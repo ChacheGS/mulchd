@@ -4,6 +4,9 @@
 # Exposes mulchd on localhost:8000 directly. Traefik is omitted by only
 # starting the services named on the command line.
 services:
+  postgres:
+    ports:
+      - "127.0.0.1:5433:5432"
   mulchd:
     ports:
       - "127.0.0.1:8000:8000"
