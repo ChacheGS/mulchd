@@ -56,6 +56,32 @@ Restart Claude Code. The mulchd tools are now active for this project.
 > Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 > Desktop config is global; name the entry to identify the project (e.g. `mulchd-acme-infra`).
 
+**4. Add session instructions to `CLAUDE.md`**
+
+Registering the MCP server makes the tools available, but does not tell Claude to use them
+automatically. Append the following block to the project's `CLAUDE.md` (create it if it does
+not exist):
+
+```markdown
+## mulchd — Team Knowledge
+
+At the start of each session:
+1. Call `list_domains` to see what knowledge domains exist for this project.
+2. Call `read_expertise` on the domains most relevant to the current task.
+
+During the session, record expertise proactively — without being asked — whenever:
+- A decision is made or confirmed → type `decision`
+- A convention is established or corrected → type `convention`
+- Something breaks and gets fixed → type `failure`
+- A reusable solution or code shape emerges → type `pattern`
+
+At the end of each session, call `get_recent` to surface what teammates recorded while you
+were working.
+```
+
+> **Claude Desktop** — there is no `CLAUDE.md` equivalent. Paste the block above into the
+> project's system prompt or custom instructions field in the Desktop UI.
+
 ---
 
 ## Session workflow
