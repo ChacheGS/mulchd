@@ -1,18 +1,31 @@
 FROM python:3.12-slim
 
-# Install Bun (required for ml CLI)
-RUN apt-get update && apt-get install -y curl unzip && rm -rf /var/lib/apt/lists/*
+# Pull uv from its official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install system deps needed by bun installer
+RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install bun + mulch CLI (needed for the ml CLI used by domains.py)
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
-
-# Install mulch CLI globally
 RUN bun install -g @os-eco/mulch-cli
 
 WORKDIR /app
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir -e .
+# Dependency layer — cached unless pyproject.toml or uv.lock changes
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --frozen --no-install-project
 
-COPY server/ ./server/
+# Source + migrations
+COPY src/ ./src/
+COPY migrations/ ./migrations/
 
-CMD ["mulchd"]
+# Install the project itself
+RUN uv sync --no-dev --frozen
+
+COPY deploy/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
