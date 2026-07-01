@@ -2,40 +2,26 @@ services:
   traefik:
     image: traefik:v3.1
     restart: unless-stopped
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      # Let's Encrypt via DigitalOcean DNS-01 challenge (DO_AUTH_TOKEN required)
-      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=digitalocean
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
-      - --api=false
-    environment:
-      DO_AUTH_TOKEN: ${DO_AUTH_TOKEN}
+    env_file:
+      - traefik.env
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
 
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+    env_file:
+      - postgres.env
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      # $$ → literal $ after compose parsing; expanded by the shell inside the container
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\""]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -45,13 +31,8 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
-    environment:
-      MULCHD_DATA_PATH: /data/mulch
-      MULCHD_DB_URL: asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      MULCHD_HOST: 0.0.0.0
-      MULCHD_PORT: 8000
-      MULCHD_SECRET_KEY: ${MULCHD_SECRET_KEY}
-      MULCHD_ADMIN_PASSWORD: ${MULCHD_ADMIN_PASSWORD}
+    env_file:
+      - mulchd.env
     volumes:
       - mulch_data:/data
     depends_on:
@@ -69,7 +50,6 @@ services:
       - traefik.http.routers.mulchd.tls=true
       - traefik.http.routers.mulchd.tls.certresolver=letsencrypt
       - traefik.http.services.mulchd.loadbalancer.server.port=8000
-      # SSE connections are long-lived; tell Traefik not to enforce a response timeout
       - traefik.http.middlewares.sse-timeout.headers.customrequestheaders.X-Accel-Buffering=no
       - traefik.http.routers.mulchd.middlewares=sse-timeout
 
