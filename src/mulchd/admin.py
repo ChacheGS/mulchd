@@ -26,6 +26,7 @@ def _redirect_login() -> RedirectResponse:
 # Auth
 # ---------------------------------------------------------------------------
 
+
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     if _is_admin(request):
@@ -53,35 +54,45 @@ async def logout(request: Request):
 # Dashboard
 # ---------------------------------------------------------------------------
 
+
 @router.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     if not _is_admin(request):
         return _redirect_login()
-    return templates.TemplateResponse(request, "dashboard.html", {
-        "active": "dashboard",
-        "stats": {
-            "users": await User.filter(active=True).count(),
-            "orgs": await Organization.all().count(),
-            "projects": await Project.all().count(),
-            "memberships": await UserMembership.all().count(),
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        {
+            "active": "dashboard",
+            "stats": {
+                "users": await User.filter(active=True).count(),
+                "orgs": await Organization.all().count(),
+                "projects": await Project.all().count(),
+                "memberships": await UserMembership.all().count(),
+            },
         },
-    })
+    )
 
 
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
 
+
 @router.get("/users", response_class=HTMLResponse)
 async def users_page(request: Request, error: str = ""):
     if not _is_admin(request):
         return _redirect_login()
     users = await User.all().order_by("username")
-    return templates.TemplateResponse(request, "users.html", {
-        "active": "users",
-        "users": users,
-        "error": error,
-    })
+    return templates.TemplateResponse(
+        request,
+        "users.html",
+        {
+            "active": "users",
+            "users": users,
+            "error": error,
+        },
+    )
 
 
 @router.post("/users")
@@ -96,11 +107,16 @@ async def create_user_route(
         user, token = await create_user(username.strip(), display_name.strip())
     except IntegrityError:
         users = await User.all().order_by("username")
-        return templates.TemplateResponse(request, "users.html", {
-            "active": "users",
-            "users": users,
-            "error": f"Username '{username}' is already taken.",
-        }, status_code=409)
+        return templates.TemplateResponse(
+            request,
+            "users.html",
+            {
+                "active": "users",
+                "users": users,
+                "error": f"Username '{username}' is already taken.",
+            },
+            status_code=409,
+        )
 
     request.session["pending_token"] = {
         "username": user.username,
@@ -117,13 +133,17 @@ async def user_created_page(request: Request):
     pending = request.session.pop("pending_token", None)
     if pending is None:
         return RedirectResponse("/admin/users", status_code=303)
-    return templates.TemplateResponse(request, "user_created.html", {
-        "active": "users",
-        "username": pending["username"],
-        "display_name": pending["display_name"],
-        "token": pending["token"],
-        "server_url": f"http://{settings.host}:{settings.port}",
-    })
+    return templates.TemplateResponse(
+        request,
+        "user_created.html",
+        {
+            "active": "users",
+            "username": pending["username"],
+            "display_name": pending["display_name"],
+            "token": pending["token"],
+            "server_url": f"http://{settings.host}:{settings.port}",
+        },
+    )
 
 
 @router.post("/users/{user_id}/deactivate")
@@ -146,16 +166,21 @@ async def activate_user(request: Request, user_id: int):
 # Organisations
 # ---------------------------------------------------------------------------
 
+
 @router.get("/orgs", response_class=HTMLResponse)
 async def orgs_page(request: Request, error: str = ""):
     if not _is_admin(request):
         return _redirect_login()
     orgs = await Organization.all().order_by("slug").prefetch_related("projects")
-    return templates.TemplateResponse(request, "orgs.html", {
-        "active": "orgs",
-        "orgs": orgs,
-        "error": error,
-    })
+    return templates.TemplateResponse(
+        request,
+        "orgs.html",
+        {
+            "active": "orgs",
+            "orgs": orgs,
+            "error": error,
+        },
+    )
 
 
 @router.post("/orgs")
@@ -170,11 +195,16 @@ async def create_org(
         await Organization.create(slug=slug.strip(), display_name=display_name.strip())
     except IntegrityError:
         orgs = await Organization.all().order_by("slug").prefetch_related("projects")
-        return templates.TemplateResponse(request, "orgs.html", {
-            "active": "orgs",
-            "orgs": orgs,
-            "error": f"Org slug '{slug}' already exists.",
-        }, status_code=409)
+        return templates.TemplateResponse(
+            request,
+            "orgs.html",
+            {
+                "active": "orgs",
+                "orgs": orgs,
+                "error": f"Org slug '{slug}' already exists.",
+            },
+            status_code=409,
+        )
     return RedirectResponse("/admin/orgs", status_code=303)
 
 
@@ -182,18 +212,23 @@ async def create_org(
 # Projects
 # ---------------------------------------------------------------------------
 
+
 @router.get("/projects", response_class=HTMLResponse)
 async def projects_page(request: Request, error: str = ""):
     if not _is_admin(request):
         return _redirect_login()
     projects = await Project.all().order_by("slug").prefetch_related("org")
     orgs = await Organization.all().order_by("slug")
-    return templates.TemplateResponse(request, "projects.html", {
-        "active": "projects",
-        "projects": projects,
-        "orgs": orgs,
-        "error": error,
-    })
+    return templates.TemplateResponse(
+        request,
+        "projects.html",
+        {
+            "active": "projects",
+            "projects": projects,
+            "orgs": orgs,
+            "error": error,
+        },
+    )
 
 
 @router.post("/projects")
@@ -213,18 +248,24 @@ async def create_project(
     except IntegrityError:
         projects = await Project.all().order_by("slug").prefetch_related("org")
         orgs = await Organization.all().order_by("slug")
-        return templates.TemplateResponse(request, "projects.html", {
-            "active": "projects",
-            "projects": projects,
-            "orgs": orgs,
-            "error": f"Project slug '{slug}' already exists in that org.",
-        }, status_code=409)
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                "active": "projects",
+                "projects": projects,
+                "orgs": orgs,
+                "error": f"Project slug '{slug}' already exists in that org.",
+            },
+            status_code=409,
+        )
     return RedirectResponse("/admin/projects", status_code=303)
 
 
 # ---------------------------------------------------------------------------
 # Memberships
 # ---------------------------------------------------------------------------
+
 
 @router.get("/memberships", response_class=HTMLResponse)
 async def memberships_page(request: Request, user: str = "", error: str = ""):
@@ -233,15 +274,19 @@ async def memberships_page(request: Request, user: str = "", error: str = ""):
     memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")
     users = await User.filter(active=True).order_by("username")
     projects = await Project.all().order_by("slug").prefetch_related("org")
-    return templates.TemplateResponse(request, "memberships.html", {
-        "active": "memberships",
-        "memberships": memberships,
-        "users": users,
-        "projects": projects,
-        "roles": list(Role),
-        "preselect_user": user,
-        "error": error,
-    })
+    return templates.TemplateResponse(
+        request,
+        "memberships.html",
+        {
+            "active": "memberships",
+            "memberships": memberships,
+            "users": users,
+            "projects": projects,
+            "roles": list(Role),
+            "preselect_user": user,
+            "error": error,
+        },
+    )
 
 
 @router.post("/memberships")
@@ -263,15 +308,20 @@ async def add_membership(
         memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")
         users = await User.filter(active=True).order_by("username")
         projects = await Project.all().order_by("slug").prefetch_related("org")
-        return templates.TemplateResponse(request, "memberships.html", {
-            "active": "memberships",
-            "memberships": memberships,
-            "users": users,
-            "projects": projects,
-            "roles": list(Role),
-            "preselect_user": "",
-            "error": f"{user.username} already has access to that project.",
-        }, status_code=409)
+        return templates.TemplateResponse(
+            request,
+            "memberships.html",
+            {
+                "active": "memberships",
+                "memberships": memberships,
+                "users": users,
+                "projects": projects,
+                "roles": list(Role),
+                "preselect_user": "",
+                "error": f"{user.username} already has access to that project.",
+            },
+            status_code=409,
+        )
     return RedirectResponse("/admin/memberships", status_code=303)
 
 
