@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_prefix": "MULCHD_"}
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]  # pydantic-settings resolves from env at runtime
 
 TORTOISE_ORM = {
     "connections": {"default": settings.db_url},
