@@ -1,0 +1,13 @@
+.env
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.py[cod]
+.venv/
+dist/
+*.egg-info/
+.ruff_cache/
+migrations/
+mulch-upstream/
+.superpowers/
