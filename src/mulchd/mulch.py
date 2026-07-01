@@ -90,13 +90,43 @@ def _extract_matches(result: dict | list) -> list[dict]:
     return matches
 
 
+_EDIT_FLAG_MAP: dict[str, str] = {
+    "content": "--content",
+    "name": "--name",
+    "description": "--description",
+    "resolution": "--resolution",
+    "title": "--title",
+    "rationale": "--rationale",
+    "classification": "--classification",
+    "files": "--files",
+    "relates_to": "--relates-to",
+    "supersedes": "--supersedes",
+}
+
+
+async def edit_record(mulch_dir: Path, domain: str, record_id: str, updates: dict) -> dict:
+    """Edit a record via ml edit. Ownership check is the caller's responsibility."""
+    args = ["edit", domain, record_id]
+    for key, flag in _EDIT_FLAG_MAP.items():
+        if key in updates:
+            val = updates[key]
+            if isinstance(val, list):
+                val = ",".join(str(v) for v in val)
+            args.extend([flag, str(val)])
+    result = await _run(mulch_dir, args)
+    return result if isinstance(result, dict) else {}
+
+
+async def delete_record(mulch_dir: Path, domain: str, record_id: str) -> None:
+    """Delete a single record via ml delete. Ownership check is the caller's responsibility."""
+    await _run(mulch_dir, ["delete", domain, "--records", record_id])
+
+
 async def ensure_domain(mulch_dir: Path, domain: str) -> None:
     """
-    Initialise the mulch store and domain if they don't exist yet.
-    ml record auto-creates domains, but we may need ml init first.
+    Bootstrap a project directory via `ml init` if it hasn't been initialised yet.
+    After that, ml record handles adding new domains to mulch.config.yaml itself.
     """
-    expertise_dir = mulch_dir / "expertise"
-    expertise_dir.mkdir(parents=True, exist_ok=True)
-    config_path = mulch_dir / "mulch.config.yaml"
-    if not config_path.exists():
-        config_path.write_text(f"domains:\n  {domain}:\n    description: Auto-created by mulchd\n")
+    mulch_dir.parent.mkdir(parents=True, exist_ok=True)
+    if not (mulch_dir / "mulch.config.yaml").exists():
+        await _run(mulch_dir, ["init"], stdin_data=None)

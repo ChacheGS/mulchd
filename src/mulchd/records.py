@@ -26,6 +26,13 @@ async def read_domain_records(path: Path) -> list[dict]:
     return records
 
 
+async def find_record(path: Path, record_id: str) -> dict | None:
+    for r in await read_domain_records(path):
+        if r.get("id") == record_id:
+            return r
+    return None
+
+
 async def get_file_mod_time(path: Path) -> datetime | None:
     try:
         return datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)

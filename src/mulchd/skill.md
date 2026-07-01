@@ -33,7 +33,7 @@ curl -s -X POST https://SERVER_URL/api/projects/ORG/PROJECT/tokens \
 
 The raw token is shown once. Copy it.
 
-**3. Write `.claude/settings.local.json`** in the project root (gitignored by default):
+**3a. Register the server in `.mcp.json`** (project root, commit this or gitignore — your call):
 
 ```json
 {
@@ -49,12 +49,38 @@ The raw token is shown once. Copy it.
 }
 ```
 
-Restart Claude Code. The mulchd tools are now active for this project.
+**3b. Approve it in `.claude/settings.local.json`** (gitignored by default — do not commit):
 
-> **Claude Desktop** — same token, different config file:
+```json
+{
+  "enabledMcpjsonServers": ["mulchd"]
+}
+```
+
+Restart Claude Code. To confirm the server is connected, run `/mcp`; `mulchd` should appear with a green status. If it shows as disconnected, double-check the URL and token.
+
+> **Claude Desktop** — the server goes in the global config file, not `.mcp.json`. The
+> exact format for SSE servers in Desktop is unverified (not available on Linux). Best effort:
+>
 > Mac: `~/Library/Application Support/Claude/claude_desktop_config.json`
 > Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-> Desktop config is global; name the entry to identify the project (e.g. `mulchd-acme-infra`).
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "mulchd-acme-infra": {
+>       "type": "sse",
+>       "url": "https://SERVER_URL/sse",
+>       "headers": {
+>         "Authorization": "Bearer PROJECT_TOKEN"
+>       }
+>     }
+>   }
+> }
+> ```
+>
+> Name the entry to identify the project (e.g. `mulchd-acme-infra`) since the config is global.
+> If this format does not work, check the Claude Desktop MCP documentation for the current SSE syntax.
 
 **4. Add session instructions to `CLAUDE.md`**
 
@@ -243,6 +269,9 @@ Default to `tactical` when unsure.
 | `record_expertise` | A decision, convention, failure, pattern, reference, or guide should be captured |
 | `search_expertise` | You need to find specific past context by keyword |
 | `get_recent` | End of session — surfacing what teammates recorded while you were working |
+| `get_record_schema` | You are unsure which fields a record type requires — call this before `record_expertise` or `edit_record` to avoid validation errors |
+| `edit_record` | Updating an existing record (writers: own records only; admins: any) |
+| `delete_record` | Removing an obsolete record (same ownership rules as `edit_record`) |
 
 ### `record_expertise` optional base fields
 

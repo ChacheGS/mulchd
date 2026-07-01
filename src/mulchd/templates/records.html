@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — records{% endblock %}
+{% block content %}
+
+<style>
+  .record-card { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+  .record-card:last-child { border-bottom: none; }
+  .record-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .record-fields { display: flex; flex-direction: column; gap: 6px; }
+  .record-field { display: grid; grid-template-columns: 96px 1fr; gap: 8px; font-size: 13px; line-height: 1.5; }
+  .record-field-label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 2px; }
+  .record-field-value { color: #1e293b; white-space: pre-wrap; word-break: break-word; }
+  .record-files { display: flex; flex-wrap: wrap; gap: 4px; }
+  .record-file { background: #f1f5f9; border-radius: 3px; padding: 1px 6px; font-family: 'Courier New', monospace; font-size: 11px; color: #475569; }
+  .record-ids { display: flex; flex-wrap: wrap; gap: 4px; }
+  .record-id-ref { background: #ede9fe; border-radius: 3px; padding: 1px 6px; font-family: 'Courier New', monospace; font-size: 11px; color: #6d28d9; }
+</style>
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+  <div class="page-title" style="margin-bottom:0">Records</div>
+  <form method="get" action="/admin/records" style="display:flex; align-items:center; gap:8px">
+    <label for="proj-select" style="font-size:12px; color:#64748b">Project</label>
+    <select id="proj-select" name="project" onchange="this.form.submit()"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
+      <option value="">— select —</option>
+      {% for p in projects %}
+      <option value="{{ p.org.slug }}/{{ p.slug }}"
+        {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
+        {{ p.org.slug }} / {{ p.slug }}
+      </option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if not selected %}
+<div class="card">
+  <div class="empty-state">Select a project above to view its expertise records.</div>
+</div>
+
+{% elif not domains %}
+<div class="card">
+  <div class="empty-state">No expertise records found for this project yet.</div>
+</div>
+
+{% else %}
+
+{% set type_styles = {
+  'convention': 'background:#ede9fe; color:#6d28d9',
+  'decision':   'background:#dbeafe; color:#1d4ed8',
+  'failure':    'background:#fee2e2; color:#991b1b',
+  'pattern':    'background:#d1fae5; color:#065f46',
+  'reference':  'background:#f1f5f9; color:#475569',
+  'guide':      'background:#fef3c7; color:#92400e',
+} %}
+
+{% for domain in domains %}
+<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;
+            letter-spacing:0.07em; margin:{% if not loop.first %}28px{% else %}0{% endif %} 0 6px">
+  {{ domain.name }}
+  <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#94a3b8; font-size:11px">
+    — {{ domain.records | length }} record{{ 's' if domain.records | length != 1 else '' }}
+  </span>
+</div>
+
+<div class="card">
+  {% for r in domain.records %}
+  <div class="record-card">
+
+    {# ── meta row ── #}
+    <div class="record-meta">
+      <span class="badge" style="{{ type_styles.get(r.type, 'background:#f1f5f9; color:#475569') }}">{{ r.type }}</span>
+      {% if r.classification %}
+        <span class="badge" style="background:#f8fafc; color:#64748b; border:1px solid #e2e8f0">{{ r.classification }}</span>
+      {% endif %}
+      <span style="flex:1"></span>
+      {% if r.owner %}<span class="monospace text-muted">{{ r.owner }}</span>{% endif %}
+      {% if r.recorded_at %}<span class="text-muted">{{ r.recorded_at[:10] }}</span>{% endif %}
+      {% if r.id %}<span class="monospace" style="font-size:11px; color:#cbd5e1">{{ r.id }}</span>{% endif %}
+    </div>
+
+    {# ── type-specific fields ── #}
+    <div class="record-fields">
+
+      {% if r.type == 'convention' %}
+        {% if r.content %}
+        <div class="record-field">
+          <span class="record-field-label">Content</span>
+          <span class="record-field-value">{{ r.content }}</span>
+        </div>
+        {% endif %}
+
+      {% elif r.type == 'decision' %}
+        {% if r.title %}
+        <div class="record-field">
+          <span class="record-field-label">Title</span>
+          <span class="record-field-value" style="font-weight:500">{{ r.title }}</span>
+        </div>
+        {% endif %}
+        {% if r.rationale %}
+        <div class="record-field">
+          <span class="record-field-label">Rationale</span>
+          <span class="record-field-value">{{ r.rationale }}</span>
+        </div>
+        {% endif %}
+        {% if r.date %}
+        <div class="record-field">
+          <span class="record-field-label">Date</span>
+          <span class="record-field-value text-muted">{{ r.date }}</span>
+        </div>
+        {% endif %}
+
+      {% elif r.type == 'failure' %}
+        {% if r.description %}
+        <div class="record-field">
+          <span class="record-field-label">Description</span>
+          <span class="record-field-value">{{ r.description }}</span>
+        </div>
+        {% endif %}
+        {% if r.resolution %}
+        <div class="record-field">
+          <span class="record-field-label">Resolution</span>
+          <span class="record-field-value">{{ r.resolution }}</span>
+        </div>
+        {% endif %}
+
+      {% elif r.type in ('pattern', 'reference', 'guide') %}
+        {% if r.name %}
+        <div class="record-field">
+          <span class="record-field-label">Name</span>
+          <span class="record-field-value" style="font-weight:500">{{ r.name }}</span>
+        </div>
+        {% endif %}
+        {% if r.description %}
+        <div class="record-field">
+          <span class="record-field-label">Description</span>
+          <span class="record-field-value">{{ r.description }}</span>
+        </div>
+        {% endif %}
+
+      {% else %}
+        {# fallback: show any non-meta string fields #}
+        {% for key, val in r.items() %}
+          {% if key not in ('id','type','classification','owner','recorded_at','tags','files','relates_to','supersedes','_domain','_summary') and val and val is string %}
+          <div class="record-field">
+            <span class="record-field-label">{{ key }}</span>
+            <span class="record-field-value">{{ val }}</span>
+          </div>
+          {% endif %}
+        {% endfor %}
+      {% endif %}
+
+      {# ── shared optional fields ── #}
+      {% if r.files %}
+      <div class="record-field">
+        <span class="record-field-label">Files</span>
+        <div class="record-files">
+          {% for f in r.files %}<span class="record-file">{{ f }}</span>{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if r.tags %}
+      <div class="record-field">
+        <span class="record-field-label">Tags</span>
+        <div class="record-files">
+          {% for t in r.tags %}<span class="record-file" style="background:#f0fdf4; color:#166534">{{ t }}</span>{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if r.relates_to %}
+      <div class="record-field">
+        <span class="record-field-label">Relates to</span>
+        <div class="record-ids">
+          {% for rid in r.relates_to %}<span class="record-id-ref">{{ rid }}</span>{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if r.supersedes %}
+      <div class="record-field">
+        <span class="record-field-label">Supersedes</span>
+        <div class="record-ids">
+          {% for rid in r.supersedes %}<span class="record-id-ref">{{ rid }}</span>{% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}

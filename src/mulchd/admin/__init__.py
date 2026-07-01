@@ -6,6 +6,7 @@ from .memberships import router as memberships_router
 from .orgs import router as orgs_router
 from .project_tokens import router as project_tokens_router
 from .projects import router as projects_router
+from .records_view import router as records_router
 from .users import router as users_router
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -16,3 +17,4 @@ router.include_router(orgs_router)
 router.include_router(projects_router)
 router.include_router(memberships_router)
 router.include_router(project_tokens_router)
+router.include_router(records_router)
