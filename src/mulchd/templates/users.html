@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — users{% endblock %}
+{% block content %}
+<div class="page-title">Users</div>
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+<div class="card">
+  <div class="table-header" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
+    <span>Username</span>
+    <span>Display name</span>
+    <span>Status</span>
+    <span>Created</span>
+    <span></span>
+  </div>
+  {% for user in users %}
+  <div class="table-row" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
+    <span class="monospace">{{ user.username }}</span>
+    <span>{{ user.display_name }}</span>
+    <span>
+      {% if user.active %}
+        <span class="badge badge-active">active</span>
+      {% else %}
+        <span class="badge badge-inactive">inactive</span>
+      {% endif %}
+    </span>
+    <span class="text-muted">{{ user.created_at.strftime('%Y-%m-%d') }}</span>
+    <span>
+      {% if user.active %}
+      <form method="post" action="/admin/users/{{ user.id }}/deactivate" style="display:inline">
+        <button type="submit" class="btn-link-danger">Deactivate</button>
+      </form>
+      {% else %}
+      <form method="post" action="/admin/users/{{ user.id }}/activate" style="display:inline">
+        <button type="submit" class="btn-link">Activate</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="empty-state">No users yet.</div>
+  {% endfor %}
+
+  <div class="form-section">
+    <div class="form-section-title">Add user</div>
+    <form method="post" action="/admin/users">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required placeholder="e.g. jorge" style="width:160px">
+        </div>
+        <div class="form-group">
+          <label for="display_name">Display name</label>
+          <input type="text" id="display_name" name="display_name" required placeholder="e.g. Jorge M." style="width:200px">
+        </div>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
