@@ -3,7 +3,10 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
+from pathlib import Path
+
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
@@ -334,6 +337,16 @@ async def handle_messages(request: Request):
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+_SKILL_PATH = Path(__file__).parent / "skill.md"
+
+
+@app.get("/skill", response_class=PlainTextResponse)
+async def skill(request: Request) -> str:
+    text = _SKILL_PATH.read_text()
+    base = str(request.base_url).rstrip("/")
+    return text.replace("https://SERVER_URL", base).replace("SERVER_URL", base)
 
 
 def run() -> None:
