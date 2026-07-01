@@ -1,15 +1,28 @@
-.PHONY: format test coverage backup restore
+.PHONY: format test coverage dev dev-down dev-logs backup restore
 
-COMPOSE = docker compose -f deploy/docker-compose.yml
+COMPOSE     = docker compose -f deploy/docker-compose.yml
+COMPOSE_DEV = $(COMPOSE) -f deploy/docker-compose.local.yml
 BACKUP_DIR ?= backups
 
 # ---------------------------------------------------------------------------
 # Dev
 # ---------------------------------------------------------------------------
 
+dev:
+	$(COMPOSE_DEV) up --build mulchd postgres
+
+dev-down:
+	$(COMPOSE_DEV) down
+
+dev-logs:
+	$(COMPOSE_DEV) logs -f mulchd postgres
+
 format:
 	uv run isort src/ tests/
 	uv run black src/ tests/
+
+typecheck:
+	uv run pyright
 
 test:
 	uv run pytest tests/ -v

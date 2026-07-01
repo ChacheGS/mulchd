@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Pull uv from its official image
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv

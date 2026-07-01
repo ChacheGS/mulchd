@@ -34,6 +34,8 @@ services:
     env_file:
       - mulchd.env
       - postgres.env
+    environment:
+      MULCHD_DATA_PATH: /data/mulch
     volumes:
       - mulch_data:/data
     depends_on:
