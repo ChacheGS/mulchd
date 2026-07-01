@@ -1,0 +1,10 @@
+{
+  "include": ["src", "tests"],
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Linux",
+  "venvPath": ".",
+  "venv": ".venv",
+  "typeCheckingMode": "standard",
+  "reportMissingTypeStubs": false,
+  "reportIncompatibleVariableOverride": false
+}
