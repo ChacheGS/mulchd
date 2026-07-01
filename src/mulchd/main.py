@@ -5,10 +5,10 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from starlette.middleware.sessions import SessionMiddleware
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.types import TextContent, Tool
+from starlette.middleware.sessions import SessionMiddleware
 from tortoise import Tortoise
 
 from .admin import router as admin_router
@@ -173,6 +173,7 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 async def _read_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     domains = args.get("domains", [])
     limit = int(args.get("limit", 50))
@@ -212,7 +213,9 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         client=args.get("client", "unknown"),
     )
 
-    return [TextContent(type="text", text=f"Recorded {written['type']} in {domain} ({written['id']})")]
+    return [
+        TextContent(type="text", text=f"Recorded {written['type']} in {domain} ({written['id']})")
+    ]
 
 
 async def _search_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
@@ -283,6 +286,7 @@ def _format_records(records: list[dict]) -> str:
 # FastAPI app
 # ---------------------------------------------------------------------------
 
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await Tortoise.init(config=TORTOISE_ORM)
@@ -292,7 +296,12 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="mulchd", lifespan=lifespan)
-app.add_middleware(SessionMiddleware, secret_key=settings.secret_key, session_cookie="mulchd_session", https_only=False)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="mulchd_session",
+    https_only=False,
+)
 app.include_router(admin_router)
 
 
@@ -326,4 +335,5 @@ async def health() -> dict:
 
 def run() -> None:
     import uvicorn
+
     uvicorn.run("server.main:app", host=settings.host, port=settings.port, reload=False)

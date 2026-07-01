@@ -22,14 +22,12 @@ async def validate_token(token: str) -> User | None:
 
 
 async def resolve_project(org_slug: str, project_slug: str) -> Project | None:
-    return await (
-        Project.filter(slug=project_slug, org__slug=org_slug)
-        .select_related("org")
-        .first()
-    )
+    return await Project.filter(slug=project_slug, org__slug=org_slug).select_related("org").first()
 
 
-async def check_membership(user: User, project: Project, min_role: Role = Role.READER) -> Role | None:
+async def check_membership(
+    user: User, project: Project, min_role: Role = Role.READER
+) -> Role | None:
     """Return the user's role in the project, or None if they have no access."""
     membership = await UserMembership.filter(user=user, project=project).first()
     if membership is None:

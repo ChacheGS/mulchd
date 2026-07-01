@@ -19,7 +19,9 @@ class MulchError(Exception):
 async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) -> dict | list:
     env = {**os.environ, "MULCH_DIR": str(mulch_dir)}
     proc = await asyncio.create_subprocess_exec(
-        "ml", "--json", *args,
+        "ml",
+        "--json",
+        *args,
         env=env,
         stdin=asyncio.subprocess.PIPE if stdin_data is not None else None,
         stdout=asyncio.subprocess.PIPE,
@@ -30,9 +32,7 @@ async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) 
     stdout, stderr = await proc.communicate(stdin_bytes)
 
     if proc.returncode != 0:
-        raise MulchError(
-            f"ml {' '.join(args)} exited {proc.returncode}: {stderr.decode().strip()}"
-        )
+        raise MulchError(f"ml {' '.join(args)} exited {proc.returncode}: {stderr.decode().strip()}")
 
     text = stdout.decode().strip()
     if not text:
@@ -99,6 +99,4 @@ async def ensure_domain(mulch_dir: Path, domain: str) -> None:
     expertise_dir.mkdir(parents=True, exist_ok=True)
     config_path = mulch_dir / "mulch.config.yaml"
     if not config_path.exists():
-        config_path.write_text(
-            f"domains:\n  {domain}:\n    description: Auto-created by mulchd\n"
-        )
+        config_path.write_text(f"domains:\n  {domain}:\n    description: Auto-created by mulchd\n")

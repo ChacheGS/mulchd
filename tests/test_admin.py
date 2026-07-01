@@ -33,7 +33,9 @@ async def test_dashboard_renders(admin_client):
 
 async def test_create_user(admin_client):
     resp = await admin_client.post(
-        "/admin/users", data={"username": "jorge", "display_name": "Jorge M."}, follow_redirects=False
+        "/admin/users",
+        data={"username": "jorge", "display_name": "Jorge M."},
+        follow_redirects=False,
     )
     assert resp.status_code == 303
     assert resp.headers["location"] == "/admin/users/created"
@@ -42,7 +44,9 @@ async def test_create_user(admin_client):
 async def test_create_user_duplicate(admin_client):
     await admin_client.post("/admin/users", data={"username": "jorge", "display_name": "Jorge"})
     resp = await admin_client.post(
-        "/admin/users", data={"username": "jorge", "display_name": "Jorge 2"}, follow_redirects=False
+        "/admin/users",
+        data={"username": "jorge", "display_name": "Jorge 2"},
+        follow_redirects=False,
     )
     assert resp.status_code == 409
     assert "already taken" in resp.text
@@ -74,6 +78,7 @@ async def test_create_project(admin_client):
     await admin_client.post("/admin/orgs", data={"slug": "acme", "display_name": "Acme"})
     resp = await admin_client.get("/admin/orgs")
     from mulchd.models import Organization
+
     org = await Organization.get(slug="acme")
     resp = await admin_client.post(
         "/admin/projects",
@@ -86,6 +91,7 @@ async def test_create_project(admin_client):
 async def test_add_membership(admin_client):
     await admin_client.post("/admin/orgs", data={"slug": "acme", "display_name": "Acme"})
     from mulchd.models import Organization
+
     org = await Organization.get(slug="acme")
     await admin_client.post(
         "/admin/projects",
@@ -94,6 +100,7 @@ async def test_add_membership(admin_client):
     await admin_client.post("/admin/users", data={"username": "jorge", "display_name": "Jorge M."})
 
     from mulchd.models import Project, User
+
     user = await User.get(username="jorge")
     project = await Project.get(slug="proj")
 
@@ -108,6 +115,7 @@ async def test_add_membership(admin_client):
 async def test_deactivate_user(admin_client):
     await admin_client.post("/admin/users", data={"username": "jorge", "display_name": "Jorge M."})
     from mulchd.models import User
+
     user = await User.get(username="jorge")
     resp = await admin_client.post(f"/admin/users/{user.id}/deactivate", follow_redirects=False)
     assert resp.status_code == 303
