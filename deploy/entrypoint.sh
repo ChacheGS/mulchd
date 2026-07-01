@@ -12,7 +12,7 @@ export MULCHD_DB_URL="asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5
 # run and migrations are committed, this picks them up on each deploy.
 if find migrations -name '*.py' 2>/dev/null | grep -q .; then
     echo "Applying database migrations..."
-    uv run aerich upgrade
+    .venv/bin/aerich upgrade
 fi
 
-exec uv run mulchd
+exec .venv/bin/mulchd
