@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — project tokens{% endblock %}
+{% block content %}
+<div class="page-title">Project Tokens</div>
+
+<div class="card">
+  <div class="table-header" style="grid-template-columns: 1fr 1.5fr 1fr 80px 70px 60px">
+    <span>User</span>
+    <span>Project</span>
+    <span>Label</span>
+    <span>Status</span>
+    <span>Created</span>
+    <span></span>
+  </div>
+  {% for t in tokens %}
+  <div class="table-row" style="grid-template-columns: 1fr 1.5fr 1fr 80px 70px 60px">
+    <span class="monospace">{{ t.user.username }}</span>
+    <span class="text-muted">
+      <span class="monospace">{{ t.project.org.slug }}</span>
+      <span style="color:#cbd5e1"> / </span>
+      <span class="monospace" style="color:#475569">{{ t.project.slug }}</span>
+    </span>
+    <span class="text-muted" style="font-size:13px">{{ t.label or '—' }}</span>
+    <span>
+      {% if t.active %}
+        <span class="badge badge-active">active</span>
+      {% else %}
+        <span class="badge badge-inactive">revoked</span>
+      {% endif %}
+    </span>
+    <span class="text-muted">{{ t.created_at.strftime('%Y-%m-%d') }}</span>
+    <span>
+      {% if t.active %}
+      <form method="post" action="/admin/project-tokens/{{ t.id }}/revoke" style="display:inline">
+        <button type="submit" class="btn-link-danger">Revoke</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="empty-state">No project tokens yet. Users create these via the self-service API after setup.</div>
+  {% endfor %}
+</div>
+{% endblock %}
