@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — dashboard{% endblock %}
+{% block content %}
+<div class="page-title">Dashboard</div>
+<div class="stats-grid">
+  <a href="/admin/users" class="stat-link">
+    <div class="stat-card">
+      <div class="stat-number">{{ stats.users }}</div>
+      <div class="stat-label">Active users</div>
+    </div>
+  </a>
+  <a href="/admin/orgs" class="stat-link">
+    <div class="stat-card">
+      <div class="stat-number">{{ stats.orgs }}</div>
+      <div class="stat-label">Organisations</div>
+    </div>
+  </a>
+  <a href="/admin/projects" class="stat-link">
+    <div class="stat-card">
+      <div class="stat-number">{{ stats.projects }}</div>
+      <div class="stat-label">Projects</div>
+    </div>
+  </a>
+  <a href="/admin/memberships" class="stat-link">
+    <div class="stat-card">
+      <div class="stat-number">{{ stats.memberships }}</div>
+      <div class="stat-label">Memberships</div>
+    </div>
+  </a>
+</div>
+{% endblock %}

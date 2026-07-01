@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — user created{% endblock %}
+{% block content %}
+<div class="page-title">User created: {{ username }}</div>
+
+<div class="card" style="padding: 24px; max-width: 680px">
+  <div class="alert alert-warning" style="margin-bottom: 20px">
+    <strong>⚠ Copy this token now — it will not be shown again.</strong>
+  </div>
+
+  <div style="margin-bottom: 20px">
+    <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px">Bearer token for {{ display_name }}</div>
+    <div class="token-box">{{ token }}</div>
+  </div>
+
+  <div style="margin-bottom: 24px">
+    <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px">
+      Share with <strong>{{ display_name }}</strong> — add to <code style="font-size:11px;background:#f1f5f9;padding:1px 5px;border-radius:3px">~/.claude/settings.json</code>
+    </div>
+    <div class="code-box">{% raw %}{
+  "mcpServers": {
+    "mulchd": {
+      "type": "sse",
+      "url": "{% endraw %}{{ server_url }}{% raw %}/sse?org=YOUR_ORG&project=YOUR_PROJECT",
+      "headers": {
+        "Authorization": "Bearer {% endraw %}{{ token }}{% raw %}"
+      }
+    }
+  }
+}{% endraw %}</div>
+    <div class="text-muted" style="margin-top: 6px">Replace <code style="font-size:11px;background:#f1f5f9;padding:1px 4px;border-radius:3px">YOUR_ORG</code> and <code style="font-size:11px;background:#f1f5f9;padding:1px 4px;border-radius:3px">YOUR_PROJECT</code> with the slugs after adding this user to a project below.</div>
+  </div>
+
+  <div style="display: flex; gap: 8px">
+    <a href="/admin/users" class="btn btn-secondary">← Back to users</a>
+    <a href="/admin/memberships?user={{ username }}" class="btn btn-primary">Add to a project →</a>
+  </div>
+</div>
+{% endblock %}

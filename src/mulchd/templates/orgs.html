@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — orgs{% endblock %}
+{% block content %}
+<div class="page-title">Organisations</div>
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+<div class="card">
+  <div class="table-header" style="grid-template-columns: 1fr 2fr 60px 80px">
+    <span>Slug</span>
+    <span>Display name</span>
+    <span>Projects</span>
+    <span>Created</span>
+  </div>
+  {% for org in orgs %}
+  <div class="table-row" style="grid-template-columns: 1fr 2fr 60px 80px">
+    <span class="monospace">{{ org.slug }}</span>
+    <span>{{ org.display_name }}</span>
+    <span class="text-muted">{{ org.projects|length }}</span>
+    <span class="text-muted">{{ org.created_at.strftime('%Y-%m-%d') }}</span>
+  </div>
+  {% else %}
+  <div class="empty-state">No organisations yet.</div>
+  {% endfor %}
+
+  <div class="form-section">
+    <div class="form-section-title">Add organisation</div>
+    <form method="post" action="/admin/orgs">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="slug">Slug</label>
+          <input type="text" id="slug" name="slug" required placeholder="e.g. acme" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, hyphens" style="width:160px">
+        </div>
+        <div class="form-group">
+          <label for="display_name">Display name</label>
+          <input type="text" id="display_name" name="display_name" required placeholder="e.g. Acme Corp" style="width:220px">
+        </div>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
