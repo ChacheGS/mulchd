@@ -352,4 +352,4 @@ async def skill(request: Request) -> str:
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("server.main:app", host=settings.host, port=settings.port, reload=False)
+    uvicorn.run("mulchd.main:app", host=settings.host, port=settings.port, reload=False)
