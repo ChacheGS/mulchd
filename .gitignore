@@ -12,3 +12,6 @@ mulch-upstream/
 .superpowers/
 backups/
 deploy/*.env
+node_modules/
+.mulch/
+.coverage
