@@ -530,6 +530,7 @@ dependencies = [
     { name = "mcp" },
     { name = "pydantic-settings" },
     { name = "python-multipart" },
+    { name = "pyyaml" },
     { name = "tortoise-orm" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -566,6 +567,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "tortoise-orm", specifier = ">=0.21" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]

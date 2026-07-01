@@ -18,10 +18,10 @@ from .admin import router as admin_router
 from .api import router as api_router
 from .auth import AuthContext, Role, authenticate_project_token
 from .config import TORTOISE_ORM, settings
-from .domains import STARTER_DOMAINS, expertise_path, list_available_domains, mulch_dir
+from .domains import expertise_path, list_available_domains, mulch_dir
 from .models import RecordMeta
-from .mulch import ensure_domain, search_domains, write_record
-from .records import read_domain_records
+from .mulch import delete_record, edit_record, ensure_domain, search_domains, write_record
+from .records import find_record, read_domain_records
 
 _ctx: ContextVar[AuthContext | None] = ContextVar("auth_context", default=None)
 
@@ -143,7 +143,113 @@ TOOLS = [
             "required": ["since"],
         },
     ),
+    Tool(
+        name="get_record_schema",
+        description=(
+            "Return the required and optional content fields for one or all record types. "
+            "Call this before record_expertise or edit_record to avoid field-name errors."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": ["convention", "pattern", "failure", "decision", "reference", "guide"],
+                    "description": "Omit to return schemas for all types.",
+                },
+            },
+        },
+    ),
+    Tool(
+        name="edit_record",
+        description=(
+            "Update fields on an existing expertise record. "
+            "Writers may only edit their own records; admins may edit any record. "
+            "Pass only the fields you want to change."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
+                "domain": {"type": "string"},
+                "classification": {
+                    "type": "string",
+                    "enum": ["foundational", "tactical", "observational"],
+                },
+                "title": {"type": "string", "description": "decision: title field"},
+                "rationale": {"type": "string", "description": "decision: rationale field"},
+                "content": {"type": "string", "description": "convention: body text"},
+                "description": {
+                    "type": "string",
+                    "description": "failure/pattern/reference/guide: description field",
+                },
+                "resolution": {"type": "string", "description": "failure: resolution field"},
+                "name": {
+                    "type": "string",
+                    "description": "pattern/reference/guide: name field",
+                },
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related file paths",
+                },
+                "relates_to": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related record IDs",
+                },
+                "supersedes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Record IDs this record replaces",
+                },
+            },
+            "required": ["record_id", "domain"],
+        },
+    ),
+    Tool(
+        name="delete_record",
+        description=(
+            "Delete an expertise record by ID. "
+            "Writers may only delete their own records; admins may delete any record."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
+                "domain": {"type": "string"},
+            },
+            "required": ["record_id", "domain"],
+        },
+    ),
 ]
+
+_RECORD_SCHEMAS: dict[str, dict] = {
+    "convention": {
+        "required": {"content": "string"},
+        "optional": {},
+    },
+    "decision": {
+        "required": {"title": "string", "rationale": "string"},
+        "optional": {"date": "string"},
+    },
+    "failure": {
+        "required": {"description": "string", "resolution": "string"},
+        "optional": {},
+    },
+    "pattern": {
+        "required": {"name": "string", "description": "string"},
+        "optional": {"files": "array of strings"},
+    },
+    "reference": {
+        "required": {"name": "string", "description": "string"},
+        "optional": {"files": "array of strings"},
+    },
+    "guide": {
+        "required": {"name": "string", "description": "string"},
+        "optional": {},
+    },
+}
 
 
 @mcp_server.list_tools()
@@ -169,6 +275,12 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
             return await _list_domains(ctx)
         case "get_recent":
             return await _get_recent(args, ctx)
+        case "get_record_schema":
+            return await _get_record_schema(args)
+        case "edit_record":
+            return await _edit_record(args, ctx)
+        case "delete_record":
+            return await _delete_record(args, ctx)
         case _:
             raise ValueError(f"Unknown tool: {name}")
 
@@ -250,7 +362,10 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     since = datetime.fromisoformat(args["since"])
     if since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
-    domains = args.get("domains") or list(STARTER_DOMAINS)
+    if args.get("domains"):
+        domains = args["domains"]
+    else:
+        domains = [d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)]
 
     results: list[dict] = []
     for domain in domains:
@@ -265,6 +380,65 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
 
     results.sort(key=lambda r: r.get("recorded_at", ""), reverse=True)
     return [TextContent(type="text", text=_format_records(results))]
+
+
+async def _get_record_schema(args: dict) -> list[TextContent]:
+    type_filter = args.get("type")
+    schemas = {type_filter: _RECORD_SCHEMAS[type_filter]} if type_filter else _RECORD_SCHEMAS
+    lines = ["# Record type schemas\n"]
+    for rtype, schema in schemas.items():
+        req = ", ".join(f"`{k}` ({v})" for k, v in schema["required"].items())
+        opt = ", ".join(f"`{k}` ({v})" for k, v in schema["optional"].items())
+        lines.append(f"**{rtype}**")
+        lines.append(f"  required: {req or 'none'}")
+        if opt:
+            lines.append(f"  optional: {opt}")
+        lines.append("")
+    return [TextContent(type="text", text="\n".join(lines))]
+
+
+async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
+    if ctx.role == Role.READER:
+        raise ValueError("reader role cannot edit records")
+
+    record_id = args["record_id"]
+    domain = args["domain"]
+
+    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
+    if record is None:
+        raise ValueError(f"record {record_id} not found in domain {domain}")
+
+    if ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
+        raise ValueError("you can only edit your own records (writer role)")
+
+    update_keys = {
+        "classification", "title", "rationale", "content", "description",
+        "resolution", "name", "files", "relates_to", "supersedes",
+    }
+    updates = {k: args[k] for k in update_keys if k in args}
+    if not updates:
+        raise ValueError("no fields to update — pass at least one content field")
+
+    await edit_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id, updates)
+    return [TextContent(type="text", text=f"Updated {record_id} in {domain}")]
+
+
+async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
+    if ctx.role == Role.READER:
+        raise ValueError("reader role cannot delete records")
+
+    record_id = args["record_id"]
+    domain = args["domain"]
+
+    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
+    if record is None:
+        raise ValueError(f"record {record_id} not found in domain {domain}")
+
+    if ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
+        raise ValueError("you can only delete your own records (writer role)")
+
+    await delete_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id)
+    return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
 
 
 def _format_records(records: list[dict]) -> str:

@@ -69,8 +69,9 @@ def data_path(tmp_path, monkeypatch):
 
 @pytest.fixture
 def fake_write_record(monkeypatch, data_path):
-    """Replace ml CLI writes with direct JSONL writes for _record_expertise tests."""
+    """Replace ml CLI calls with direct JSONL writes for _record_expertise tests."""
     import mulchd.main as mcp_main
+    import mulchd.mulch as mcp_mulch
 
     async def _write(m_dir: Path, domain: str, record: dict) -> dict:
         expertise_dir = m_dir / "expertise"
@@ -80,7 +81,11 @@ def fake_write_record(monkeypatch, data_path):
             f.write(json.dumps(result) + "\n")
         return result
 
+    async def _ensure(m_dir: Path, domain: str) -> None:
+        (m_dir / "expertise").mkdir(parents=True, exist_ok=True)
+
     monkeypatch.setattr(mcp_main, "write_record", _write)
+    monkeypatch.setattr(mcp_main, "ensure_domain", _ensure)
 
 
 @pytest.fixture
@@ -203,9 +208,9 @@ async def test_list_domains_isolation_different_projects(team, data_path):
     [result] = await _list_domains(ctx(t.carlos, t.org, t.infra))
     assert "2 records" in result.text
 
-    # data-platform project: 0 records in the infra domain
+    # data-platform project: no expertise files at all → no domains listed
     [result] = await _list_domains(ctx(t.jorge, t.org, t.data))
-    assert "0 records" in result.text
+    assert "infra" not in result.text
 
 
 # ---------------------------------------------------------------------------
