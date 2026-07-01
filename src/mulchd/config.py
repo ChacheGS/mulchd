@@ -20,7 +20,7 @@ TORTOISE_ORM = {
     "connections": {"default": settings.db_url},
     "apps": {
         "models": {
-            "models": ["server.models", "aerich.models"],
+            "models": ["mulchd.models", "aerich.models"],
             "default_connection": "default",
         }
     },

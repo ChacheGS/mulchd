@@ -1,4 +1,4 @@
-.PHONY: format test coverage dev dev-down dev-logs backup restore
+.PHONY: format test coverage dev dev-down dev-logs migrate-up migrate backup restore
 
 COMPOSE     = docker compose -f deploy/docker-compose.yml
 COMPOSE_DEV = $(COMPOSE) -f deploy/docker-compose.local.yml
@@ -16,6 +16,16 @@ dev-down:
 
 dev-logs:
 	$(COMPOSE_DEV) logs -f mulchd postgres
+
+# Generate a new aerich migration after model changes.
+# Requires the dev postgres to be running (make migrate-up first).
+migrate-up:
+	$(COMPOSE_DEV) up -d postgres
+
+migrate:
+	MULCHD_SECRET_KEY=dev MULCHD_ADMIN_PASSWORD=dev \
+	MULCHD_DB_URL="asyncpg://mulchd:devpassword@localhost:5433/mulchd" \
+	uv run aerich migrate
 
 format:
 	uv run isort src/ tests/
