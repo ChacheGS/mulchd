@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@os-eco/mulch-cli": "^0.10.7"
+  }
+}
