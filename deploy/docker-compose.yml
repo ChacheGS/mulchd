@@ -29,13 +29,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: mulchd
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: mulchd
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mulchd"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     environment:
       MULCHD_DATA_PATH: /data/mulch
-      MULCHD_DB_URL: asyncpg://mulchd:${POSTGRES_PASSWORD}@postgres:5432/mulchd
+      MULCHD_DB_URL: asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MULCHD_HOST: 0.0.0.0
       MULCHD_PORT: 8000
       MULCHD_SECRET_KEY: ${MULCHD_SECRET_KEY}
