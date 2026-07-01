@@ -3,7 +3,7 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
@@ -12,7 +12,8 @@ from starlette.middleware.sessions import SessionMiddleware
 from tortoise import Tortoise
 
 from .admin import router as admin_router
-from .auth import AuthContext, Role, authenticate
+from .api import router as api_router
+from .auth import AuthContext, Role, authenticate_project_token
 from .config import TORTOISE_ORM, settings
 from .domains import STARTER_DOMAINS, expertise_path, list_available_domains, mulch_dir
 from .models import RecordMeta
@@ -303,16 +304,18 @@ app.add_middleware(
     https_only=False,
 )
 app.include_router(admin_router)
+app.include_router(api_router)
 
 
 async def get_auth_context(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    org: str = Query(..., description="Organisation slug"),
-    project: str = Query(..., description="Project slug"),
 ) -> AuthContext:
-    ctx = await authenticate(credentials.credentials, org, project)
+    ctx = await authenticate_project_token(credentials.credentials)
     if ctx is None:
-        raise HTTPException(status_code=401, detail="Invalid token or no access to this project")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or inactive project token. Use a project-scoped token for MCP access.",
+        )
     return ctx
 
 

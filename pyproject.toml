@@ -2,7 +2,7 @@
 name = "mulchd"
 version = "0.1.0"
 description = "Self-hosted MCP knowledge server for engineering teams"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -64,3 +64,8 @@ target-version = ["py312"]
 
 [tool.uv]
 package = true
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+]

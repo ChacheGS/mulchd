@@ -10,7 +10,7 @@ class Role(StrEnum):
 
 
 class Organization(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     slug = fields.CharField(max_length=64, unique=True)
     display_name = fields.CharField(max_length=128)
     created_at = fields.DatetimeField(auto_now_add=True)
@@ -20,7 +20,7 @@ class Organization(models.Model):
 
 
 class Project(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     slug = fields.CharField(max_length=64)
     display_name = fields.CharField(max_length=128)
     org: fields.ForeignKeyRelation[Organization] = fields.ForeignKeyField(
@@ -34,7 +34,7 @@ class Project(models.Model):
 
 
 class User(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     username = fields.CharField(max_length=64, unique=True)
     display_name = fields.CharField(max_length=128)
     token_hash = fields.CharField(max_length=64)  # sha256 hex of bearer token
@@ -46,7 +46,7 @@ class User(models.Model):
 
 
 class UserMembership(models.Model):
-    id = fields.IntField(pk=True)
+    id = fields.IntField(primary_key=True)
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="memberships"
     )
@@ -61,8 +61,25 @@ class UserMembership(models.Model):
         unique_together = (("user", "project"),)
 
 
+class ProjectToken(models.Model):
+    id = fields.IntField(primary_key=True)
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="project_tokens"
+    )
+    project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
+        "models.Project", related_name="tokens"
+    )
+    token_hash = fields.CharField(max_length=64, unique=True)
+    label = fields.CharField(max_length=128, default="")
+    created_at = fields.DatetimeField(auto_now_add=True)
+    active = fields.BooleanField(default=True)
+
+    class Meta:
+        table = "project_tokens"
+
+
 class RecordMeta(models.Model):
-    record_id = fields.CharField(max_length=32, pk=True)  # mx-xxxxxx
+    record_id = fields.CharField(max_length=32, primary_key=True)  # mx-xxxxxx
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
         "models.Project", related_name="records"
     )
