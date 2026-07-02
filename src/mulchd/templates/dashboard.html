@@ -38,11 +38,12 @@
   <div class="empty-state">No tool calls recorded yet.</div>
 {% else %}
   {% for ps in project_stats %}
-  <div style="border-bottom: 1px solid #f1f5f9;" class="proj-row">
+  {% set proj_idx = loop.index %}
+  <div style="border-bottom: 1px solid #f1f5f9;">
 
     {# ── aggregate row (always visible) ── #}
-    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer"
-         onclick="toggleDetail('proj-{{ loop.index }}')">
+    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer; user-select:none"
+         onclick="toggleDetail('proj-{{ proj_idx }}', '{{ ps.project.org.slug }}', '{{ ps.project.slug }}')">
       <span style="font-size:13px; font-weight:500; color:#1e293b">
         {{ ps.project.org.slug }} / {{ ps.project.slug }}
       </span>
@@ -60,13 +61,29 @@
       <span class="text-muted">·</span>
       <span class="text-muted">{{ ps.by_tool | length }} tool{{ 's' if ps.by_tool | length != 1 else '' }}</span>
       {% endif %}
-      <span style="color:#94a3b8; font-size:11px" id="proj-{{ loop.index }}-chevron">▼</span>
+      <span style="color:#94a3b8; font-size:11px" id="proj-{{ proj_idx }}-chevron">▼</span>
     </div>
 
     {# ── collapsible detail ── #}
-    <div id="proj-{{ loop.index }}" style="display:none; padding:0 16px 12px; display:none">
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:4px">
+    <div id="proj-{{ proj_idx }}" style="display:none; padding:12px 16px 16px">
 
+      {# period selector + chart #}
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px">
+        <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.05em">Trend</span>
+        <span style="flex:1"></span>
+        {% for p, label in [('day','Day'), ('week','Week'), ('month','Month')] %}
+        <button onclick="loadChart('proj-{{ proj_idx }}', '{{ ps.project.org.slug }}', '{{ ps.project.slug }}', '{{ p }}')"
+                id="proj-{{ proj_idx }}-btn-{{ p }}"
+                style="padding:2px 10px; font-size:11px; border-radius:3px; border:1px solid #e2e8f0; cursor:pointer; background:white; color:#64748b; font-weight:500">
+          {{ label }}
+        </button>
+        {% endfor %}
+      </div>
+      <canvas id="proj-{{ proj_idx }}-chart" height="110"
+              style="display:block; width:100%; margin-bottom:16px"></canvas>
+
+      {# by-tool / by-user breakdown #}
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
         <div>
           <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By tool</div>
           {% for tool, count in ps.by_tool %}
@@ -76,7 +93,6 @@
           </div>
           {% endfor %}
         </div>
-
         <div>
           <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By user</div>
           {% for user, count in ps.by_user %}
@@ -86,23 +102,78 @@
           </div>
           {% endfor %}
         </div>
-
       </div>
-    </div>
 
+    </div>
   </div>
   {% endfor %}
 {% endif %}
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
-function toggleDetail(id) {
+var _charts = {};
+var _activePeriod = {};
+
+function toggleDetail(id, org, project) {
   var el = document.getElementById(id);
   var ch = document.getElementById(id + '-chevron');
   var open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   ch.textContent = open ? '▼' : '▲';
+  if (!open && !_charts[id]) {
+    loadChart(id, org, project, 'week');
+  }
+}
+
+function loadChart(id, org, project, period) {
+  _activePeriod[id] = period;
+
+  // highlight active button
+  ['day','week','month'].forEach(function(p) {
+    var btn = document.getElementById(id + '-btn-' + p);
+    if (!btn) return;
+    btn.style.background = p === period ? '#1e293b' : 'white';
+    btn.style.color = p === period ? 'white' : '#64748b';
+    btn.style.borderColor = p === period ? '#1e293b' : '#e2e8f0';
+  });
+
+  fetch('/admin/api/usage/' + org + '/' + project + '?period=' + period)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var canvas = document.getElementById(id + '-chart');
+      if (!canvas) return;
+      if (_charts[id]) { _charts[id].destroy(); }
+      _charts[id] = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: data.labels,
+          datasets: [{
+            data: data.counts,
+            backgroundColor: 'rgba(59,130,246,0.18)',
+            borderColor: '#3b82f6',
+            borderWidth: 1.5,
+            borderRadius: 2,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 11 }, color: '#94a3b8' }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: '#f1f5f9' },
+              ticks: { font: { size: 11 }, color: '#94a3b8', precision: 0 }
+            }
+          }
+        }
+      });
+    });
 }
 </script>
-
 {% endblock %}
