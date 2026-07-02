@@ -15,3 +15,4 @@ deploy/*.env
 node_modules/
 .mulch/
 .coverage
+.claude/settings.local.json

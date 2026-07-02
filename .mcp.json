@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mulchd": {
+      "type": "http",
+      "url": "http://localhost:8000/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MULCHD_TOKEN_PERSONAL_MULCHD}"
+      }
+    }
+  }
+}
