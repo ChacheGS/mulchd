@@ -147,15 +147,17 @@ Works with **Claude Code** (macOS / Linux / Windows) and **Claude Desktop**
 
 1. **Never send a token over plain HTTP** to a non-localhost server. `localhost` is for
    local testing only; the team server is always HTTPS.
-2. **Never put a raw token on a command line.** Command lines end up in shell history and
-   conversation transcripts. Source tokens from the credentials file and use variable
-   expansion.
-3. **Never commit a raw token to git.** `.mcp.json` uses env var expansion and is safe to
-   commit; the credentials file and any `.env` holding tokens are never committed.
+2. **Global token — keep it out of transcripts and command lines.** It can mint project
+   tokens for any project you have access to. Store it in the credentials file and
+   reference it via env var expansion, never paste it raw into a chat or shell command.
+3. **Project tokens — don't commit them to git.** They're scoped to one project and one
+   machine; if one leaks the blast radius is limited to what Claude can already read in
+   that project. `.mcp.json` uses env var expansion and is safe to commit; any file
+   holding a raw token value is not.
 4. **Never record secrets into mulchd** — no credentials, API keys, account IDs, or
    client-identifying data. Records are team-visible and permanent.
-5. Token possibly leaked (lost laptop, pasted into a transcript, committed by accident)?
-   Revoke immediately — see **Token lifecycle**.
+5. Token possibly leaked? Revoke it — see **Token lifecycle**. Global token leaks are
+   higher urgency than project token leaks.
 
 ---
 
