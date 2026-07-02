@@ -11,7 +11,7 @@ os.environ.setdefault("MULCHD_DB_URL", "sqlite://:memory:")
 from mulchd.main import app  # noqa: E402 — env must be set before import
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 async def db():
     await Tortoise.init(
         db_url="sqlite://:memory:",
