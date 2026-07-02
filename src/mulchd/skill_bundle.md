@@ -167,14 +167,17 @@ All tokens live in one file per machine, outside any repo.
 
 ```bash
 mkdir -p ~/.config/mulchd && chmod 700 ~/.config/mulchd
-cat > ~/.config/mulchd/credentials <<'EOF'
+printf 'Global token: ' && IFS= read -rs GLBTOK && echo
+cat > ~/.config/mulchd/credentials <<EOF
 export MULCHD_URL="{{ mulchd_url }}"
-export MULCHD_GLOBAL_TOKEN="glb_..."
+export MULCHD_GLOBAL_TOKEN="$GLBTOK"
 # One line per project token:
 export {{ token_env_var }}="prj_..."
 EOF
-chmod 600 ~/.config/mulchd/credentials
+chmod 600 ~/.config/mulchd/credentials && echo "Saved."
 ```
+
+`IFS= read -rs` works in bash and zsh. The token never appears in the transcript.
 
 Load: `source ~/.config/mulchd/credentials`
 
