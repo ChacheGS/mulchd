@@ -84,6 +84,9 @@
       {% if r.recorded_at %}<span class="text-muted">{{ r.recorded_at[:10] }}</span>{% endif %}
       {% if r.id %}<span class="monospace" style="font-size:11px; color:#cbd5e1">{{ r.id }}</span>{% endif %}
       {% if r.id %}
+      <button onclick="toggleEdit('edit-{{ r.id }}')"
+        style="background:none; border:none; cursor:pointer; color:#94a3b8; font-size:12px; padding:0 2px; line-height:1"
+        title="Edit record">✎</button>
       <form method="post" action="/admin/records/delete"
             onsubmit="return confirm('Delete {{ r.id }}?')" style="margin:0">
         <input type="hidden" name="project" value="{{ selected }}">
@@ -205,6 +208,33 @@
       {% endif %}
 
     </div>
+
+    {# ── inline edit panel ── #}
+    {% if r.id %}
+    {% set edit_fields = [] %}
+    {% if r.type == 'convention' %}{% set edit_fields = [('content', r.content or '')] %}
+    {% elif r.type == 'decision' %}{% set edit_fields = [('title', r.title or ''), ('rationale', r.rationale or '')] %}
+    {% elif r.type == 'failure' %}{% set edit_fields = [('description', r.description or ''), ('resolution', r.resolution or '')] %}
+    {% elif r.type in ('pattern', 'reference', 'guide') %}{% set edit_fields = [('name', r.name or ''), ('description', r.description or '')] %}
+    {% endif %}
+    <div id="edit-{{ r.id }}" style="display:none; background:#f8fafc; border-top:1px solid #f1f5f9; padding:12px 16px">
+      {% for fname, fval in edit_fields %}
+      <form method="post" action="/admin/records/edit" style="margin-bottom:8px">
+        <input type="hidden" name="project" value="{{ selected }}">
+        <input type="hidden" name="domain" value="{{ domain.name }}">
+        <input type="hidden" name="record_id" value="{{ r.id }}">
+        <input type="hidden" name="field" value="{{ fname }}">
+        <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px">{{ fname }}</div>
+        <div style="display:flex; gap:6px; align-items:flex-start">
+          <textarea name="value" rows="3"
+            style="flex:1; font-size:13px; border:1px solid #d1d5db; border-radius:4px; padding:6px 8px; font-family:inherit; resize:vertical; line-height:1.5">{{ fval }}</textarea>
+          <button type="submit" class="btn btn-primary" style="padding:5px 12px; white-space:nowrap">Save</button>
+        </div>
+      </form>
+      {% endfor %}
+    </div>
+    {% endif %}
+
   </div>
   {% endfor %}
 </div>
@@ -219,6 +249,10 @@ function filterRecords(q) {
   document.querySelectorAll('.record-card').forEach(function(card) {
     card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
+}
+function toggleEdit(id) {
+  var el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 </script>
 {% endif %}
