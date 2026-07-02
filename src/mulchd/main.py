@@ -10,6 +10,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from starlette.middleware.sessions import SessionMiddleware
 from tortoise import Tortoise
@@ -27,6 +28,7 @@ _ctx: ContextVar[AuthContext | None] = ContextVar("auth_context", default=None)
 
 mcp_server = Server("mulchd")
 sse = SseServerTransport("/messages/")
+streamable_manager = StreamableHTTPSessionManager(app=mcp_server, stateless=True)
 security = HTTPBearer()
 
 # ---------------------------------------------------------------------------
@@ -469,7 +471,8 @@ def _format_records(records: list[dict]) -> str:
 async def lifespan(_: FastAPI):
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas()
-    yield
+    async with streamable_manager.run():
+        yield
     await Tortoise.close_connections()
 
 
@@ -496,6 +499,12 @@ async def get_auth_context(
     return ctx
 
 
+@app.api_route("/mcp", methods=["GET", "POST", "DELETE"])
+async def streamable_http_endpoint(request: Request, ctx: AuthContext = Depends(get_auth_context)) -> None:
+    _ctx.set(ctx)
+    await streamable_manager.handle_request(request.scope, request.receive, request._send)
+
+
 @app.get("/sse")
 async def sse_endpoint(request: Request, ctx: AuthContext = Depends(get_auth_context)):
     _ctx.set(ctx)
@@ -510,17 +519,95 @@ async def handle_messages(request: Request):
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "skill_version": SKILL_VERSION}
 
 
-_SKILL_PATH = Path(__file__).parent / "skill.md"
+# ---------------------------------------------------------------------------
+# Skill bundle
+# ---------------------------------------------------------------------------
+
+SKILL_VERSION = "2.1"
+_SKILL_BUNDLE_PATH = Path(__file__).parent / "skill_bundle.md"
+_VALID_SKILL_FILES = {"SKILL.md", "SETUP.md", "REFERENCE.md"}
+_optional_bearer = HTTPBearer(auto_error=False)
+
+
+def _render_bundle(base_url: str, ctx: AuthContext | None) -> str:
+    from jinja2 import Environment, BaseLoader
+
+    template_str = _SKILL_BUNDLE_PATH.read_text()
+    env = Environment(loader=BaseLoader(), keep_trailing_newline=True)
+    template = env.from_string(template_str)
+
+    if ctx is not None:
+        org = ctx.org.slug
+        project = ctx.project.slug
+        token_env_var = f"MULCHD_TOKEN_{org.upper().replace('-', '_')}_{project.upper().replace('-', '_')}"
+        anon_note = ""
+    else:
+        org = "ORG"
+        project = "PROJECT"
+        token_env_var = "TOKEN_ENV_VAR"
+        anon_note = (
+            "> **Note:** Fetched without a project token — replace ORG/PROJECT/TOKEN_ENV_VAR "
+            "manually, or re-fetch with `Authorization: Bearer <project-token>` "
+            "for a personalized copy.\n\n"
+        )
+
+    rendered = template.render(
+        mulchd_url=base_url,
+        skill_version=SKILL_VERSION,
+        org=org,
+        project=project,
+        token_env_var=token_env_var,
+        token_env_var_ref="${" + token_env_var + "}",
+    )
+
+    return anon_note + rendered if anon_note else rendered
+
+
+def _extract_file(bundle: str, filename: str) -> str | None:
+    start_marker = f"<!-- mulchd:file {filename} -->"
+    end_marker = "<!-- mulchd:endfile -->"
+    start = bundle.find(start_marker)
+    if start == -1:
+        return None
+    start += len(start_marker)
+    end = bundle.find(end_marker, start)
+    if end == -1:
+        return None
+    return bundle[start:end].strip()
 
 
 @app.get("/skill", response_class=PlainTextResponse)
-async def skill(request: Request) -> str:
-    text = _SKILL_PATH.read_text()
+async def skill_bundle_endpoint(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+) -> str:
+    ctx: AuthContext | None = None
+    if credentials:
+        ctx = await authenticate_project_token(credentials.credentials)
     base = str(request.base_url).rstrip("/")
-    return text.replace("https://SERVER_URL", base).replace("SERVER_URL", base)
+    return _render_bundle(base, ctx)
+
+
+@app.get("/skill/{filename}", response_class=PlainTextResponse)
+async def skill_file_endpoint(
+    filename: str,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_optional_bearer),
+) -> str:
+    if filename not in _VALID_SKILL_FILES:
+        raise HTTPException(status_code=404, detail=f"Unknown skill file: {filename}")
+    ctx: AuthContext | None = None
+    if credentials:
+        ctx = await authenticate_project_token(credentials.credentials)
+    base = str(request.base_url).rstrip("/")
+    bundle = _render_bundle(base, ctx)
+    content = _extract_file(bundle, filename)
+    if content is None:
+        raise HTTPException(status_code=404, detail=f"File not found in bundle: {filename}")
+    return content
 
 
 def run() -> None:
