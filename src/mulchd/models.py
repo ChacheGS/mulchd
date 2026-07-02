@@ -79,6 +79,22 @@ class ProjectToken(models.Model):
         table = "project_tokens"
 
 
+class ToolCall(models.Model):
+    id = fields.IntField(primary_key=True)
+    project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
+        "models.Project", related_name="tool_calls"
+    )
+    author: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="tool_calls", null=True
+    )
+    tool = fields.CharField(max_length=64)
+    client = fields.CharField(max_length=64, default="unknown")
+    called_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "tool_calls"
+
+
 class RecordMeta(models.Model):
     record_id = fields.CharField(max_length=32, primary_key=True)  # mx-xxxxxx
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
