@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     db_url: str = "sqlite://mulchd.db"
     host: str = "0.0.0.0"
     port: int = 8000
+    reload: bool = False
     secret_key: str  # required — set MULCHD_SECRET_KEY
     admin_password: str  # required — set MULCHD_ADMIN_PASSWORD
 

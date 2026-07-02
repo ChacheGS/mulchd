@@ -647,4 +647,4 @@ async def skill_file_endpoint(
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("mulchd.main:app", host=settings.host, port=settings.port, reload=False)
+    uvicorn.run("mulchd.main:app", host=settings.host, port=settings.port, reload=settings.reload)
