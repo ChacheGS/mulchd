@@ -83,25 +83,29 @@
         <canvas id="proj-{{ proj_idx }}-chart"></canvas>
       </div>
 
-      {# by-tool / by-user breakdown #}
+      {# by-tool / by-user breakdown (populated by JS on period change) #}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
         <div>
           <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By tool</div>
-          {% for tool, count in ps.by_tool %}
-          <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:1px solid #f8fafc">
-            <span class="monospace" style="color:#475569">{{ tool }}</span>
-            <span style="font-weight:500; color:#1e293b">{{ count }}</span>
+          <div id="proj-{{ proj_idx }}-by-tool">
+            {% for tool, count in ps.by_tool %}
+            <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:1px solid #f8fafc">
+              <span class="monospace" style="color:#475569">{{ tool }}</span>
+              <span style="font-weight:500; color:#1e293b">{{ count }}</span>
+            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
         </div>
         <div>
           <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By user</div>
-          {% for user, count in ps.by_user %}
-          <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:1px solid #f8fafc">
-            <span class="monospace" style="color:#475569">{{ user }}</span>
-            <span style="font-weight:500; color:#1e293b">{{ count }}</span>
+          <div id="proj-{{ proj_idx }}-by-user">
+            {% for user, count in ps.by_user %}
+            <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:1px solid #f8fafc">
+              <span class="monospace" style="color:#475569">{{ user }}</span>
+              <span style="font-weight:500; color:#1e293b">{{ count }}</span>
+            </div>
+            {% endfor %}
           </div>
-          {% endfor %}
         </div>
       </div>
 
@@ -115,6 +119,17 @@
 <script>
 var _charts = {};
 var _activePeriod = {};
+
+function renderBreakdown(id, rows) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  if (!rows || !rows.length) { el.innerHTML = '<span class="text-muted">—</span>'; return; }
+  el.innerHTML = rows.map(function(r) {
+    return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:1px solid #f8fafc">'
+      + '<span class="monospace" style="color:#475569">' + r[0] + '</span>'
+      + '<span style="font-weight:500;color:#1e293b">' + r[1] + '</span></div>';
+  }).join('');
+}
 
 function toggleDetail(id, org, project) {
   var el = document.getElementById(id);
@@ -162,18 +177,15 @@ function loadChart(id, org, project, period) {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: {
-              grid: { display: false },
-              ticks: { font: { size: 11 }, color: '#94a3b8' }
-            },
-            y: {
-              beginAtZero: true,
-              grid: { color: '#f1f5f9' },
-              ticks: { font: { size: 11 }, color: '#94a3b8', precision: 0 }
-            }
+            x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#94a3b8' } },
+            y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 11 }, color: '#94a3b8', precision: 0 } }
           }
         }
       });
+
+      // Update breakdown tables
+      renderBreakdown(id + '-by-tool', data.by_tool);
+      renderBreakdown(id + '-by-user', data.by_user);
     });
 }
 </script>

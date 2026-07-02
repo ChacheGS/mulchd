@@ -102,10 +102,6 @@ TOOLS = [
                         "decision: {title, rationale}."
                     ),
                 },
-                "client": {
-                    "type": "string",
-                    "description": "Client identifier, e.g. claude-desktop or claude-code.",
-                },
             },
             "required": ["domain", "type", "classification", "content"],
         },
@@ -271,9 +267,8 @@ async def list_tools() -> list[Tool]:
     return TOOLS
 
 
-async def _record_tool_call(name: str, ctx: AuthContext, args: dict) -> None:
-    client = args.get("client", "unknown")
-    await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=client)
+async def _record_tool_call(name: str, ctx: AuthContext) -> None:
+    await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=ctx.client)
 
 
 @mcp_server.call_tool()
@@ -283,7 +278,7 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     if ctx is None:
         raise ValueError("No auth context in scope")
 
-    asyncio.create_task(_record_tool_call(name, ctx, args))
+    asyncio.create_task(_record_tool_call(name, ctx))
 
     match name:
         case "read_expertise":
@@ -347,7 +342,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         domain=domain,
         author=ctx.user,
         session_id=session_id,
-        client=args.get("client", "unknown"),
+        client=ctx.client,
     )
 
     return [
@@ -410,7 +405,17 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
                 results.append(r)
 
     results.sort(key=lambda r: r.get("recorded_at", ""), reverse=True)
-    return [TextContent(type="text", text=_format_records(results))]
+
+    # Enrich with session info from RecordMeta for grouped output
+    record_ids = [r["id"] for r in results if r.get("id")]
+    meta_rows = (
+        await RecordMeta.filter(record_id__in=record_ids)
+        .prefetch_related("author")
+        .values("record_id", "session_id", "author__username")
+    ) if record_ids else []
+    meta_by_id = {m["record_id"]: m for m in meta_rows}
+
+    return [TextContent(type="text", text=_format_recent(results, meta_by_id))]
 
 
 async def _get_record_schema(args: dict) -> list[TextContent]:
@@ -470,6 +475,50 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
 
     await delete_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id)
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
+
+
+def _format_recent(records: list[dict], meta_by_id: dict) -> str:
+    """Format get_recent output grouped by session, newest session first."""
+    if not records:
+        return "No records found in the requested window."
+
+    # Group by session_id (or fallback to author+date bucket for untracked records)
+    from collections import defaultdict
+    sessions: dict[str, list[dict]] = defaultdict(list)
+    session_keys: list[str] = []
+    for r in records:
+        m = meta_by_id.get(r.get("id", ""))
+        sid = str(m["session_id"]) if m else f"untracked:{r.get('recorded_at', '')[:10]}"
+        if sid not in sessions:
+            session_keys.append(sid)
+        sessions[sid].append((r, m))
+
+    lines: list[str] = []
+    for sid in session_keys:
+        entries = sessions[sid]
+        first_meta = next((m for _, m in entries if m), None)
+        author = first_meta["author__username"] if first_meta else "unknown"
+        first_ts = entries[-1][0].get("recorded_at", "")[:16].replace("T", " ")
+        lines.append(f"## Session — {author} from {first_ts} UTC")
+        for r, _ in entries:
+            lines.append(f"  {_format_single(r)}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_single(r: dict) -> str:
+    title = r.get("title") or r.get("name") or ""
+    body = r.get("content") or r.get("rationale") or r.get("description") or ""
+    domain = r.get("_domain", "?")
+    rtype = r.get("type", "?")
+    rid = r.get("id", "?")
+    header = f"[{domain}/{rtype}] {rid}"
+    if title:
+        header += f" — {title}"
+    if body:
+        header += f"\n    {str(body)[:160]}"
+    return header
 
 
 def _format_records(records: list[dict]) -> str:
@@ -533,14 +582,23 @@ async def get_auth_context(
     return ctx
 
 
+def _client_from_request(request: Request) -> str:
+    ua = request.headers.get("user-agent", "")
+    if ua:
+        return ua[:128]
+    return "unknown"
+
+
 @app.api_route("/mcp", methods=["GET", "POST", "DELETE"])
 async def streamable_http_endpoint(request: Request, ctx: AuthContext = Depends(get_auth_context)) -> None:
+    ctx.client = _client_from_request(request)
     _ctx.set(ctx)
     await streamable_manager.handle_request(request.scope, request.receive, request._send)
 
 
 @app.get("/sse")
 async def sse_endpoint(request: Request, ctx: AuthContext = Depends(get_auth_context)):
+    ctx.client = _client_from_request(request)
     _ctx.set(ctx)
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await mcp_server.run(streams[0], streams[1], mcp_server.create_initialization_options())
@@ -560,7 +618,7 @@ async def health() -> dict:
 # Skill bundle
 # ---------------------------------------------------------------------------
 
-SKILL_VERSION = "2.1"
+SKILL_VERSION = "2.2"
 _SKILL_BUNDLE_PATH = Path(__file__).parent / "skill_bundle.md"
 _VALID_SKILL_FILES = {"SKILL.md", "SETUP.md", "REFERENCE.md"}
 _optional_bearer = HTTPBearer(auto_error=False)

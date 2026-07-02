@@ -11,6 +11,7 @@ class AuthContext:
     project: Project
     org: Organization
     role: Role
+    client: str = "unknown"
 
 
 def _hash_token(token: str) -> str:
