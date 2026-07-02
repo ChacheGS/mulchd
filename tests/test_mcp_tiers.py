@@ -74,3 +74,41 @@ def test_render_html_and_plain_same_url():
     url = "https://mulchd.example.com"
     assert url in render_onboarding_text(url, "html")
     assert url in render_onboarding_text(url, "plain")
+
+
+@pytest.mark.no_db
+def test_tier1_tool_list_has_exactly_one_tool():
+    from mulchd.mcp.tier1 import TIER1_TOOLS
+    assert len(TIER1_TOOLS) == 1
+    assert TIER1_TOOLS[0].name == "get_setup_instructions"
+
+
+@pytest.mark.no_db
+def test_tier1_server_has_no_instructions():
+    from mulchd.mcp.tier1 import tier1_server
+    opts = tier1_server.create_initialization_options()
+    assert opts.instructions is None
+
+
+@pytest.mark.no_db
+@pytest.mark.asyncio
+async def test_tier1_get_setup_instructions_returns_onboard_link(monkeypatch):
+    from mulchd.config import settings
+    monkeypatch.setattr(settings, "base_url", "https://test.example.com")
+    monkeypatch.setattr(settings, "admin_contact", None)
+    from mulchd.mcp.tier1 import _get_setup_instructions
+    result = await _get_setup_instructions()
+    assert len(result) == 1
+    assert "test.example.com" in result[0].text
+    assert "/onboard" in result[0].text
+
+
+@pytest.mark.no_db
+@pytest.mark.asyncio
+async def test_tier1_get_setup_instructions_includes_contact(monkeypatch):
+    from mulchd.config import settings
+    monkeypatch.setattr(settings, "base_url", "https://test.example.com")
+    monkeypatch.setattr(settings, "admin_contact", "ops@example.com")
+    from mulchd.mcp.tier1 import _get_setup_instructions
+    result = await _get_setup_instructions()
+    assert "ops@example.com" in result[0].text
