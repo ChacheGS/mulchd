@@ -22,9 +22,9 @@
 
   <div style="margin-bottom: 28px">
     <div style="font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 6px">
-      Skill URL
+      Setup guide URL
     </div>
-    <div class="code-box">{{ server_url }}/skill</div>
+    <div class="code-box">{{ server_url }}/onboard</div>
     <div class="text-muted" style="margin-top: 6px">
       Send this URL to <strong>{{ display_name }}</strong> along with their global token above.
     </div>
@@ -33,14 +33,13 @@
   <div class="alert" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:16px;margin-bottom:24px">
     <div style="font-size:13px;font-weight:600;color:#166534;margin-bottom:8px">Setup instructions for {{ display_name }}</div>
     <ol style="margin:0;padding-left:20px;font-size:13px;color:#15803d;line-height:1.8">
-      <li>Open a Claude session in your project directory.</li>
-      <li>Say: <em>"Set up mulchd from {{ server_url }}/skill"</em></li>
-      <li>When prompted, paste your global token.</li>
-      <li>Claude will list your accessible projects, let you pick one, mint a scoped token, and write <code style="font-size:11px;background:#dcfce7;padding:1px 4px;border-radius:3px">.claude/settings.local.json</code> automatically.</li>
-      <li>Restart Claude Code — the mulchd tools will be active.</li>
+      <li>Open <code style="font-size:11px;background:#dcfce7;padding:1px 4px;border-radius:3px">{{ server_url }}/onboard</code> and add the global-token MCP entry to your MCP client config.</li>
+      <li>Connect with the global token, then ask Claude to run <code style="font-size:11px;background:#dcfce7;padding:1px 4px;border-radius:3px">mint_project_token</code> for your project.</li>
+      <li>Claude will give you the exact config snippet for a project-scoped connection.</li>
+      <li>Add that entry to your config and reconnect — the mulchd knowledge tools will be active.</li>
     </ol>
     <div class="text-muted" style="margin-top:10px;font-size:12px;color:#166534">
-      You must add this user to at least one project before step 3 — otherwise the project list will be empty.
+      You must add this user to at least one project first — otherwise the project list will be empty.
     </div>
   </div>
 
