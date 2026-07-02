@@ -10,7 +10,7 @@ description: >
 
 # mulchd — Session Workflow
 
-> Skill version: 2.1 · Canonical source: http://localhost:8000/skill
+> Skill version: 2.2 · Canonical source: http://localhost:8000/skill
 > First time on this machine or MCP server not connected? → read `SETUP.md`.
 > Unsure which fields a record type needs? → call `get_record_schema` or read `REFERENCE.md`.
 
@@ -20,8 +20,12 @@ visible to the whole team, attributed to the user, and persists indefinitely.
 ## Session start
 
 1. **Note the current UTC timestamp** — needed for `get_recent` at session end.
-2. `list_domains()` — see what knowledge domains exist.
-3. `read_expertise(domains=[...])` — load the domains relevant to the current task.
+2. `list_domains()` — see what domains exist and when they were last updated.
+3. `read_expertise(domains=[...])` — pass all domains returned above, or just the ones
+   relevant to the current task. When in doubt, load everything: records are short.
+4. **Check skill version**: compare the version in this file (`2.2`) against
+   `GET http://localhost:8000/health` → `skill_version`. If they differ, re-fetch the skill
+   files from `http://localhost:8000/skill/SKILL.md` etc. before continuing.
 
 ## During the session — record proactively
 
@@ -32,11 +36,13 @@ Record **without being asked** whenever:
 - Something breaks and gets fixed → `failure`
 - A reusable solution or code shape emerges → `pattern`
 
-**Before every write, search first:** `search_expertise(query="<topic keywords>")`
+**Before writing to an existing domain, search first:**
+`search_expertise(query="<topic keywords>")`
 
 - Equivalent record exists → don't duplicate. Skip, or `edit_record` (own records), or
   write a new record with `supersedes` if this replaces it.
 - No match → record it.
+- **First write to a brand-new domain** → skip the search, there's nothing there yet.
 
 **Never record:**
 
