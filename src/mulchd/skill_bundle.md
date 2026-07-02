@@ -250,7 +250,14 @@ The env vars must exist in the environment Claude Code launches from: source the
 credentials file in your shell profile (`.bashrc` / `.zshrc` / PowerShell `$PROFILE`), or
 use a gitignored `.env` if your launcher supports it.
 
-Approve the server in `.claude/settings.local.json` (gitignored — do not commit):
+Approve the server and supply the token in `.claude/settings.local.json` (gitignored — do
+not commit). There are two ways to provide the env vars:
+
+**Option A — credentials file (recommended for shared machines or multiple projects)**
+
+Source the credentials file in your shell profile (`.bashrc` / `.zshrc` / PowerShell
+`$PROFILE`) so the vars are present when Claude Code launches, then add only the approval
+key to `settings.local.json`:
 
 ```json
 {
@@ -258,8 +265,25 @@ Approve the server in `.claude/settings.local.json` (gitignored — do not commi
 }
 ```
 
-Restart Claude Code, run `/mcp` — `mulchd` should show green. If disconnected, verify the
-env vars are set in the launching shell (`echo $MULCHD_URL`).
+**Option B — inline env in `settings.local.json` (simpler for a single project)**
+
+Put the vars directly in `settings.local.json`. Claude Code injects them into MCP server
+processes automatically — no shell profile change needed:
+
+```json
+{
+  "enabledMcpjsonServers": ["mulchd"],
+  "env": {
+    "MULCHD_URL": "{{ mulchd_url }}",
+    "{{ token_env_var }}": "prj_..."
+  }
+}
+```
+
+`settings.local.json` is gitignored by default, but it sits inside the repo directory.
+If you ever share or commit that file by accident, revoke the token immediately.
+
+Restart Claude Code, run `/mcp` — `mulchd` should show green.
 
 ### Claude Desktop — global config file
 
