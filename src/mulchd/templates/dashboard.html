@@ -79,8 +79,9 @@
         </button>
         {% endfor %}
       </div>
-      <canvas id="proj-{{ proj_idx }}-chart" height="110"
-              style="display:block; width:100%; margin-bottom:16px"></canvas>
+      <div style="position:relative; height:120px; margin-bottom:16px">
+        <canvas id="proj-{{ proj_idx }}-chart"></canvas>
+      </div>
 
       {# by-tool / by-user breakdown #}
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
