@@ -39,8 +39,8 @@ The raw token is shown once. Copy it.
 {
   "mcpServers": {
     "mulchd": {
-      "type": "sse",
-      "url": "https://SERVER_URL/sse",
+      "type": "http",
+      "url": "https://SERVER_URL/mcp",
       "headers": {
         "Authorization": "Bearer PROJECT_TOKEN"
       }
@@ -48,6 +48,9 @@ The raw token is shown once. Copy it.
   }
 }
 ```
+
+> If your client does not support streamable HTTP yet, use the legacy SSE transport instead:
+> `"type": "sse"` with `"url": "https://SERVER_URL/sse"`
 
 **3b. Approve it in `.claude/settings.local.json`** (gitignored by default — do not commit):
 
@@ -60,7 +63,7 @@ The raw token is shown once. Copy it.
 Restart Claude Code. To confirm the server is connected, run `/mcp`; `mulchd` should appear with a green status. If it shows as disconnected, double-check the URL and token.
 
 > **Claude Desktop** — the server goes in the global config file, not `.mcp.json`. The
-> exact format for SSE servers in Desktop is unverified (not available on Linux). Best effort:
+> exact format is unverified (not available on Linux). Best effort:
 >
 > Mac: `~/Library/Application Support/Claude/claude_desktop_config.json`
 > Windows: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -69,8 +72,8 @@ Restart Claude Code. To confirm the server is connected, run `/mcp`; `mulchd` sh
 > {
 >   "mcpServers": {
 >     "mulchd-acme-infra": {
->       "type": "sse",
->       "url": "https://SERVER_URL/sse",
+>       "type": "http",
+>       "url": "https://SERVER_URL/mcp",
 >       "headers": {
 >         "Authorization": "Bearer PROJECT_TOKEN"
 >       }
@@ -80,7 +83,8 @@ Restart Claude Code. To confirm the server is connected, run `/mcp`; `mulchd` sh
 > ```
 >
 > Name the entry to identify the project (e.g. `mulchd-acme-infra`) since the config is global.
-> If this format does not work, check the Claude Desktop MCP documentation for the current SSE syntax.
+> If streamable HTTP is not supported by your Desktop version, try `"type": "sse"` with
+> `"url": "https://SERVER_URL/sse"` instead.
 
 **4. Add session instructions to `CLAUDE.md`**
 
