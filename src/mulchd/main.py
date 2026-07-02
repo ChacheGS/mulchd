@@ -8,12 +8,10 @@ from tortoise import Tortoise
 
 from .admin import router as admin_router
 from .api import router as api_router
-from .auth import AuthContext, authenticate_global_token, authenticate_project_token
+from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
 from .mcp import tier_managers, tier_servers
-from .mcp.context import _ctx, _global_ctx
-from .mcp.onboarding import render_onboarding_text
-from .models import User
+from .mcp.context import _ctx
 
 sse = SseServerTransport("/messages/")
 
@@ -23,7 +21,7 @@ def _client_from_request(request: Request) -> str:
     return ua[:128] if ua else "unknown"
 
 
-async def resolve_mcp_tier(request: Request) -> tuple[str, AuthContext | User | None]:
+async def resolve_mcp_tier(request: Request) -> tuple[str, AuthContext | None]:
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         return "tier1", None
@@ -31,10 +29,7 @@ async def resolve_mcp_tier(request: Request) -> tuple[str, AuthContext | User | 
     ctx = await authenticate_project_token(token)
     if ctx is not None:
         ctx.client = _client_from_request(request)
-        return "tier3", ctx
-    user = await authenticate_global_token(token)
-    if user is not None:
-        return "tier2", user
+        return "tier2", ctx
     return "tier1", None
 
 
@@ -45,7 +40,6 @@ async def lifespan(_: FastAPI):
     async with (
         tier_managers["tier1"].run(),
         tier_managers["tier2"].run(),
-        tier_managers["tier3"].run(),
     ):
         yield
     await Tortoise.close_connections()
@@ -65,20 +59,16 @@ app.include_router(api_router)
 @app.api_route("/mcp", methods=["GET", "POST", "DELETE"])
 async def mcp_endpoint(request: Request) -> None:
     tier, ctx = await resolve_mcp_tier(request)
-    if tier == "tier3":
+    if tier == "tier2":
         _ctx.set(ctx)
-    elif tier == "tier2":
-        _global_ctx.set(ctx)
     await tier_managers[tier].handle_request(request.scope, request.receive, request._send)
 
 
 @app.get("/sse")
 async def sse_endpoint(request: Request):
     tier, ctx = await resolve_mcp_tier(request)
-    if tier == "tier3":
+    if tier == "tier2":
         _ctx.set(ctx)
-    elif tier == "tier2":
-        _global_ctx.set(ctx)
     server = tier_servers[tier]
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())
@@ -92,12 +82,6 @@ async def handle_messages(request: Request):
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
-
-
-@app.get("/onboard", response_class=HTMLResponse)
-async def onboard(request: Request) -> str:
-    base_url = str(request.base_url).rstrip("/")
-    return render_onboarding_text(base_url, "html", admin_contact=settings.admin_contact)
 
 
 def run() -> None:
