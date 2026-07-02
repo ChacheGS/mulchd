@@ -11,6 +11,18 @@ os.environ.setdefault("MULCHD_DB_URL", "sqlite://:memory:")
 from mulchd.main import app  # noqa: E402 — env must be set before import
 
 
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line("markers", "no_db: mark test as not requiring database fixture")
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip the db fixture for tests marked with no_db only in test_mcp_tiers.py."""
+    for item in items:
+        if "no_db" in item.keywords and "test_mcp_tiers.py" in str(item.fspath):
+            item.fixturenames = [f for f in item.fixturenames if f != "db"]
+
+
 @pytest.fixture(autouse=True)
 async def db():
     await Tortoise.init(
