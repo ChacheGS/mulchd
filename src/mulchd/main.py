@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import datetime, timedelta, timezone
+from uuid import UUID, uuid7
 
 from pathlib import Path
 
@@ -25,6 +25,21 @@ from .mulch import delete_record, edit_record, ensure_domain, search_domains, wr
 from .records import find_record, read_domain_records
 
 _ctx: ContextVar[AuthContext | None] = ContextVar("auth_context", default=None)
+
+# In-memory session cache: (user_id, project_id) → (session_uuid7, expires_at)
+_SESSION_WINDOW = timedelta(hours=4)
+_active_sessions: dict[tuple[int, int], tuple[UUID, datetime]] = {}
+
+
+def _get_or_create_session(user_id: int, project_id: int) -> UUID:
+    key = (user_id, project_id)
+    now = datetime.now(timezone.utc)
+    entry = _active_sessions.get(key)
+    if entry and entry[1] > now:
+        return entry[0]
+    sid = uuid7()
+    _active_sessions[key] = (sid, now + _SESSION_WINDOW)
+    return sid
 
 mcp_server = Server("mulchd")
 sse = SseServerTransport("/messages/")
@@ -85,10 +100,6 @@ TOOLS = [
                         "failure: {description, resolution}. "
                         "decision: {title, rationale}."
                     ),
-                },
-                "session_id": {
-                    "type": "string",
-                    "description": "UUID identifying the current session. Generate once per session.",
                 },
                 "client": {
                     "type": "string",
@@ -321,7 +332,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     await ensure_domain(m_dir, domain)
     written = await write_record(m_dir, domain, record)
 
-    session_id = UUID(args["session_id"]) if "session_id" in args else uuid4()
+    session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordMeta.create(
         record_id=written["id"],
         project=ctx.project,
