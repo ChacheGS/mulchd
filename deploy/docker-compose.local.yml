@@ -3,6 +3,9 @@
 #
 # Exposes mulchd on localhost:8000 directly. Traefik is omitted by only
 # starting the services named on the command line.
+#
+# Hot-reload: docker compose ... up mulchd postgres --watch
+# Syncs src/ and migrations/ into the container; uvicorn restarts on change.
 services:
   postgres:
     ports:
@@ -10,3 +13,13 @@ services:
   mulchd:
     ports:
       - "8000:8000"
+    environment:
+      MULCHD_RELOAD: "true"
+    develop:
+      watch:
+        - action: sync
+          path: ../src
+          target: /app/src
+        - action: sync
+          path: ../migrations
+          target: /app/migrations
