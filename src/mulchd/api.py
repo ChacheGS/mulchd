@@ -55,6 +55,7 @@ class OrgOut(BaseModel):
 class ProjectOut(BaseModel):
     slug: str
     display_name: str
+    knowledge_language: str | None = None
 
 
 class ProjectAccessOut(BaseModel):
@@ -93,7 +94,7 @@ async def list_my_projects(user: User = Depends(get_global_user)):
     return [
         ProjectAccessOut(
             org=OrgOut(slug=m.project.org.slug, display_name=m.project.org.display_name),
-            project=ProjectOut(slug=m.project.slug, display_name=m.project.display_name),
+            project=ProjectOut(slug=m.project.slug, display_name=m.project.display_name, knowledge_language=m.project.knowledge_language),
             role=m.role,
         )
         for m in memberships

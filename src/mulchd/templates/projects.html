@@ -6,17 +6,26 @@
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
 <div class="card">
-  <div class="table-header" style="grid-template-columns: 1fr 1fr 2fr 80px">
+  <div class="table-header" style="grid-template-columns: 1fr 1fr 2fr 100px 120px">
     <span>Org</span>
     <span>Slug</span>
     <span>Display name</span>
+    <span>Language</span>
     <span>Created</span>
   </div>
   {% for project in projects %}
-  <div class="table-row" style="grid-template-columns: 1fr 1fr 2fr 80px">
+  <div class="table-row" style="grid-template-columns: 1fr 1fr 2fr 100px 120px; align-items: center">
     <span class="monospace text-muted">{{ project.org.slug }}</span>
     <span class="monospace">{{ project.slug }}</span>
     <span>{{ project.display_name }}</span>
+    <span>
+      <form method="post" action="/admin/projects/{{ project.id }}/language" style="display:flex;gap:4px;align-items:center">
+        <input type="text" name="knowledge_language" value="{{ project.knowledge_language or '' }}"
+               placeholder="e.g. en" style="width:60px;font-size:0.8rem;padding:2px 4px"
+               title="BCP 47 language tag (e.g. en, es, pt-BR). Leave blank for no constraint.">
+        <button type="submit" class="btn" style="padding:2px 6px;font-size:0.75rem">✓</button>
+      </form>
+    </span>
     <span class="text-muted">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
   </div>
   {% else %}
@@ -43,6 +52,10 @@
         <div class="form-group">
           <label for="display_name">Display name</label>
           <input type="text" id="display_name" name="display_name" required placeholder="e.g. Data Platform" style="width:200px">
+        </div>
+        <div class="form-group">
+          <label for="knowledge_language">Language</label>
+          <input type="text" id="knowledge_language" name="knowledge_language" placeholder="e.g. en" style="width:80px" title="BCP 47 language tag. Leave blank for no constraint.">
         </div>
         <button type="submit" class="btn btn-primary">Create</button>
       </div>

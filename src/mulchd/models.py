@@ -23,6 +23,7 @@ class Project(models.Model):
     id = fields.IntField(primary_key=True)
     slug = fields.CharField(max_length=64)
     display_name = fields.CharField(max_length=128)
+    knowledge_language = fields.CharField(max_length=16, null=True, default=None)
     org: fields.ForeignKeyRelation[Organization] = fields.ForeignKeyField(
         "models.Organization", related_name="projects"
     )

@@ -353,6 +353,16 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
 async def _list_domains(ctx: AuthContext) -> list[TextContent]:
     domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     lines = [f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n"]
+    if ctx.project.knowledge_language:
+        lang = ctx.project.knowledge_language
+        lines.append(
+            f"**Knowledge base language:** `{lang}`\n"
+            f"All records in this project are written in this language. "
+            f"Translate search queries to `{lang}` before calling "
+            f"`search_expertise` or `read_expertise`, and write all record content "
+            f"in `{lang}` regardless of the conversation language. "
+            f"Translate back when presenting records to the user.\n"
+        )
     for d in domains:
         updated = d["last_updated"] or "never"
         lines.append(f"**{d['name']}** — {d['description']}")
