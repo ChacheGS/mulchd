@@ -461,13 +461,18 @@ def _format_records(records: list[dict]) -> str:
         owner = r.get("owner", "")
         rid = r.get("id", "?")
         recorded_at = r.get("recorded_at", "")[:10]
-        main = r.get("content") or r.get("rationale") or r.get("description") or r.get("name") or ""
+        title = r.get("title") or r.get("name") or ""
+        body = r.get("content") or r.get("rationale") or r.get("description") or ""
         author_str = f" by {owner}" if owner else ""
-        lines.append(
+        header = (
             f"[{r.get('_domain')}/{r.get('type')}/{r.get('classification')}]"
             f" {rid}{author_str} ({recorded_at})"
         )
-        lines.append(f"  {str(main)[:200]}")
+        if title:
+            header += f" — {title}"
+        lines.append(header)
+        if body:
+            lines.append(f"  {str(body)[:200]}")
         lines.append("")
     return "\n".join(lines)
 

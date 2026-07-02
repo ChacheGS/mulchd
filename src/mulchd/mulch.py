@@ -46,11 +46,35 @@ async def write_record(mulch_dir: Path, domain: str, record: dict) -> dict:
     Returns the written record dict (with id populated by mulch).
     """
     result = await _run(mulch_dir, ["record", domain, "--stdin"], stdin_data=json.dumps(record))
-    # --json output: { success, command, action, domain, type, record, ... }
+    # ml's --stdin mode returns a summary {success, created, ...} without the record object.
+    # Fall back to reading the JSONL and matching on the fields we set.
     written = result.get("record") if isinstance(result, dict) else None
+    if written is None and isinstance(result, dict) and result.get("created", 0) > 0:
+        written = _find_written_record(mulch_dir / "expertise" / f"{domain}.jsonl", record)
     if written is None:
         raise MulchError(f"ml record returned no record object: {result}")
     return written
+
+
+def _find_written_record(jsonl_path: Path, record: dict) -> dict | None:
+    """Find a just-written record in the JSONL by matching stable fields."""
+    try:
+        lines = jsonl_path.read_text().splitlines()
+    except OSError:
+        return None
+    # Match on fields we set ourselves — recorded_at + owner + type is unique enough.
+    match_keys = {k: record[k] for k in ("recorded_at", "owner", "type") if k in record}
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            candidate = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if all(candidate.get(k) == v for k, v in match_keys.items()):
+            return candidate
+    return None
 
 
 async def search_domains(

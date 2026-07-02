@@ -18,19 +18,25 @@
 
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
   <div class="page-title" style="margin-bottom:0">Records</div>
-  <form method="get" action="/admin/records" style="display:flex; align-items:center; gap:8px">
-    <label for="proj-select" style="font-size:12px; color:#64748b">Project</label>
-    <select id="proj-select" name="project" onchange="this.form.submit()"
-      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
-      <option value="">— select —</option>
-      {% for p in projects %}
-      <option value="{{ p.org.slug }}/{{ p.slug }}"
-        {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
-        {{ p.org.slug }} / {{ p.slug }}
-      </option>
-      {% endfor %}
-    </select>
-  </form>
+  <div style="display:flex; align-items:center; gap:12px">
+    {% if selected %}
+    <input id="record-search" type="search" placeholder="Filter records…" oninput="filterRecords(this.value)"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; outline:none; width:200px">
+    {% endif %}
+    <form method="get" action="/admin/records" style="display:flex; align-items:center; gap:8px">
+      <label for="proj-select" style="font-size:12px; color:#64748b">Project</label>
+      <select id="proj-select" name="project" onchange="this.form.submit()"
+        style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
+        <option value="">— select —</option>
+        {% for p in projects %}
+        <option value="{{ p.org.slug }}/{{ p.slug }}"
+          {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
+          {{ p.org.slug }} / {{ p.slug }}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
 </div>
 
 {% if not selected %}
@@ -77,6 +83,17 @@
       {% if r.owner %}<span class="monospace text-muted">{{ r.owner }}</span>{% endif %}
       {% if r.recorded_at %}<span class="text-muted">{{ r.recorded_at[:10] }}</span>{% endif %}
       {% if r.id %}<span class="monospace" style="font-size:11px; color:#cbd5e1">{{ r.id }}</span>{% endif %}
+      {% if r.id %}
+      <form method="post" action="/admin/records/delete"
+            onsubmit="return confirm('Delete {{ r.id }}?')" style="margin:0">
+        <input type="hidden" name="project" value="{{ selected }}">
+        <input type="hidden" name="domain" value="{{ domain.name }}">
+        <input type="hidden" name="record_id" value="{{ r.id }}">
+        <button type="submit"
+          style="background:none; border:none; cursor:pointer; color:#ef4444; font-size:12px; padding:0 2px; line-height:1"
+          title="Delete record">✕</button>
+      </form>
+      {% endif %}
     </div>
 
     {# ── type-specific fields ── #}
@@ -193,5 +210,16 @@
 </div>
 {% endfor %}
 
+{% endif %}
+
+{% if selected %}
+<script>
+function filterRecords(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.record-card').forEach(function(card) {
+    card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
 {% endif %}
 {% endblock %}
