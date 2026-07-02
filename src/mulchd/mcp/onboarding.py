@@ -1,3 +1,4 @@
+from html import escape
 from typing import Literal
 
 
@@ -42,9 +43,9 @@ def render_onboarding_text(
             "<h2>Step 1: Add a global-token MCP entry</h2>\n"
             "<p>This lets Claude mint project tokens for you.</p>\n"
             "<h3>Claude Code — <code>.mcp.json</code></h3>\n"
-            f"<pre>{claude_code_snippet}</pre>\n"
+            f"<pre>{escape(claude_code_snippet)}</pre>\n"
             "<h3>Claude Desktop — <code>claude_desktop_config.json</code> (requires Node.js/npx)</h3>\n"
-            f"<pre>{desktop_snippet}</pre>\n"
+            f"<pre>{escape(desktop_snippet)}</pre>\n"
             "<h2>Step 2: Ask Claude to mint a project token</h2>\n"
             "<p>Once connected with a global token, ask Claude to run "
             "<code>mint_project_token</code> for your project. It will give you the exact "
