@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from ..domains import mulch_dir
 from ..models import Project
@@ -8,6 +8,20 @@ from ..records import read_domain_records
 from ._shared import is_admin, redirect_login, templates
 
 router = APIRouter()
+
+
+@router.get("/records/count")
+async def records_count(request: Request, project: str = "") -> Response:
+    if not is_admin(request):
+        return redirect_login()
+    count = 0
+    if project and "/" in project:
+        org_slug, project_slug = project.split("/", 1)
+        expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
+        if expertise_dir.exists():
+            for jsonl_file in expertise_dir.glob("*.jsonl"):
+                count += sum(1 for line in jsonl_file.read_text().splitlines() if line.strip())
+    return JSONResponse({"count": count})
 
 
 @router.post("/records/delete")
@@ -71,6 +85,8 @@ async def records_page(request: Request, project: str = "") -> Response:
                             {"name": jsonl_file.stem, "records": records}
                         )
 
+    total_record_count = sum(len(d["records"]) for d in domains_data)
+
     return templates.TemplateResponse(
         request,
         "records.html",
@@ -80,5 +96,6 @@ async def records_page(request: Request, project: str = "") -> Response:
             "selected": project,
             "selected_project": selected_project,
             "domains": domains_data,
+            "total_record_count": total_record_count,
         },
     )

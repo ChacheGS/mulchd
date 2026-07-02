@@ -14,7 +14,18 @@
   .record-file { background: #f1f5f9; border-radius: 3px; padding: 1px 6px; font-family: 'Courier New', monospace; font-size: 11px; color: #475569; }
   .record-ids { display: flex; flex-wrap: wrap; gap: 4px; }
   .record-id-ref { background: #ede9fe; border-radius: 3px; padding: 1px 6px; font-family: 'Courier New', monospace; font-size: 11px; color: #6d28d9; }
+  #new-records-banner { display:none; align-items:center; gap:10px; background:#fef3c7; border:1px solid #fcd34d; border-radius:6px; padding:8px 14px; margin-bottom:16px; font-size:13px; color:#92400e; }
+  #new-records-banner a { color:#92400e; font-weight:600; text-decoration:underline; cursor:pointer; }
+  #new-records-banner button { background:none; border:none; cursor:pointer; color:#92400e; font-size:14px; padding:0; margin-left:auto; line-height:1; }
 </style>
+
+{% if selected %}
+<div id="new-records-banner">
+  <span>↑ </span><span id="new-records-msg"></span>
+  <a onclick="location.reload()">Refresh</a>
+  <button onclick="dismissBanner()" title="Dismiss">✕</button>
+</div>
+{% endif %}
 
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
   <div class="page-title" style="margin-bottom:0">Records</div>
@@ -244,16 +255,61 @@
 
 {% if selected %}
 <script>
+var INITIAL_COUNT = {{ total_record_count }};
+var _pollInterval = null;
+var _dismissed = false;
+
 function filterRecords(q) {
   q = q.toLowerCase();
   document.querySelectorAll('.record-card').forEach(function(card) {
     card.style.display = !q || card.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
+
 function toggleEdit(id) {
   var el = document.getElementById(id);
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
+
+function dismissBanner() {
+  document.getElementById('new-records-banner').style.display = 'none';
+  _dismissed = true;
+  startPolling();
+}
+
+function hasOpenEditPanel() {
+  return Array.from(document.querySelectorAll('[id^="edit-"]'))
+    .some(function(el) { return el.style.display !== 'none'; });
+}
+
+function checkForNewRecords() {
+  if (_dismissed || hasOpenEditPanel()) return;
+  fetch('/admin/records/count?project={{ selected | urlencode }}')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.count > INITIAL_COUNT) {
+        var diff = data.count - INITIAL_COUNT;
+        document.getElementById('new-records-msg').textContent =
+          diff + ' new record' + (diff === 1 ? '' : 's') + ' since this page loaded — ';
+        document.getElementById('new-records-banner').style.display = 'flex';
+        stopPolling();
+      }
+    })
+    .catch(function() {});
+}
+
+function startPolling() {
+  if (_pollInterval) return;
+  _pollInterval = setInterval(checkForNewRecords, 15000);
+}
+
+function stopPolling() {
+  clearInterval(_pollInterval);
+  _pollInterval = null;
+}
+
+window.addEventListener('beforeunload', stopPolling);
+startPolling();
 </script>
 {% endif %}
 {% endblock %}
