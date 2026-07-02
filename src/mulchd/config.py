@@ -11,11 +11,19 @@ class Settings(BaseSettings):
     reload: bool = False
     secret_key: str  # required — set MULCHD_SECRET_KEY
     admin_password: str  # required — set MULCHD_ADMIN_PASSWORD
+    admin_contact: str | None = None  # MULCHD_ADMIN_CONTACT — rendered as-is on /onboard
+    base_url: str | None = None  # MULCHD_BASE_URL — derived from host+port if unset
 
     model_config = {"env_file": ".env", "env_prefix": "MULCHD_"}
 
+    @property
+    def resolved_base_url(self) -> str:
+        if self.base_url:
+            return self.base_url.rstrip("/")
+        return f"http://{self.host}:{self.port}"
 
-settings = Settings()  # type: ignore[call-arg]  # pydantic-settings resolves from env at runtime
+
+settings = Settings()  # type: ignore[call-arg]
 
 TORTOISE_ORM = {
     "connections": {"default": settings.db_url},

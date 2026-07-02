@@ -11,8 +11,18 @@ os.environ.setdefault("MULCHD_DB_URL", "sqlite://:memory:")
 from mulchd.main import app  # noqa: E402 — env must be set before import
 
 
+def pytest_configure(config):
+    config.addinivalue_line("markers", "no_db: mark test to skip database fixture")
+
+
+def pytest_runtest_setup(item):
+    # Don't auto-apply the db fixture for tests marked with no_db
+    if "no_db" in item.keywords:
+        item.fixturenames[:] = [f for f in item.fixturenames if f != "db"]
+
+
 @pytest.fixture(autouse=True)
-async def db():
+async def db(request):
     await Tortoise.init(
         db_url="sqlite://:memory:",
         modules={"models": ["mulchd.models", "aerich.models"]},
