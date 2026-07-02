@@ -168,3 +168,74 @@ def test_tier3_server_has_session_workflow_instructions():
     opts = tier3_server.create_initialization_options()
     assert opts.instructions == SESSION_WORKFLOW
     assert len(SESSION_WORKFLOW) > 200
+
+
+async def test_onboard_returns_200_with_config_snippets(client):
+    resp = await client.get("/onboard")
+    assert resp.status_code == 200
+    assert "mcp-remote" in resp.text
+    assert ".mcp.json" in resp.text
+
+
+async def test_onboard_no_contact_when_unset(client, monkeypatch):
+    from mulchd.config import settings
+    monkeypatch.setattr(settings, "admin_contact", None)
+    resp = await client.get("/onboard")
+    assert resp.status_code == 200
+    assert "ops@example.com" not in resp.text
+
+
+async def test_onboard_shows_contact_when_set(client, monkeypatch):
+    from mulchd.config import settings
+    monkeypatch.setattr(settings, "admin_contact", "ops@example.com")
+    resp = await client.get("/onboard")
+    assert resp.status_code == 200
+    assert "ops@example.com" in resp.text
+
+
+async def test_resolve_tier1_with_no_auth(client):
+    from starlette.requests import Request
+    from mulchd.main import resolve_mcp_tier
+    scope = {"type": "http", "method": "POST", "path": "/mcp",
+             "headers": [], "query_string": b""}
+    req = Request(scope)
+    tier, ctx = await resolve_mcp_tier(req)
+    assert tier == "tier1"
+    assert ctx is None
+
+
+async def test_resolve_tier2_with_global_token(db):
+    from starlette.requests import Request
+    from mulchd.auth import create_user
+    from mulchd.main import resolve_mcp_tier
+    _, token = await create_user("jorge", "Jorge")
+    scope = {
+        "type": "http", "method": "POST", "path": "/mcp",
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+        "query_string": b"",
+    }
+    req = Request(scope)
+    tier, ctx = await resolve_mcp_tier(req)
+    assert tier == "tier2"
+    assert ctx.username == "jorge"
+
+
+async def test_resolve_tier3_with_project_token(db):
+    from starlette.requests import Request
+    from mulchd.auth import create_project_token, create_user
+    from mulchd.main import resolve_mcp_tier
+    from mulchd.models import Organization, Project, UserMembership, Role
+    user, _ = await create_user("jorge", "Jorge")
+    org = await Organization.create(slug="acme", display_name="Acme")
+    proj = await Project.create(slug="demo", display_name="Demo", org=org)
+    await UserMembership.create(user=user, project=proj, role=Role.WRITER)
+    _, token = await create_project_token(user, proj, label="test")
+    scope = {
+        "type": "http", "method": "POST", "path": "/mcp",
+        "headers": [(b"authorization", f"Bearer {token}".encode())],
+        "query_string": b"",
+    }
+    req = Request(scope)
+    tier, ctx = await resolve_mcp_tier(req)
+    assert tier == "tier3"
+    assert ctx.project.slug == "demo"
