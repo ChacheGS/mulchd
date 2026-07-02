@@ -187,7 +187,7 @@ async def test_skill_bundle_authenticated(db):
 
 
 @pytest.mark.anyio
-async def test_skill_bundle_bad_token_falls_back_to_anonymous():
+async def test_skill_bundle_bad_token_falls_back_to_anonymous(db):
     """An invalid token should not cause a 401 — fall back to anonymous render."""
     status, body = await _get("/skill", token="prj_invalid_garbage")
     assert status == 200
