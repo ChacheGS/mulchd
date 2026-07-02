@@ -28,4 +28,81 @@
     </div>
   </a>
 </div>
+
+<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:10px">
+  Tool usage — last {{ window_days }} days
+</div>
+
+<div class="card">
+{% if not project_stats %}
+  <div class="empty-state">No tool calls recorded yet.</div>
+{% else %}
+  {% for ps in project_stats %}
+  <div style="border-bottom: 1px solid #f1f5f9;" class="proj-row">
+
+    {# ── aggregate row (always visible) ── #}
+    <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer"
+         onclick="toggleDetail('proj-{{ loop.index }}')">
+      <span style="font-size:13px; font-weight:500; color:#1e293b">
+        {{ ps.project.org.slug }} / {{ ps.project.slug }}
+      </span>
+      {% if ps.project.display_name %}
+      <span class="text-muted">{{ ps.project.display_name }}</span>
+      {% endif %}
+      <span style="flex:1"></span>
+      <span style="font-size:13px; font-weight:600; color:#3b82f6">{{ ps.total }}</span>
+      <span class="text-muted" style="min-width:28px">calls</span>
+      {% if ps.by_user %}
+      <span class="text-muted">·</span>
+      <span class="text-muted">{{ ps.by_user | length }} user{{ 's' if ps.by_user | length != 1 else '' }}</span>
+      {% endif %}
+      {% if ps.by_tool %}
+      <span class="text-muted">·</span>
+      <span class="text-muted">{{ ps.by_tool | length }} tool{{ 's' if ps.by_tool | length != 1 else '' }}</span>
+      {% endif %}
+      <span style="color:#94a3b8; font-size:11px" id="proj-{{ loop.index }}-chevron">▼</span>
+    </div>
+
+    {# ── collapsible detail ── #}
+    <div id="proj-{{ loop.index }}" style="display:none; padding:0 16px 12px; display:none">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:4px">
+
+        <div>
+          <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By tool</div>
+          {% for tool, count in ps.by_tool %}
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:1px solid #f8fafc">
+            <span class="monospace" style="color:#475569">{{ tool }}</span>
+            <span style="font-weight:500; color:#1e293b">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+
+        <div>
+          <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By user</div>
+          {% for user, count in ps.by_user %}
+          <div style="display:flex; justify-content:space-between; font-size:13px; padding:3px 0; border-bottom:1px solid #f8fafc">
+            <span class="monospace" style="color:#475569">{{ user }}</span>
+            <span style="font-weight:500; color:#1e293b">{{ count }}</span>
+          </div>
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+  {% endfor %}
+{% endif %}
+</div>
+
+<script>
+function toggleDetail(id) {
+  var el = document.getElementById(id);
+  var ch = document.getElementById(id + '-chevron');
+  var open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  ch.textContent = open ? '▼' : '▲';
+}
+</script>
+
 {% endblock %}

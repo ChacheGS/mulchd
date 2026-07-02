@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -20,7 +21,7 @@ from .api import router as api_router
 from .auth import AuthContext, Role, authenticate_project_token
 from .config import TORTOISE_ORM, settings
 from .domains import expertise_path, list_available_domains, mulch_dir
-from .models import RecordMeta
+from .models import RecordMeta, ToolCall
 from .mulch import delete_record, edit_record, ensure_domain, search_domains, write_record
 from .records import find_record, read_domain_records
 
@@ -270,12 +271,19 @@ async def list_tools() -> list[Tool]:
     return TOOLS
 
 
+async def _record_tool_call(name: str, ctx: AuthContext, args: dict) -> None:
+    client = args.get("client", "unknown")
+    await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=client)
+
+
 @mcp_server.call_tool()
 async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     args = arguments or {}
     ctx = _ctx.get()
     if ctx is None:
         raise ValueError("No auth context in scope")
+
+    asyncio.create_task(_record_tool_call(name, ctx, args))
 
     match name:
         case "read_expertise":
