@@ -43,6 +43,9 @@
 
     {# ── aggregate row (always visible) ── #}
     <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; cursor:pointer; user-select:none"
+         data-proj-id="proj-{{ proj_idx }}"
+         data-org="{{ ps.project.org.slug }}"
+         data-project="{{ ps.project.slug }}"
          onclick="toggleDetail('proj-{{ proj_idx }}', '{{ ps.project.org.slug }}', '{{ ps.project.slug }}')">
       <span style="font-size:13px; font-weight:500; color:#1e293b">
         {{ ps.project.org.slug }} / {{ ps.project.slug }}
@@ -188,5 +191,49 @@ function loadChart(id, org, project, period) {
       renderBreakdown(id + '-by-user', data.by_user);
     });
 }
+
+var _dashRefreshInterval = null;
+
+function saveOpenPanels() {
+  var open = Array.from(document.querySelectorAll('[data-proj-id]'))
+    .filter(function(row) {
+      var panel = document.getElementById(row.dataset.projId);
+      return panel && panel.style.display !== 'none';
+    })
+    .map(function(row) { return row.dataset.projId; });
+  if (open.length) {
+    sessionStorage.setItem('dash-open', JSON.stringify(open));
+  } else {
+    sessionStorage.removeItem('dash-open');
+  }
+}
+
+function restoreOpenPanels() {
+  var stored = sessionStorage.getItem('dash-open');
+  if (!stored) return;
+  sessionStorage.removeItem('dash-open');
+  var open;
+  try { open = JSON.parse(stored); } catch(e) { return; }
+  open.forEach(function(id) {
+    var row = document.querySelector('[data-proj-id="' + id + '"]');
+    if (!row) return;
+    var panel = document.getElementById(id);
+    if (panel && panel.style.display === 'none') {
+      toggleDetail(id, row.dataset.org, row.dataset.project);
+    }
+  });
+}
+
+window.addEventListener('beforeunload', function() {
+  clearInterval(_dashRefreshInterval);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  restoreOpenPanels();
+  _dashRefreshInterval = setInterval(function() {
+    saveOpenPanels();
+    location.reload();
+  }, 30000);
+});
 </script>
 {% endblock %}
