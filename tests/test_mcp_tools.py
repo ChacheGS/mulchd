@@ -24,7 +24,7 @@ import pytest
 
 from mulchd.auth import AuthContext
 from mulchd.models import Organization, Project, Role, User, UserMembership
-from mulchd.main import _get_recent, _list_domains, _read_expertise, _record_expertise
+from mulchd.mcp.tier3 import _get_recent, _list_domains, _read_expertise, _record_expertise
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -70,8 +70,7 @@ def data_path(tmp_path, monkeypatch):
 @pytest.fixture
 def fake_write_record(monkeypatch, data_path):
     """Replace ml CLI calls with direct JSONL writes for _record_expertise tests."""
-    import mulchd.main as mcp_main
-    import mulchd.mulch as mcp_mulch
+    import mulchd.mcp.tier3 as mcp_tier3
 
     async def _write(m_dir: Path, domain: str, record: dict) -> dict:
         expertise_dir = m_dir / "expertise"
@@ -84,8 +83,8 @@ def fake_write_record(monkeypatch, data_path):
     async def _ensure(m_dir: Path, domain: str) -> None:
         (m_dir / "expertise").mkdir(parents=True, exist_ok=True)
 
-    monkeypatch.setattr(mcp_main, "write_record", _write)
-    monkeypatch.setattr(mcp_main, "ensure_domain", _ensure)
+    monkeypatch.setattr(mcp_tier3, "write_record", _write)
+    monkeypatch.setattr(mcp_tier3, "ensure_domain", _ensure)
 
 
 @pytest.fixture

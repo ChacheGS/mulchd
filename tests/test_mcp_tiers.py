@@ -148,3 +148,23 @@ def test_build_next_steps_uppercases_slugs_with_hyphens():
     from mulchd.mcp.tier2 import _build_next_steps
     result = _build_next_steps("https://x.com", "my-org", "my-project", "t")
     assert "MULCHD_TOKEN_MY_ORG_MY_PROJECT" in result
+
+
+@pytest.mark.no_db
+def test_tier3_tool_list_has_eight_knowledge_tools():
+    from mulchd.mcp.tier3 import TIER3_TOOLS
+    names = {t.name for t in TIER3_TOOLS}
+    assert names == {
+        "read_expertise", "record_expertise", "search_expertise", "list_domains",
+        "get_recent", "get_record_schema", "edit_record", "delete_record",
+    }
+    assert "mint_project_token" not in names
+    assert "get_setup_instructions" not in names
+
+
+@pytest.mark.no_db
+def test_tier3_server_has_session_workflow_instructions():
+    from mulchd.mcp.tier3 import tier3_server, SESSION_WORKFLOW
+    opts = tier3_server.create_initialization_options()
+    assert opts.instructions == SESSION_WORKFLOW
+    assert len(SESSION_WORKFLOW) > 200
