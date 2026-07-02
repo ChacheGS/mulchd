@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-c
 # Install bun + mulch CLI (needed for the ml CLI used by domains.py)
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:$PATH"
-RUN bun install -g @os-eco/mulch-cli
+COPY package.json bun.lock ./
+RUN bun install -p --frozen-lockfile --no-cache -g
 
 WORKDIR /app
 
