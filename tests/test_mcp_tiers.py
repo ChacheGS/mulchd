@@ -73,7 +73,7 @@ def test_tier2_tool_list_has_eight_knowledge_tools():
     from mulchd.mcp.tier2 import TIER2_TOOLS
     names = {t.name for t in TIER2_TOOLS}
     assert names == {
-        "read_expertise", "record_expertise", "search_expertise", "list_domains",
+        "read_records", "write_record", "search_records", "list_domains",
         "get_recent", "get_record_schema", "edit_record", "delete_record",
     }
     assert "mint_project_token" not in names

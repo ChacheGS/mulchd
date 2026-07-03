@@ -19,13 +19,13 @@ mulchd stores shared team expertise for this project. Everything you record is v
 to the whole team, attributed to you, and persists indefinitely.
 
 Session start: call list_domains() — the response includes the current server timestamp, \
-note it for get_recent at session end. Do not call read_expertise() yet; wait until the \
+note it for get_recent at session end. Do not call read_records() yet; wait until the \
 user states a task, then load only the domains relevant to that task.
 
 During the session, record proactively — without being asked — whenever a decision is \
 made or confirmed (type: decision), a convention is established or corrected (type: \
 convention), something breaks and gets fixed (type: failure), or a reusable solution or \
-code shape emerges (type: pattern). Before every write, call search_expertise() first — \
+code shape emerges (type: pattern). Before every write, call search_records() first — \
 if an equivalent record exists, don't duplicate it; edit_record() your own records, or \
 write a new record with supersedes if this replaces someone else's. Keep rationale to \
 2-4 sentences: the decision and the why, not the full deliberation.
@@ -80,9 +80,9 @@ _RECORD_FIELD_KEYS = frozenset({
 
 TIER2_TOOLS = [
     Tool(
-        name="read_expertise",
+        name="read_records",
         description=(
-            "Load team expertise records for context injection at session start. "
+            "Load team records for context injection at session start. "
             "Call this at the beginning of a session with domains relevant to the current task."
         ),
         inputSchema={
@@ -112,9 +112,9 @@ TIER2_TOOLS = [
         annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
-        name="record_expertise",
+        name="write_record",
         description=(
-            "Write a new expertise record to a domain. Call this when a decision, "
+            "Write a new record to a domain. Call this when a decision, "
             "convention, failure, or pattern has been reached — without being asked. "
             "Writing to a domain that does not exist will create it automatically."
         ),
@@ -146,8 +146,8 @@ TIER2_TOOLS = [
         annotations=ToolAnnotations(destructiveHint=True),
     ),
     Tool(
-        name="search_expertise",
-        description="Search expertise records by query, optionally filtered by domain or author.",
+        name="search_records",
+        description="Search records by query, optionally filtered by domain or author.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -226,7 +226,7 @@ TIER2_TOOLS = [
         name="get_record_schema",
         description=(
             "Return the required and optional content fields for one or all record types. "
-            "Call this before record_expertise or edit_record to avoid field-name errors."
+            "Call this before write_record or edit_record to avoid field-name errors."
         ),
         inputSchema={
             "type": "object",
@@ -243,7 +243,7 @@ TIER2_TOOLS = [
     Tool(
         name="edit_record",
         description=(
-            "Update fields on an existing expertise record. "
+            "Update fields on an existing record. "
             "Writers may only edit their own records; admins may edit any record. "
             "Pass only the fields you want to change."
         ),
@@ -457,7 +457,7 @@ async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
             f"**Knowledge base language:** `{lang}`\n"
             f"All records in this project are written in this language. "
             f"Translate search queries to `{lang}` before calling "
-            f"`search_expertise` or `read_expertise`, and write all record content "
+            f"`search_records` or `read_records`, and write all record content "
             f"in `{lang}` regardless of the conversation language. "
             f"Translate back when presenting records to the user.\n"
         )
@@ -573,9 +573,9 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         raise ValueError("No auth context — use a project token for this connection")
     asyncio.create_task(_record_tool_call(name, ctx))
     match name:
-        case "read_expertise":     return await _read_expertise(args, ctx)
-        case "record_expertise":   return await _record_expertise(args, ctx)
-        case "search_expertise":   return await _search_expertise(args, ctx)
+        case "read_records":       return await _read_expertise(args, ctx)
+        case "write_record":       return await _record_expertise(args, ctx)
+        case "search_records":     return await _search_expertise(args, ctx)
         case "list_domains":       return await _list_domains(ctx)
         case "get_recent":         return await _get_recent(args, ctx)
         case "get_record_schema":  return await _get_record_schema(args)
