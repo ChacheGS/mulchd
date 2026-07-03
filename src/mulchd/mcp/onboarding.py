@@ -10,10 +10,10 @@ def render_onboarding_text(
     claude_code_snippet = (
         '{\n'
         '  "mcpServers": {\n'
-        '    "mulchd": {\n'
+        '    "mulchd-<project>": {\n'
         '      "type": "http",\n'
         f'      "url": "{base_url}/mcp",\n'
-        '      "headers": { "Authorization": "Bearer <your-global-token>" }\n'
+        '      "headers": { "Authorization": "Bearer <your-project-token>" }\n'
         '    }\n'
         '  }\n'
         '}'
@@ -21,11 +21,11 @@ def render_onboarding_text(
     desktop_snippet = (
         '{\n'
         '  "mcpServers": {\n'
-        '    "mulchd": {\n'
+        '    "mulchd-<project>": {\n'
         '      "command": "npx",\n'
         '      "args": ["-y", "mcp-remote@latest", "' + base_url + '/mcp",\n'
         '               "--header", "Authorization:${MULCHD_TOKEN}"],\n'
-        '      "env": { "MULCHD_TOKEN": "Bearer <your-global-token>" }\n'
+        '      "env": { "MULCHD_TOKEN": "Bearer <your-project-token>" }\n'
         '    }\n'
         '  }\n'
         '}'
@@ -40,16 +40,17 @@ def render_onboarding_text(
             "code{font-family:monospace}</style></head><body>\n"
             "<h1>mulchd setup</h1>\n"
             f"<p>Server: <code>{base_url}</code></p>\n"
-            "<h2>Step 1: Add a global-token MCP entry</h2>\n"
-            "<p>This lets Claude mint project tokens for you.</p>\n"
+            "<h2>Add your project-token MCP entry</h2>\n"
+            "<p>Replace <code>&lt;project&gt;</code> with your project name and "
+            "<code>&lt;your-project-token&gt;</code> with the token your admin gave you.</p>\n"
             "<h3>Claude Code — <code>.mcp.json</code></h3>\n"
             f"<pre>{escape(claude_code_snippet)}</pre>\n"
             "<h3>Claude Desktop — <code>claude_desktop_config.json</code> (requires Node.js/npx)</h3>\n"
             f"<pre>{escape(desktop_snippet)}</pre>\n"
-            "<h2>Step 2: Ask Claude to mint a project token</h2>\n"
-            "<p>Once connected with a global token, ask Claude to run "
-            "<code>mint_project_token</code> for your project. It will give you the exact "
-            "config snippet for a project-scoped connection.</p>\n"
+            "<h2>Don't have a token yet?</h2>\n"
+            "<p>Ask your admin for a project token, or — if you have a global token — "
+            "connect with it and ask Claude to run "
+            "<code>mint_project_token</code> to mint one for yourself.</p>\n"
             f"{contact_line}"
             "</body></html>"
         )
@@ -57,14 +58,15 @@ def render_onboarding_text(
         contact_line = f"\nNeed a token? {admin_contact}\n" if admin_contact else ""
         return (
             f"mulchd server: {base_url}\n\n"
-            "== Step 1: Add a global-token MCP entry ==\n\n"
+            "== Add your project-token MCP entry ==\n\n"
+            "Replace <project> with your project name and <your-project-token> with\n"
+            "the token your admin gave you.\n\n"
             "Claude Code (.mcp.json):\n"
             f"{claude_code_snippet}\n\n"
             "Claude Desktop (claude_desktop_config.json, requires Node.js/npx):\n"
             f"{desktop_snippet}\n\n"
-            "== Step 2: Ask Claude to mint a project token ==\n\n"
-            "Once connected with a global token, ask Claude to run mint_project_token\n"
-            "for your project. It will give you the exact config snippet for a\n"
-            "project-scoped connection.\n"
+            "== Don't have a token yet? ==\n\n"
+            "Ask your admin for a project token, or — if you have a global token —\n"
+            "connect with it and ask Claude to run mint_project_token to mint one.\n"
             f"{contact_line}"
         )
