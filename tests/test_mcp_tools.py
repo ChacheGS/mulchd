@@ -140,13 +140,13 @@ async def test_read_isolation_different_projects(team, data_path):
     )
 
     # Member of both projects reading from infra sees the record.
-    result = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra))
-    assert "Terraform" in result[0].text
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra))
+    assert "Terraform" in text_content[0].text
 
     # Same user reading from data-platform sees nothing.
-    result = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.data))
-    assert "Terraform" not in result[0].text
-    assert "No records found" in result[0].text
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.data))
+    assert "Terraform" not in text_content[0].text
+    assert "No records found" in text_content[0].text
 
 
 async def test_get_recent_isolation_different_projects(team, data_path):
@@ -176,7 +176,7 @@ async def test_get_recent_isolation_different_projects(team, data_path):
         ctx(t.jorge, t.org, t.data),
     )
     assert "VPCs use /16 CIDR blocks" not in result[0].text
-    assert "No records found" in result[0].text
+    assert "No records" in result[0].text
 
 
 async def test_list_domains_isolation_different_projects(team, data_path):
@@ -204,12 +204,12 @@ async def test_list_domains_isolation_different_projects(team, data_path):
     )
 
     # infra project: 2 records in the infra domain
-    [result] = await _list_domains(ctx(t.carlos, t.org, t.infra))
-    assert "2 records" in result.text
+    text_content, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
+    assert "2 records" in text_content[0].text
 
     # data-platform project: no expertise files at all → no domains listed
-    [result] = await _list_domains(ctx(t.jorge, t.org, t.data))
-    assert "infra" not in result.text
+    text_content, structured = await _list_domains(ctx(t.jorge, t.org, t.data))
+    assert "infra" not in text_content[0].text
 
 
 # ---------------------------------------------------------------------------
@@ -232,9 +232,9 @@ async def test_cross_user_read_sees_all_project_records(team, data_path):
     )
 
     # jorge reads and sees carlos's record with author attribution
-    result = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra))
-    assert "NAT gateway quota exhaustion" in result[0].text
-    assert "carlos" in result[0].text
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra))
+    assert "NAT gateway quota exhaustion" in text_content[0].text
+    assert "carlos" in text_content[0].text
 
 
 async def test_multiple_authors_all_visible_to_team(team, data_path):
@@ -262,8 +262,8 @@ async def test_multiple_authors_all_visible_to_team(team, data_path):
     )
 
     # ana is not in infra, but carlos is — carlos sees both records
-    result = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
-    text = result[0].text
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    text = text_content[0].text
     assert "Aurora Serverless" in text
     assert "Tag all resources" in text
     assert "carlos" in text
@@ -278,14 +278,14 @@ async def test_cross_user_record_then_read(team, data_path, fake_write_record):
             "domain": "infra",
             "type": "convention",
             "classification": "tactical",
-            "content": {"content": "Use IMDSv2 on all EC2 instances"},
+            "content": "Use IMDSv2 on all EC2 instances",
         },
         ctx(t.jorge, t.org, t.infra),
     )
 
-    result = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
-    assert "IMDSv2" in result[0].text
-    assert "Jorge M." in result[0].text
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert "IMDSv2" in text_content[0].text
+    assert "Jorge M." in text_content[0].text
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +304,7 @@ async def test_reader_cannot_write(team, data_path, fake_write_record):
                 "domain": "infra",
                 "type": "convention",
                 "classification": "observational",
-                "content": {"content": "test"},
+                "content": "test",
             },
             reader_ctx,
         )
@@ -317,7 +317,7 @@ async def test_writer_record_returns_confirmation(team, data_path, fake_write_re
             "domain": "infra",
             "type": "convention",
             "classification": "observational",
-            "content": {"content": "Always enable S3 versioning"},
+            "content": "Always enable S3 versioning",
         },
         ctx(t.carlos, t.org, t.infra),
     )
@@ -412,9 +412,9 @@ async def test_get_recent_multiple_domains(team, data_path):
 
 async def test_list_domains_shows_org_and_project_name(team, data_path):
     t = team
-    [result] = await _list_domains(ctx(t.carlos, t.org, t.infra))
-    assert "Acme Corp" in result.text
-    assert "Infrastructure" in result.text
+    text_content, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
+    assert "Acme Corp" in text_content[0].text
+    assert "Infrastructure" in text_content[0].text
 
 
 async def test_list_domains_counts_match_written_records(team, data_path):
@@ -431,5 +431,58 @@ async def test_list_domains_counts_match_written_records(team, data_path):
             owner="carlos",
         )
 
-    [result] = await _list_domains(ctx(t.carlos, t.org, t.infra))
-    assert "3 records" in result.text
+    text_content, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
+    assert "3 records" in text_content[0].text
+
+
+# ---------------------------------------------------------------------------
+# New tests: validation, unknown-domain warnings, structured truncation
+# ---------------------------------------------------------------------------
+
+
+async def test_record_expertise_validates_required_fields(team, data_path, fake_write_record):
+    """record_expertise raises ValueError when required fields are missing."""
+    t = team
+    with pytest.raises(ValueError, match="requires"):
+        await _record_expertise(
+            {
+                "domain": "infra",
+                "type": "decision",
+                "classification": "foundational",
+                # missing title and rationale
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_read_expertise_unknown_domain_warns(team, data_path):
+    """read_expertise warns on unknown domains rather than silently returning empty."""
+    t = team
+    text_content, structured = await _read_expertise(
+        {"domains": ["nonexistent-domain"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Unknown domain" in text_content[0].text
+    assert "nonexistent-domain" in text_content[0].text
+
+
+async def test_read_expertise_structured_truncation_flag(team, data_path):
+    """read_expertise sets truncated=True when limit is hit."""
+    t = team
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="tactical", content="record one", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="tactical", content="record two", owner="carlos")
+
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"], "limit": 1},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert structured["truncated"] is True
+    assert len(structured["records"]) == 1
+
+    text_content2, structured2 = await _read_expertise(
+        {"domains": ["infra"], "limit": 10},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert structured2["truncated"] is False
