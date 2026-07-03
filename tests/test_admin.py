@@ -57,7 +57,7 @@ async def test_token_reveal_page(admin_client):
     resp = await admin_client.get("/admin/users/created")
     assert resp.status_code == 200
     assert "jorge" in resp.text
-    assert "/onboard" in resp.text  # setup guide URL shown on token reveal page
+    assert "/connect" in resp.text  # setup guide URL shown on token reveal page
 
 
 async def test_token_reveal_clears_on_revisit(admin_client):
