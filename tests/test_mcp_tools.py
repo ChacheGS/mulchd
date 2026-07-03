@@ -610,3 +610,42 @@ async def test_read_records_unknown_domain_in_structured_output(team, data_path)
         "structured output must include 'unknown_domains' when unrecognised names are requested"
     )
     assert "does-not-exist" in structured["unknown_domains"]
+
+
+# delete_domain
+# -------------
+
+async def test_delete_domain_removes_empty_domain(team, data_path):
+    """Admin can delete a domain that has no records."""
+    from mulchd.mcp.tier2 import _delete_domain
+    from mulchd.models import Role
+    t = team
+    # create an empty JSONL
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    expertise.mkdir(parents=True, exist_ok=True)
+    (expertise / "scratch.jsonl").write_text("")
+
+    result = await _delete_domain({"domain": "scratch"}, ctx(t.carlos, t.org, t.infra, Role.ADMIN))
+    assert "scratch" in result[0].text
+    assert not (expertise / "scratch.jsonl").exists()
+
+
+async def test_delete_domain_errors_when_domain_has_records(team, data_path):
+    """delete_domain raises when the domain still contains records."""
+    from mulchd.mcp.tier2 import _delete_domain
+    from mulchd.models import Role
+    t = team
+    _jot(data_path, "acme", "infra", "live",
+         type="convention", classification="foundational", content="keep me", owner="carlos")
+
+    with pytest.raises(ValueError, match="record"):
+        await _delete_domain({"domain": "live"}, ctx(t.carlos, t.org, t.infra, Role.ADMIN))
+
+
+async def test_delete_domain_errors_for_non_admin(team, data_path):
+    """delete_domain is admin-only."""
+    from mulchd.mcp.tier2 import _delete_domain
+    from mulchd.models import Role
+    t = team
+    with pytest.raises(ValueError, match="admin"):
+        await _delete_domain({"domain": "any"}, ctx(t.carlos, t.org, t.infra, Role.WRITER))

@@ -69,12 +69,13 @@ async def test_tier1_get_setup_instructions_includes_contact(monkeypatch):
 
 
 @pytest.mark.no_db
-def test_tier2_tool_list_has_eight_knowledge_tools():
+def test_tier2_tool_list_has_nine_knowledge_tools():
     from mulchd.mcp.tier2 import TIER2_TOOLS
     names = {t.name for t in TIER2_TOOLS}
     assert names == {
         "read_records", "write_record", "search_records", "list_domains",
         "get_recent", "get_record_schema", "edit_record", "delete_record",
+        "delete_domain",
     }
     assert "mint_project_token" not in names
     assert "get_setup_instructions" not in names
