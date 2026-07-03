@@ -473,6 +473,32 @@ async def test_read_records_unknown_domain_warns(team, data_path):
     assert "nonexistent-domain" in text_content[0].text
 
 
+async def test_read_records_cursor_pagination(team, data_path):
+    """Cursor-based pagination returns pages in recorded_at order with a next_cursor."""
+    t = team
+    for i in range(3):
+        _jot(data_path, "acme", "infra", "infra",
+             type="convention", classification="tactical",
+             content=f"record {i}", owner="carlos",
+             recorded_at=datetime(2026, 1, 1, i, 0, 0, tzinfo=timezone.utc))
+
+    _, s1 = await _read_expertise({"domains": ["infra"], "limit": 2}, ctx(t.carlos, t.org, t.infra))
+    assert len(s1["records"]) == 2
+    assert s1["truncated"] is True
+    assert s1["next_cursor"] is not None
+    assert s1["records"][0]["content"] == "record 0"
+    assert s1["records"][1]["content"] == "record 1"
+
+    _, s2 = await _read_expertise(
+        {"domains": ["infra"], "limit": 2, "cursor": s1["next_cursor"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert len(s2["records"]) == 1
+    assert s2["records"][0]["content"] == "record 2"
+    assert s2["truncated"] is False
+    assert s2["next_cursor"] is None
+
+
 async def test_read_records_structured_truncation_flag(team, data_path):
     """read_records sets truncated=True when limit is hit."""
     t = team

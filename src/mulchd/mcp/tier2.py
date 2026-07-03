@@ -98,6 +98,10 @@ TIER2_TOOLS = [
                     "default": 50,
                     "description": "Max records to return across all domains.",
                 },
+                "cursor": {
+                    "type": "string",
+                    "description": "recorded_at value of the last record from the previous page. Omit for the first page.",
+                },
             },
             "required": ["domains"],
         },
@@ -106,6 +110,7 @@ TIER2_TOOLS = [
             "properties": {
                 "records": {"type": "array", "items": {"type": "object"}},
                 "truncated": {"type": "boolean"},
+                "next_cursor": {"type": ["string", "null"], "description": "Pass as cursor on the next call to fetch the following page. Null when no more records remain."},
                 "unknown_domains": {"type": "array", "items": {"type": "string"}, "description": "Requested domains not found in this project."},
             },
             "required": ["records", "truncated"],
@@ -409,6 +414,7 @@ def _format_recent(records: list[dict], meta_by_id: dict) -> str:
 async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     domains = args.get("domains", [])
     limit = int(args.get("limit", 50))
+    cursor = args.get("cursor")
     available = {d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)}
     unknown = [d for d in domains if d not in available]
     warning = ""
@@ -420,12 +426,17 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         for r in records:
             r["_domain"] = domain
         all_records.extend(records)
+    all_records.sort(key=lambda r: r.get("recorded_at", ""))
+    if cursor:
+        all_records = [r for r in all_records if r.get("recorded_at", "") > cursor]
     truncated = len(all_records) > limit
-    _mark_superseded(all_records)
-    text = warning + _format_records(all_records[:limit])
+    page = all_records[:limit]
+    next_cursor = page[-1]["recorded_at"] if truncated and page else None
+    _mark_superseded(page)
+    text = warning + _format_records(page)
     return (
         [TextContent(type="text", text=text)],
-        {"records": all_records[:limit], "truncated": truncated, "unknown_domains": unknown},
+        {"records": page, "truncated": truncated, "next_cursor": next_cursor, "unknown_domains": unknown},
     )
 
 
