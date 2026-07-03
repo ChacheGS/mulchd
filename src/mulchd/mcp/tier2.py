@@ -5,7 +5,7 @@ from uuid import UUID, uuid7
 
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import TextContent, Tool
+from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotations
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
@@ -44,8 +44,7 @@ at session end.
 Session end: call get_recent(since=<noted server timestamp>) and relay anything \
 teammates recorded while you were working.
 
-Unsure which fields a record type requires? Call get_record_schema(type) before writing — \
-don't guess field names.\
+Unsure which optional fields a record type supports? Call get_record_schema(type) to see them.\
 """
 
 tier2_server = Server("mulchd", instructions=SESSION_WORKFLOW)
@@ -74,6 +73,11 @@ def _get_or_create_session(user_id: int, project_id: int) -> UUID:
 # Tool registry
 # ---------------------------------------------------------------------------
 
+_RECORD_FIELD_KEYS = frozenset({
+    "content", "title", "rationale", "description", "resolution",
+    "name", "files", "relates_to", "supersedes",
+})
+
 TIER2_TOOLS = [
     Tool(
         name="read_expertise",
@@ -97,12 +101,22 @@ TIER2_TOOLS = [
             },
             "required": ["domains"],
         },
+        outputSchema={
+            "type": "object",
+            "properties": {
+                "records": {"type": "array", "items": {"type": "object"}},
+                "truncated": {"type": "boolean"},
+            },
+            "required": ["records", "truncated"],
+        },
+        annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
         name="record_expertise",
         description=(
             "Write a new expertise record to a domain. Call this when a decision, "
-            "convention, failure, or pattern has been reached — without being asked."
+            "convention, failure, or pattern has been reached — without being asked. "
+            "Writing to a domain that does not exist will create it automatically."
         ),
         inputSchema={
             "type": "object",
@@ -115,19 +129,21 @@ TIER2_TOOLS = [
                 "classification": {
                     "type": "string",
                     "enum": ["foundational", "tactical", "observational"],
+                    "description": "foundational: core conventions/decisions that rarely change; tactical: current approach, may evolve; observational: useful context, specific to a situation or moment",
                 },
-                "content": {
-                    "type": "object",
-                    "description": (
-                        "Type-specific fields. convention: {content}. "
-                        "pattern/reference/guide: {name, description}. "
-                        "failure: {description, resolution}. "
-                        "decision: {title, rationale}."
-                    ),
-                },
+                "content": {"type": "string", "description": "convention: body text"},
+                "title": {"type": "string", "description": "decision: title"},
+                "rationale": {"type": "string", "description": "decision: rationale"},
+                "description": {"type": "string", "description": "failure/pattern/reference/guide: description"},
+                "resolution": {"type": "string", "description": "failure: resolution"},
+                "name": {"type": "string", "description": "pattern/reference/guide: name"},
+                "files": {"type": "array", "items": {"type": "string"}, "description": "Related file paths"},
+                "relates_to": {"type": "array", "items": {"type": "string"}, "description": "Related record IDs"},
+                "supersedes": {"type": "array", "items": {"type": "string"}, "description": "Record IDs this record replaces"},
             },
-            "required": ["domain", "type", "classification", "content"],
+            "required": ["domain", "type", "classification"],
         },
+        annotations=ToolAnnotations(destructiveHint=True),
     ),
     Tool(
         name="search_expertise",
@@ -148,11 +164,40 @@ TIER2_TOOLS = [
             },
             "required": ["query"],
         },
+        outputSchema={
+            "type": "object",
+            "properties": {
+                "records": {"type": "array", "items": {"type": "object"}},
+                "truncated": {"type": "boolean"},
+            },
+            "required": ["records", "truncated"],
+        },
+        annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
         name="list_domains",
         description="List available domains with record counts and last-updated timestamps.",
         inputSchema={"type": "object", "properties": {}},
+        outputSchema={
+            "type": "object",
+            "properties": {
+                "server_time": {"type": "string"},
+                "domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "record_count": {"type": "integer"},
+                            "last_updated": {"type": ["string", "null"]},
+                        },
+                    },
+                },
+            },
+            "required": ["server_time", "domains"],
+        },
+        annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
         name="get_recent",
@@ -175,6 +220,7 @@ TIER2_TOOLS = [
             },
             "required": ["since"],
         },
+        annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
         name="get_record_schema",
@@ -192,6 +238,7 @@ TIER2_TOOLS = [
                 },
             },
         },
+        annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
         name="edit_record",
@@ -208,6 +255,7 @@ TIER2_TOOLS = [
                 "classification": {
                     "type": "string",
                     "enum": ["foundational", "tactical", "observational"],
+                    "description": "foundational: core conventions/decisions that rarely change; tactical: current approach, may evolve; observational: useful context, specific to a situation or moment",
                 },
                 "title": {"type": "string", "description": "decision: title field"},
                 "rationale": {"type": "string", "description": "decision: rationale field"},
@@ -224,6 +272,7 @@ TIER2_TOOLS = [
             },
             "required": ["record_id", "domain"],
         },
+        annotations=ToolAnnotations(destructiveHint=True),
     ),
     Tool(
         name="delete_record",
@@ -239,6 +288,7 @@ TIER2_TOOLS = [
             },
             "required": ["record_id", "domain"],
         },
+        annotations=ToolAnnotations(destructiveHint=True),
     ),
 ]
 
@@ -322,30 +372,45 @@ def _format_recent(records: list[dict], meta_by_id: dict) -> str:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
-async def _read_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     domains = args.get("domains", [])
     limit = int(args.get("limit", 50))
+    available = {d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)}
+    unknown = [d for d in domains if d not in available]
+    warning = ""
+    if unknown:
+        warning = f"⚠ Unknown domain(s): {', '.join(unknown)} — not in this project\n\n"
     all_records: list[dict] = []
     for domain in domains:
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, domain))
         for r in records:
             r["_domain"] = domain
         all_records.extend(records)
-    return [TextContent(type="text", text=_format_records(all_records[:limit]))]
+    truncated = len(all_records) > limit
+    text = warning + _format_records(all_records[:limit])
+    return (
+        [TextContent(type="text", text=text)],
+        {"records": all_records[:limit], "truncated": truncated},
+    )
 
 
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
     if ctx.role == Role.READER:
         raise ValueError("reader role cannot write records")
+    rtype = args["type"]
+    required = list(_RECORD_SCHEMAS[rtype]["required"])
+    missing = [f for f in required if not args.get(f)]
+    if missing:
+        raise ValueError(f"record type '{rtype}' requires: {', '.join(missing)}")
     domain = args["domain"]
     record = {
-        "type": args["type"],
+        "type": rtype,
         "classification": args["classification"],
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "owner": ctx.user.username,
         "owner_display": ctx.user.display_name,
-        **args.get("content", {}),
+        **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await ensure_domain(m_dir, domain)
@@ -362,17 +427,26 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=f"Recorded {written['type']} in {domain} ({written['id']})")]
 
 
-async def _search_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     query = args["query"]
     domains: list[str] | None = args.get("domains") or None
     author_filter = args.get("author")
+    available = {d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)}
+    unknown = [d for d in (domains or []) if d not in available]
+    warning = ""
+    if unknown:
+        warning = f"⚠ Unknown domain(s): {', '.join(unknown)} — not in this project\n\n"
     results = await search_domains(mulch_dir(ctx.org.slug, ctx.project.slug), query, domains)
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
-    return [TextContent(type="text", text=_format_records(results))]
+    text = warning + _format_records(results)
+    return (
+        [TextContent(type="text", text=text)],
+        {"records": results, "truncated": False},
+    )
 
 
-async def _list_domains(ctx: AuthContext) -> list[TextContent]:
+async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
     domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
@@ -391,7 +465,10 @@ async def _list_domains(ctx: AuthContext) -> list[TextContent]:
         updated = d["last_updated"] or "never"
         lines.append(f"**{d['name']}** — {d['description']}")
         lines.append(f"  {d['record_count']} records, last updated: {updated}\n")
-    return [TextContent(type="text", text="\n".join(lines))]
+    return (
+        [TextContent(type="text", text="\n".join(lines))],
+        {"server_time": now, "domains": domains},
+    )
 
 
 async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
@@ -505,3 +582,47 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         case "edit_record":        return await _edit_record(args, ctx)
         case "delete_record":      return await _delete_record(args, ctx)
         case _:                    raise ValueError(f"Unknown tool: {name}")
+
+
+@tier2_server.list_resources()
+async def list_resources() -> list[Resource]:
+    ctx = _ctx.get()
+    if ctx is None:
+        return []
+    domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
+    return [
+        Resource(
+            uri=f"mulchd://domain/{d['name']}",
+            name=d["name"],
+            description=d.get("description", ""),
+            mimeType="text/plain",
+        )
+        for d in domains
+    ]
+
+
+@tier2_server.list_resource_templates()
+async def list_resource_templates() -> list[ResourceTemplate]:
+    return [
+        ResourceTemplate(
+            uriTemplate="mulchd://domain/{name}",
+            name="Domain records",
+            description="All expertise records in a domain. Substitute {name} with the domain name.",
+            mimeType="text/plain",
+        )
+    ]
+
+
+@tier2_server.read_resource()
+async def read_resource(uri) -> str:
+    ctx = _ctx.get()
+    if ctx is None:
+        raise ValueError("No auth context")
+    uri_str = str(uri)
+    if uri_str.startswith("mulchd://domain/"):
+        name = uri_str[len("mulchd://domain/"):]
+        records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
+        for r in records:
+            r["_domain"] = name
+        return _format_records(records)
+    raise ValueError(f"Unknown resource URI: {uri_str}")
