@@ -4,9 +4,9 @@ Integration tests for MCP tool handlers.
 Strategy:
   - write_record (ml CLI) is monkeypatched for _record_expertise tests so no
     external binary is required.
-  - _read_expertise, _get_recent, _list_domains read JSONL directly, so we
+  - read_records, get_recent, list_domains read JSONL directly, so we
     seed files with _jot() and test without any mocking.
-  - _search_expertise is omitted: it shells out to `ml search` (BM25) which
+  - search_records is omitted: it shells out to `ml search` (BM25) which
     requires the mulch CLI to be installed.
 
 Isolation model: path-based — data_path/org/project/.mulch/expertise/domain.jsonl
@@ -440,8 +440,8 @@ async def test_list_domains_counts_match_written_records(team, data_path):
 # ---------------------------------------------------------------------------
 
 
-async def test_record_expertise_validates_required_fields(team, data_path, fake_write_record):
-    """record_expertise raises ValueError when required fields are missing."""
+async def test_write_record_validates_required_fields(team, data_path, fake_write_record):
+    """write_record raises ValueError when required fields are missing."""
     t = team
     with pytest.raises(ValueError, match="requires"):
         await _record_expertise(
@@ -455,8 +455,8 @@ async def test_record_expertise_validates_required_fields(team, data_path, fake_
         )
 
 
-async def test_read_expertise_unknown_domain_warns(team, data_path):
-    """read_expertise warns on unknown domains rather than silently returning empty."""
+async def test_read_records_unknown_domain_warns(team, data_path):
+    """read_records warns on unknown domains rather than silently returning empty."""
     t = team
     text_content, structured = await _read_expertise(
         {"domains": ["nonexistent-domain"]},
@@ -466,8 +466,8 @@ async def test_read_expertise_unknown_domain_warns(team, data_path):
     assert "nonexistent-domain" in text_content[0].text
 
 
-async def test_read_expertise_structured_truncation_flag(team, data_path):
-    """read_expertise sets truncated=True when limit is hit."""
+async def test_read_records_structured_truncation_flag(team, data_path):
+    """read_records sets truncated=True when limit is hit."""
     t = team
     _jot(data_path, "acme", "infra", "infra",
          type="convention", classification="tactical", content="record one", owner="carlos")
