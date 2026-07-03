@@ -294,6 +294,21 @@ TIER2_TOOLS = [
         },
         annotations=ToolAnnotations(destructiveHint=True),
     ),
+    Tool(
+        name="delete_domain",
+        description=(
+            "Delete an empty domain. "
+            "Errors if the domain still contains records. Admin only."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+            },
+            "required": ["domain"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
 ]
 
 _RECORD_SCHEMAS: dict[str, dict] = {
@@ -570,6 +585,23 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
 
 
+async def _delete_domain(args: dict, ctx: AuthContext) -> list[TextContent]:
+    from ..models import Role
+    if ctx.role != Role.ADMIN:
+        raise ValueError("only admins can delete domains")
+    domain = args["domain"]
+    path = expertise_path(ctx.org.slug, ctx.project.slug, domain)
+    if not path.exists():
+        raise ValueError(f"domain '{domain}' not found")
+    records = await read_domain_records(path)
+    if records:
+        raise ValueError(
+            f"domain '{domain}' has {len(records)} record(s) — delete all records first"
+        )
+    path.unlink()
+    return [TextContent(type="text", text=f"Deleted domain '{domain}'")]
+
+
 async def _record_tool_call(name: str, ctx: AuthContext) -> None:
     await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=ctx.client)
 
@@ -599,6 +631,7 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         case "get_record_schema":  return await _get_record_schema(args)
         case "edit_record":        return await _edit_record(args, ctx)
         case "delete_record":      return await _delete_record(args, ctx)
+        case "delete_domain":      return await _delete_domain(args, ctx)
         case _:                    raise ValueError(f"Unknown tool: {name}")
 
 
