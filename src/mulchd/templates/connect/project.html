@@ -1,4 +1,38 @@
-<!DOCTYPE html><html><body id="project-page">
-<div id="token-list">{% for t in tokens %}<span>{{ t.label }}</span>{% endfor %}</div>
+{% extends "connect/connect_base.html" %}
+{% block page_title %}{{ project.display_name }}{% endblock %}
+{% block topbar_right %}
+<a href="/connect/projects" style="font-size:13px;color:#64748b;text-decoration:none;margin-right:auto;">← Projects</a>
+<a href="/connect/logout" class="btn-link" style="font-size:13px;">Sign out</a>
+{% endblock %}
+{% block content %}
+<div id="project-page">
+<div style="margin-bottom:24px;">
+  <div class="page-title" style="font-size:17px;font-weight:600;">{{ project.display_name }}</div>
+  <div class="text-muted">{{ org.display_name }}</div>
+</div>
+
+<div style="margin-bottom:24px;">
+  <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Your tokens</div>
+  <div id="token-list">
+    {% include "connect/partials/token_list.html" %}
+  </div>
+</div>
+
+<div class="card" style="padding:20px;margin-bottom:16px;">
+  <div style="font-size:13px;font-weight:600;margin-bottom:12px;">Mint a new token</div>
+  <div class="text-muted" style="margin-bottom:12px;">Each token is for one machine or session. Give it a label so you can revoke it later.</div>
+  <form hx-post="/connect/projects/{{ org.slug }}/{{ project.slug }}/mint"
+        hx-target="#snippet-area" hx-swap="outerHTML">
+    <div class="form-row">
+      <div class="form-group" style="flex:1;">
+        <label>Label (optional)</label>
+        <input type="text" name="label" placeholder="e.g. laptop, work desktop">
+      </div>
+      <button type="submit" class="btn btn-primary">Mint token</button>
+    </div>
+  </form>
+</div>
+
 <div id="snippet-area"></div>
-</body></html>
+</div>
+{% endblock %}

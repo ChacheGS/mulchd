@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}mulchd — {% block page_title %}connect{% endblock %}{% endblock %}
+{% block body %}
+<div style="min-height:100vh; background:#f8fafc;">
+  <div style="background:white; border-bottom:1px solid #e2e8f0; padding:10px 24px; display:flex; align-items:center; gap:16px;">
+    <span style="font-weight:700; font-size:15px; letter-spacing:-0.3px;">mulchd</span>
+    {% block topbar_right %}{% endblock %}
+  </div>
+  <main style="max-width:720px; margin:0 auto; padding:32px 24px;">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+{% endblock %}

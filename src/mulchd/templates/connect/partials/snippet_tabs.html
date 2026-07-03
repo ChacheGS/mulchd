@@ -1,6 +1,38 @@
 <div id="snippet-area">
-<pre class="mcp-json">{{ snippets.mcp_json }}</pre>
-<pre class="settings-local">{{ snippets.settings_local }}</pre>
-<pre class="desktop">{{ snippets.desktop }}</pre>
-<div id="token-list">{% for t in tokens %}<span>{{ t.label }}</span>{% endfor %}</div>
+  <div class="card" style="padding:20px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Token minted</div>
+    <div class="text-muted" style="margin-bottom:16px;">Copy the config below — the token value will not be shown again.</div>
+
+    <div style="display:flex;gap:8px;margin-bottom:12px;" id="snippet-tabs">
+      <button class="btn btn-primary" onclick="showTab('code')" id="tab-code">Claude Code</button>
+      <button class="btn btn-secondary" onclick="showTab('desktop')" id="tab-desktop">Claude Desktop</button>
+    </div>
+
+    <div id="panel-code">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">.mcp.json</div>
+      <div class="code-box">{{ snippets.mcp_json }}</div>
+      <div style="font-size:12px;font-weight:600;color:#374151;margin:12px 0 6px;">.claude/settings.local.json</div>
+      <div class="code-box">{{ snippets.settings_local }}</div>
+      <div class="text-muted" style="margin-top:8px;">The env var in <code>.mcp.json</code> is expanded from <code>settings.local.json</code>. Never commit <code>settings.local.json</code> — it contains your token.</div>
+    </div>
+
+    <div id="panel-desktop" style="display:none;">
+      <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">claude_desktop_config.json</div>
+      <div class="code-box">{{ snippets.desktop }}</div>
+      <div class="text-muted" style="margin-top:8px;">Uses <code>mcp-remote</code> to proxy the connection with your token.</div>
+    </div>
+  </div>
+
+  <script>
+  function showTab(tab) {
+    document.getElementById('panel-code').style.display = tab === 'code' ? '' : 'none';
+    document.getElementById('panel-desktop').style.display = tab === 'desktop' ? '' : 'none';
+    document.getElementById('tab-code').className = tab === 'code' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('tab-desktop').className = tab === 'desktop' ? 'btn btn-primary' : 'btn btn-secondary';
+  }
+  </script>
+
+  <div id="token-list">
+    {% include "connect/partials/token_list.html" %}
+  </div>
 </div>
