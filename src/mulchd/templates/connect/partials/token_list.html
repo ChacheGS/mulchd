@@ -8,7 +8,7 @@
     </div>
     <button class="btn-link-danger"
             hx-post="/connect/projects/{{ org.slug }}/{{ project.slug }}/revoke/{{ t.id }}"
-            hx-target="#token-list" hx-swap="outerHTML"
+            hx-target="#token-list" hx-swap="innerHTML"
             hx-confirm="Revoke this token? Any client using it will lose access.">Revoke</button>
   </div>
   {% endfor %}
