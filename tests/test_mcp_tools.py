@@ -292,7 +292,7 @@ async def test_cross_user_record_then_read(team, data_path, fake_write_record):
 
     text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     assert "IMDSv2" in text_content[0].text
-    assert "Jorge M." in text_content[0].text
+    assert "jorge" in text_content[0].text
 
 
 # ---------------------------------------------------------------------------
