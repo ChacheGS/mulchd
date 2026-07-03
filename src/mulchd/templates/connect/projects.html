@@ -1,0 +1,3 @@
+<!DOCTYPE html><html><body>
+{% for m in memberships %}<a href="/connect/projects/{{ m.project.org.slug }}/{{ m.project.slug }}">{{ m.project.display_name }}</a>{% endfor %}
+</body></html>

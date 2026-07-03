@@ -1,0 +1,6 @@
+<!DOCTYPE html><html><body>
+{% if error %}<p id="error">{{ error }}</p>{% endif %}
+<form method="post" action="/connect">
+<input name="token"><input type="checkbox" name="remember_me" value="on"><button>Login</button>
+</form>
+</body></html>

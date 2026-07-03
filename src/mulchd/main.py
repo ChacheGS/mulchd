@@ -8,6 +8,7 @@ from tortoise import Tortoise
 
 from .admin import router as admin_router
 from .api import router as api_router
+from .connect import router as connect_router
 from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
 from .mcp import tier_managers, tier_servers
@@ -54,6 +55,7 @@ app.add_middleware(
 )
 app.include_router(admin_router)
 app.include_router(api_router)
+app.include_router(connect_router)
 
 
 @app.api_route("/mcp", methods=["GET", "POST", "DELETE"])
