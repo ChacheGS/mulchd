@@ -275,7 +275,7 @@ def _format_records(records: list[dict]) -> str:
         return "No records found."
     lines: list[str] = []
     for r in records:
-        owner = r.get("owner", "")
+        owner = r.get("owner_display") or r.get("owner", "")
         rid = r.get("id", "?")
         recorded_at = r.get("recorded_at", "")[:10]
         title = r.get("title") or r.get("name") or ""
@@ -309,7 +309,7 @@ def _format_recent(records: list[dict], meta_by_id: dict) -> str:
     for sid in session_keys:
         entries = sessions[sid]
         first_meta = next((m for _, m in entries if m), None)
-        author = first_meta["author__username"] if first_meta else "unknown"
+        author = (first_meta.get("author__display_name") or first_meta["author__username"]) if first_meta else "unknown"
         first_ts = entries[-1][0].get("recorded_at", "")[:16].replace("T", " ")
         lines.append(f"## Session — {author} from {first_ts} UTC")
         for r, _ in entries:
@@ -344,6 +344,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         "classification": args["classification"],
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "owner": ctx.user.username,
+        "owner_display": ctx.user.display_name,
         **args.get("content", {}),
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
@@ -416,7 +417,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     meta_rows = (
         await RecordMeta.filter(record_id__in=record_ids)
         .prefetch_related("author")
-        .values("record_id", "session_id", "author__username")
+        .values("record_id", "session_id", "author__username", "author__display_name")
     ) if record_ids else []
     meta_by_id = {m["record_id"]: m for m in meta_rows}
     return [TextContent(type="text", text=_format_recent(results, meta_by_id))]
