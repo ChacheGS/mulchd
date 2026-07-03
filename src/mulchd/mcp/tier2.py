@@ -18,8 +18,9 @@ SESSION_WORKFLOW = """\
 mulchd stores shared team expertise for this project. Everything you record is visible \
 to the whole team, attributed to you, and persists indefinitely.
 
-Session start: note the current UTC timestamp (needed later for get_recent), then call \
-list_domains() and read_expertise() for domains relevant to the current task.
+Session start: call list_domains() — the response includes the current server timestamp, \
+note it for get_recent at session end. Do not call read_expertise() yet; wait until the \
+user states a task, then load only the domains relevant to that task.
 
 During the session, record proactively — without being asked — whenever a decision is \
 made or confirmed (type: decision), a convention is established or corrected (type: \
@@ -40,7 +41,7 @@ If a tool call fails or the connection drops mid-session, don't stall retrying �
 the work, keep a list of records you would have written, and show that list to the user \
 at session end.
 
-Session end: call get_recent(since=<session start timestamp>) and relay anything \
+Session end: call get_recent(since=<noted server timestamp>) and relay anything \
 teammates recorded while you were working.
 
 Unsure which fields a record type requires? Call get_record_schema(type) before writing — \
@@ -265,7 +266,7 @@ def _format_single(r: dict) -> str:
     if title:
         header += f" — {title}"
     if body:
-        header += f"\n    {str(body)[:160]}"
+        header += f"\n    {body}"
     return header
 
 
@@ -288,7 +289,7 @@ def _format_records(records: list[dict]) -> str:
             header += f" — {title}"
         lines.append(header)
         if body:
-            lines.append(f"  {str(body)[:200]}")
+            lines.append(f"  {body}")
         lines.append("")
     return "\n".join(lines)
 
@@ -372,7 +373,9 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
 
 async def _list_domains(ctx: AuthContext) -> list[TextContent]:
     domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
-    lines = [f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n"]
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    lines = [f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
+             f"**Server time:** {now} — note this for get_recent at session end.\n"]
     if ctx.project.knowledge_language:
         lang = ctx.project.knowledge_language
         lines.append(
