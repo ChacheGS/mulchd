@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     reload: bool = False
     secret_key: str  # required — set MULCHD_SECRET_KEY
     admin_password: str  # required — set MULCHD_ADMIN_PASSWORD
-    admin_contact: str | None = None  # MULCHD_ADMIN_CONTACT — rendered as-is on /onboard
+    admin_contact: str | None = None  # MULCHD_ADMIN_CONTACT — shown in /connect portal and tier1 setup instructions
     base_url: str | None = None  # MULCHD_BASE_URL — derived from host+port if unset
 
     model_config = {"env_file": ".env", "env_prefix": "MULCHD_"}
