@@ -99,6 +99,44 @@ async def test_resolve_tier1_with_no_auth(client):
     assert ctx is None
 
 
+# ---------------------------------------------------------------------------
+# Regression tests — cross-evaluation findings (2026-07-03)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.no_db
+def test_no_tool_description_says_expertise_record():
+    """delete_record and get_recent previously described their subject as
+    'expertise record' after the bulk rename. All 8 tools should use 'record'."""
+    from mulchd.mcp.tier2 import TIER2_TOOLS
+    for tool in TIER2_TOOLS:
+        assert "expertise record" not in (tool.description or ""), (
+            f"Tool '{tool.name}' still contains stale wording 'expertise record'"
+        )
+
+
+@pytest.mark.no_db
+def test_write_record_schema_exposes_date_for_decisions():
+    """get_record_schema advertises decision.date as an optional field, but
+    write_record must also expose it so clients can actually set it."""
+    from mulchd.mcp.tier2 import TIER2_TOOLS
+    write_tool = next(t for t in TIER2_TOOLS if t.name == "write_record")
+    assert "date" in write_tool.inputSchema["properties"], (
+        "write_record must include 'date' to match what get_record_schema advertises"
+    )
+
+
+@pytest.mark.no_db
+def test_search_records_filter_param_named_owner_not_author():
+    """search_records filters on the 'owner' field in records, so the parameter
+    should be named 'owner' for consistency — not 'author'."""
+    from mulchd.mcp.tier2 import TIER2_TOOLS
+    search_tool = next(t for t in TIER2_TOOLS if t.name == "search_records")
+    props = search_tool.inputSchema["properties"]
+    assert "owner" in props, "search_records filter parameter should be named 'owner'"
+    assert "author" not in props, "search_records should not use 'author' (inconsistent with stored field)"
+
+
 async def test_resolve_tier2_with_project_token(db):
     from starlette.requests import Request
     from mulchd.main import resolve_mcp_tier

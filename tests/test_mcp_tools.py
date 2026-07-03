@@ -15,6 +15,7 @@ ctx.project.slug and no cross-project leakage is possible via a wrong context.
 """
 
 import json
+import shutil
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,8 +24,14 @@ from types import SimpleNamespace
 import pytest
 
 from mulchd.auth import AuthContext
+from mulchd.domains import list_available_domains
 from mulchd.models import Organization, Project, Role, User, UserMembership
+from mulchd.mulch import MulchError
 from mulchd.mcp.tier2 import _get_recent, _list_domains, _read_expertise, _record_expertise
+
+ml_available = pytest.mark.skipif(
+    not shutil.which("ml"), reason="ml not in PATH — run via: mise x -- uv run pytest"
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -486,3 +493,120 @@ async def test_read_records_structured_truncation_flag(team, data_path):
         ctx(t.carlos, t.org, t.infra),
     )
     assert structured2["truncated"] is False
+
+
+# ---------------------------------------------------------------------------
+# Regression tests — cross-evaluation findings (2026-07-03)
+# ---------------------------------------------------------------------------
+
+
+# Critical: write_record broken due to owner_display in ml payload
+# ----------------------------------------------------------------
+
+@ml_available
+async def test_live_write_record_succeeds(team, data_path):
+    """write_record should complete without error via the live ml CLI."""
+    t = team
+    result = await _record_expertise(
+        {
+            "domain": "live-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Always enable S3 versioning on all buckets",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "convention" in result[0].text
+    assert "live-test" in result[0].text
+
+
+@ml_available
+async def test_live_write_record_decision_succeeds(team, data_path):
+    """A decision record (title + rationale) should also write cleanly via ml."""
+    t = team
+    result = await _record_expertise(
+        {
+            "domain": "live-test",
+            "type": "decision",
+            "classification": "foundational",
+            "title": "Use Aurora Serverless for managed DBs",
+            "rationale": "Removes the operational burden of instance sizing while staying cost-proportional.",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "decision" in result[0].text
+
+
+# High: domain orphaned when ml write fails
+# ------------------------------------------
+
+async def test_write_failure_cleans_up_empty_domain(team, data_path, monkeypatch):
+    """A write that fails after ml creates the domain file should not leave an orphan."""
+    import mulchd.mcp.tier2 as mcp_tier2
+
+    async def _init(m_dir: Path) -> None:
+        (m_dir / "expertise").mkdir(parents=True, exist_ok=True)
+
+    async def _write_creates_file_then_fails(m_dir: Path, domain: str, record: dict) -> dict:
+        # Simulates ml touching the domain file before its own validation fails.
+        (m_dir / "expertise" / f"{domain}.jsonl").touch()
+        raise MulchError("simulated ml schema rejection")
+
+    monkeypatch.setattr(mcp_tier2, "init_ml_project", _init)
+    monkeypatch.setattr(mcp_tier2, "write_record", _write_creates_file_then_fails)
+
+    t = team
+    with pytest.raises(MulchError):
+        await _record_expertise(
+            {
+                "domain": "orphan-test",
+                "type": "convention",
+                "classification": "tactical",
+                "content": "Should not persist",
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+    domains = await list_available_domains(t.org.slug, t.infra.slug)
+    assert not any(d["name"] == "orphan-test" for d in domains)
+
+
+# Medium: list_domains structured output missing self-documenting fields
+# -----------------------------------------------------------------------
+
+async def test_list_domains_structured_includes_get_recent_hint(team, data_path):
+    """list_domains structured output should carry the get_recent hint so clients
+    consuming structured content don't lose the session-start instruction."""
+    t = team
+    _, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
+    assert "get_recent_hint" in structured or "hint" in structured, (
+        "structured output must include the get_recent timestamp hint"
+    )
+
+
+async def test_list_domains_structured_includes_language(team, data_path):
+    """list_domains structured output should expose knowledge_language when set,
+    so clients using structured content still receive the translation directive."""
+    t = team
+    t.infra.knowledge_language = "es"
+    await t.infra.save()
+
+    _, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
+    assert structured.get("language") == "es"
+
+
+# Medium: unknown domain not signalled in structured output (§5)
+# ---------------------------------------------------------------
+
+async def test_read_records_unknown_domain_in_structured_output(team, data_path):
+    """read_records should expose unknown domain names in structured output,
+    not just as a text warning that structured clients may never see."""
+    t = team
+    _, structured = await _read_expertise(
+        {"domains": ["does-not-exist"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "unknown_domains" in structured, (
+        "structured output must include 'unknown_domains' when unrecognised names are requested"
+    )
+    assert "does-not-exist" in structured["unknown_domains"]
