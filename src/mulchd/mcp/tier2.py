@@ -10,7 +10,7 @@ from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotat
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
 from ..models import RecordMeta, ToolCall
-from ..mulch import delete_record, edit_record, ensure_domain, search_domains, write_record
+from ..mulch import delete_record, edit_record, init_ml_project, search_domains, write_record
 from ..records import find_record, read_domain_records
 from .context import _ctx
 
@@ -413,7 +413,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    await ensure_domain(m_dir, domain)
+    await init_ml_project(m_dir)
     written = await write_record(m_dir, domain, record)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordMeta.create(

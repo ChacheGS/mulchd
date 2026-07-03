@@ -80,11 +80,11 @@ def fake_write_record(monkeypatch, data_path):
             f.write(json.dumps(result) + "\n")
         return result
 
-    async def _ensure(m_dir: Path, domain: str) -> None:
+    async def _init(m_dir: Path) -> None:
         (m_dir / "expertise").mkdir(parents=True, exist_ok=True)
 
     monkeypatch.setattr(mcp_tier2, "write_record", _write)
-    monkeypatch.setattr(mcp_tier2, "ensure_domain", _ensure)
+    monkeypatch.setattr(mcp_tier2, "init_ml_project", _init)
 
 
 @pytest.fixture
