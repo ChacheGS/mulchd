@@ -1,3 +1,22 @@
-<!DOCTYPE html><html><body>
-{% for m in memberships %}<a href="/connect/projects/{{ m.project.org.slug }}/{{ m.project.slug }}">{{ m.project.display_name }}</a>{% endfor %}
-</body></html>
+{% extends "connect/connect_base.html" %}
+{% block page_title %}projects{% endblock %}
+{% block topbar_right %}<a href="/connect/logout" class="btn-link" style="margin-left:auto;font-size:13px;">Sign out</a>{% endblock %}
+{% block content %}
+<div class="page-title" style="font-size:17px;font-weight:600;margin-bottom:20px;">Your projects</div>
+{% if memberships %}
+<div class="card">
+  {% for m in memberships %}
+  <div class="table-row" style="grid-template-columns:1fr auto auto; align-items:center;">
+    <div>
+      <a href="/connect/projects/{{ m.project.org.slug }}/{{ m.project.slug }}" style="font-size:13px;font-weight:500;color:#1e293b;text-decoration:none;">{{ m.project.display_name }}</a>
+      <div class="text-muted">{{ m.project.org.display_name }}</div>
+    </div>
+    <span class="badge badge-{{ m.role }}">{{ m.role }}</span>
+    <a href="/connect/projects/{{ m.project.org.slug }}/{{ m.project.slug }}" class="btn btn-secondary" style="font-size:12px;">Open →</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No projects yet — ask your admin to add you to a project.</div>
+{% endif %}
+{% endblock %}
