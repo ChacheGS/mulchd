@@ -3,8 +3,8 @@
 {% block content %}
 <div style="max-width:360px; margin:40px auto;">
   <div class="card" style="padding:32px;">
-    <div class="login-logo" style="margin-bottom:4px">mulchd</div>
-    <div class="login-subtitle" style="margin-bottom:24px">Connect your MCP client</div>
+    <div class="login-logo">mulchd</div>
+    <div class="login-subtitle">Connect your MCP client</div>
     <div id="form-area">
       {% if error %}<div class="alert alert-error" style="margin-bottom:16px">{{ error }}</div>{% endif %}
       <form hx-post="/connect" hx-target="#form-area" hx-swap="outerHTML">
