@@ -91,7 +91,7 @@
         <span class="badge" style="background:#f8fafc; color:#64748b; border:1px solid #e2e8f0">{{ r.classification }}</span>
       {% endif %}
       <span style="flex:1"></span>
-      {% if r.owner %}<span class="monospace text-muted">{{ r.owner }}</span>{% endif %}
+      {% if r.owner_display or r.owner %}<span class="monospace text-muted">{{ r.owner_display or r.owner }}</span>{% endif %}
       {% if r.recorded_at %}<span class="text-muted">{{ r.recorded_at[:10] }}</span>{% endif %}
       {% if r.id %}<span class="monospace" style="font-size:11px; color:#cbd5e1">{{ r.id }}</span>{% endif %}
       {% if r.id %}
