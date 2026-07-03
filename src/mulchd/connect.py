@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
@@ -84,6 +84,35 @@ def _get_connect_user_id(request: Request) -> int | None:
         return None
 
 
+# ── Auth requirement helpers ──────────────────────────────────────────────────
+
+async def _require_user(request: Request) -> User | None:
+    """
+    Extract and validate the user from the connect cookie.
+    Returns User if valid and active, None otherwise.
+    """
+    user_id = _get_connect_user_id(request)
+    if user_id is None:
+        return None
+    return await User.filter(id=user_id, active=True).first()
+
+
+async def _require_membership(user: User, org_slug: str, project_slug: str) -> tuple[Organization, Project]:
+    """
+    Validate user membership to org/project.
+    Returns (org, project) or raises HTTPException(404) if invalid.
+    """
+    org = await Organization.filter(slug=org_slug).first()
+    if org is None:
+        raise HTTPException(status_code=404)
+    project = await Project.filter(slug=project_slug, org=org).select_related("org").first()
+    if project is None:
+        raise HTTPException(status_code=404)
+    if not await UserMembership.filter(user=user, project=project).exists():
+        raise HTTPException(status_code=404)
+    return org, project
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
@@ -126,10 +155,7 @@ async def connect_login(
 
 @router.get("/projects", response_class=HTMLResponse)
 async def connect_projects(request: Request):
-    user_id = _get_connect_user_id(request)
-    if user_id is None:
-        return RedirectResponse("/connect", status_code=303)
-    user = await User.filter(id=user_id, active=True).first()
+    user = await _require_user(request)
     if user is None:
         return RedirectResponse("/connect", status_code=303)
 
@@ -143,24 +169,11 @@ async def connect_projects(request: Request):
 
 @router.get("/projects/{org_slug}/{project_slug}", response_class=HTMLResponse)
 async def connect_project_page(request: Request, org_slug: str, project_slug: str):
-    user_id = _get_connect_user_id(request)
-    if user_id is None:
-        return RedirectResponse("/connect", status_code=303)
-    user = await User.filter(id=user_id, active=True).first()
+    user = await _require_user(request)
     if user is None:
         return RedirectResponse("/connect", status_code=303)
 
-    org = await Organization.filter(slug=org_slug).first()
-    if org is None:
-        return Response(status_code=404)
-
-    project = await Project.filter(slug=project_slug, org=org).select_related("org").first()
-    if project is None:
-        return Response(status_code=404)
-
-    membership = await UserMembership.filter(user=user, project=project).first()
-    if membership is None:
-        return Response(status_code=404)
+    org, project = await _require_membership(user, org_slug, project_slug)
 
     tokens = await ProjectToken.filter(user=user, project=project, active=True).all()
     return templates.TemplateResponse(
@@ -177,26 +190,13 @@ async def connect_mint_token(
     project_slug: str,
     label: str = Form(default=""),
 ):
-    user_id = _get_connect_user_id(request)
-    if user_id is None:
-        return RedirectResponse("/connect", status_code=303)
-    user = await User.filter(id=user_id, active=True).first()
+    user = await _require_user(request)
     if user is None:
         return RedirectResponse("/connect", status_code=303)
 
-    org = await Organization.filter(slug=org_slug).first()
-    if org is None:
-        return Response(status_code=404)
+    org, project = await _require_membership(user, org_slug, project_slug)
 
-    project = await Project.filter(slug=project_slug, org=org).select_related("org").first()
-    if project is None:
-        return Response(status_code=404)
-
-    membership = await UserMembership.filter(user=user, project=project).first()
-    if membership is None:
-        return Response(status_code=404)
-
-    _pt, token_value = await create_project_token(user, project, label)
+    _, token_value = await create_project_token(user, project, label)
     snippets = build_connect_snippets(settings.resolved_base_url, org.slug, project.slug, token_value)
     tokens = await ProjectToken.filter(user=user, project=project, active=True).all()
     return templates.TemplateResponse(
@@ -213,24 +213,11 @@ async def connect_revoke_token(
     project_slug: str,
     token_id: int,
 ):
-    user_id = _get_connect_user_id(request)
-    if user_id is None:
-        return RedirectResponse("/connect", status_code=303)
-    user = await User.filter(id=user_id, active=True).first()
+    user = await _require_user(request)
     if user is None:
         return RedirectResponse("/connect", status_code=303)
 
-    org = await Organization.filter(slug=org_slug).first()
-    if org is None:
-        return Response(status_code=404)
-
-    project = await Project.filter(slug=project_slug, org=org).select_related("org").first()
-    if project is None:
-        return Response(status_code=404)
-
-    membership = await UserMembership.filter(user=user, project=project).first()
-    if membership is None:
-        return Response(status_code=404)
+    org, project = await _require_membership(user, org_slug, project_slug)
 
     pt = await ProjectToken.filter(id=token_id, user=user, project=project, active=True).first()
     if pt is None:
