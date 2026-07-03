@@ -112,3 +112,39 @@ async def test_tier1_get_setup_instructions_includes_contact(monkeypatch):
     from mulchd.mcp.tier1 import _get_setup_instructions
     result = await _get_setup_instructions()
     assert "ops@example.com" in result[0].text
+
+
+@pytest.mark.no_db
+def test_tier2_tool_list_has_four_tools():
+    from mulchd.mcp.tier2 import TIER2_TOOLS
+    names = {t.name for t in TIER2_TOOLS}
+    assert names == {
+        "list_my_projects",
+        "mint_project_token",
+        "list_project_tokens",
+        "revoke_project_token",
+    }
+
+
+@pytest.mark.no_db
+def test_tier2_server_has_no_instructions():
+    from mulchd.mcp.tier2 import tier2_server
+    assert tier2_server.create_initialization_options().instructions is None
+
+
+@pytest.mark.no_db
+def test_build_next_steps_interpolates_values():
+    from mulchd.mcp.tier2 import _build_next_steps
+    result = _build_next_steps("https://example.com", "acme", "demo", "tok-abc")
+    assert "https://example.com/mcp" in result
+    assert "mulchd-demo" in result
+    assert "mulchd-acme-demo" in result
+    assert "tok-abc" in result
+    assert "MULCHD_TOKEN_ACME_DEMO" in result
+
+
+@pytest.mark.no_db
+def test_build_next_steps_uppercases_slugs_with_hyphens():
+    from mulchd.mcp.tier2 import _build_next_steps
+    result = _build_next_steps("https://x.com", "my-org", "my-project", "t")
+    assert "MULCHD_TOKEN_MY_ORG_MY_PROJECT" in result
