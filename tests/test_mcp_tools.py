@@ -474,7 +474,8 @@ async def test_read_records_unknown_domain_warns(team, data_path):
 
 
 async def test_read_records_cursor_pagination(team, data_path):
-    """Cursor-based pagination returns pages in recorded_at order with a next_cursor."""
+    """Cursor-based pagination returns pages in recorded_at order with an opaque next_cursor."""
+    import base64
     t = team
     for i in range(3):
         _jot(data_path, "acme", "infra", "infra",
@@ -486,6 +487,10 @@ async def test_read_records_cursor_pagination(team, data_path):
     assert len(s1["records"]) == 2
     assert s1["truncated"] is True
     assert s1["next_cursor"] is not None
+    # cursor must be opaque — not a raw ISO timestamp
+    assert s1["next_cursor"] != s1["records"][-1].get("recorded_at")
+    # must be valid base64
+    base64.b64decode(s1["next_cursor"])
     assert s1["records"][0]["content"] == "record 0"
     assert s1["records"][1]["content"] == "record 1"
 
@@ -497,6 +502,30 @@ async def test_read_records_cursor_pagination(team, data_path):
     assert s2["records"][0]["content"] == "record 2"
     assert s2["truncated"] is False
     assert s2["next_cursor"] is None
+
+
+async def test_read_records_cursor_tiebreak_on_id(team, data_path):
+    """Two records with identical timestamps are disambiguated by id so no record is skipped."""
+    t = team
+    ts = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="tactical",
+         content="twin a", owner="carlos", recorded_at=ts)
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="tactical",
+         content="twin b", owner="carlos", recorded_at=ts)
+
+    _, s1 = await _read_expertise({"domains": ["infra"], "limit": 1}, ctx(t.carlos, t.org, t.infra))
+    assert s1["truncated"] is True
+
+    _, s2 = await _read_expertise(
+        {"domains": ["infra"], "limit": 1, "cursor": s1["next_cursor"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert len(s2["records"]) == 1
+    # both records returned across two pages — no skip, no duplicate
+    contents = {s1["records"][0]["content"], s2["records"][0]["content"]}
+    assert contents == {"twin a", "twin b"}
 
 
 async def test_read_records_structured_truncation_flag(team, data_path):

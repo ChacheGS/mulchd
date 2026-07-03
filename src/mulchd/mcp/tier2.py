@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid7
@@ -100,7 +102,7 @@ TIER2_TOOLS = [
                 },
                 "cursor": {
                     "type": "string",
-                    "description": "recorded_at value of the last record from the previous page. Omit for the first page.",
+                    "description": "Pass next_cursor from the previous response verbatim. Omit for the first page.",
                 },
             },
             "required": ["domains"],
@@ -426,12 +428,19 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         for r in records:
             r["_domain"] = domain
         all_records.extend(records)
-    all_records.sort(key=lambda r: r.get("recorded_at", ""))
+    all_records.sort(key=lambda r: (r.get("recorded_at", ""), r.get("id", "")))
     if cursor:
-        all_records = [r for r in all_records if r.get("recorded_at", "") > cursor]
+        cursor_ts, cursor_id = json.loads(base64.b64decode(cursor))
+        all_records = [
+            r for r in all_records
+            if (r.get("recorded_at", ""), r.get("id", "")) > (cursor_ts, cursor_id)
+        ]
     truncated = len(all_records) > limit
     page = all_records[:limit]
-    next_cursor = page[-1]["recorded_at"] if truncated and page else None
+    next_cursor = (
+        base64.b64encode(json.dumps([page[-1]["recorded_at"], page[-1].get("id", "")]).encode()).decode()
+        if truncated and page else None
+    )
     _mark_superseded(page)
     text = warning + _format_records(page)
     return (
