@@ -146,11 +146,8 @@ async def delete_record(mulch_dir: Path, domain: str, record_id: str) -> None:
     await _run(mulch_dir, ["delete", domain, "--records", record_id])
 
 
-async def ensure_domain(mulch_dir: Path, domain: str) -> None:
-    """
-    Bootstrap a project directory via `ml init` if it hasn't been initialised yet.
-    After that, ml record handles adding new domains to mulch.config.yaml itself.
-    """
+async def init_ml_project(mulch_dir: Path) -> None:
+    """Bootstrap a project directory via `ml init` if not yet initialised."""
     mulch_dir.parent.mkdir(parents=True, exist_ok=True)
     if not (mulch_dir / "mulch.config.yaml").exists():
         await _run(mulch_dir, ["init"], stdin_data=None)
