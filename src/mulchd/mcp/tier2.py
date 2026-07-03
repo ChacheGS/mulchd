@@ -75,7 +75,7 @@ def _get_or_create_session(user_id: int, project_id: int) -> UUID:
 
 _RECORD_FIELD_KEYS = frozenset({
     "content", "title", "rationale", "description", "resolution",
-    "name", "files", "relates_to", "supersedes",
+    "name", "files", "relates_to", "supersedes", "date",
 })
 
 TIER2_TOOLS = [
@@ -106,6 +106,7 @@ TIER2_TOOLS = [
             "properties": {
                 "records": {"type": "array", "items": {"type": "object"}},
                 "truncated": {"type": "boolean"},
+                "unknown_domains": {"type": "array", "items": {"type": "string"}, "description": "Requested domains not found in this project."},
             },
             "required": ["records", "truncated"],
         },
@@ -140,6 +141,7 @@ TIER2_TOOLS = [
                 "files": {"type": "array", "items": {"type": "string"}, "description": "Related file paths"},
                 "relates_to": {"type": "array", "items": {"type": "string"}, "description": "Related record IDs"},
                 "supersedes": {"type": "array", "items": {"type": "string"}, "description": "Record IDs this record replaces"},
+                "date": {"type": "string", "description": "decision: date the decision was made (ISO 8601); defaults to recorded_at"},
             },
             "required": ["domain", "type", "classification"],
         },
@@ -147,7 +149,7 @@ TIER2_TOOLS = [
     ),
     Tool(
         name="search_records",
-        description="Search records by query, optionally filtered by domain or author.",
+        description="Search records by query, optionally filtered by domain or owner.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -157,7 +159,7 @@ TIER2_TOOLS = [
                     "items": {"type": "string"},
                     "description": "Limit search to these domains. Defaults to all domains.",
                 },
-                "author": {
+                "owner": {
                     "type": "string",
                     "description": "Filter to records written by this username.",
                 },
@@ -182,6 +184,8 @@ TIER2_TOOLS = [
             "type": "object",
             "properties": {
                 "server_time": {"type": "string"},
+                "get_recent_hint": {"type": "string", "description": "Reminder to call get_recent(since=server_time) at session end."},
+                "language": {"type": "string", "description": "Knowledge base language code, if set."},
                 "domains": {
                     "type": "array",
                     "items": {
@@ -202,7 +206,7 @@ TIER2_TOOLS = [
     Tool(
         name="get_recent",
         description=(
-            "Get expertise records written since a given timestamp. "
+            "Get records written since a given timestamp. "
             "Call at session end to surface changes made by teammates while you were working."
         ),
         inputSchema={
@@ -277,7 +281,7 @@ TIER2_TOOLS = [
     Tool(
         name="delete_record",
         description=(
-            "Delete an expertise record by ID. "
+            "Delete a record by ID. "
             "Writers may only delete their own records; admins may delete any record."
         ),
         inputSchema={
@@ -390,7 +394,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     text = warning + _format_records(all_records[:limit])
     return (
         [TextContent(type="text", text=text)],
-        {"records": all_records[:limit], "truncated": truncated},
+        {"records": all_records[:limit], "truncated": truncated, "unknown_domains": unknown},
     )
 
 
@@ -409,12 +413,19 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         "classification": args["classification"],
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "owner": ctx.user.username,
-        "owner_display": ctx.user.display_name,
         **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await init_ml_project(m_dir)
-    written = await write_record(m_dir, domain, record)
+    domain_file = m_dir / "expertise" / f"{domain}.jsonl"
+    pre_existed = domain_file.exists()
+    from ..mulch import MulchError
+    try:
+        written = await write_record(m_dir, domain, record)
+    except MulchError:
+        if not pre_existed and domain_file.exists() and domain_file.stat().st_size == 0:
+            domain_file.unlink()
+        raise
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordMeta.create(
         record_id=written["id"],
@@ -430,7 +441,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
 async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     query = args["query"]
     domains: list[str] | None = args.get("domains") or None
-    author_filter = args.get("author")
+    author_filter = args.get("owner")
     available = {d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)}
     unknown = [d for d in (domains or []) if d not in available]
     warning = ""
@@ -465,9 +476,16 @@ async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
         updated = d["last_updated"] or "never"
         lines.append(f"**{d['name']}** — {d['description']}")
         lines.append(f"  {d['record_count']} records, last updated: {updated}\n")
+    structured: dict = {
+        "server_time": now,
+        "get_recent_hint": f"Call get_recent(since='{now}') at session end to surface teammate activity.",
+        "domains": domains,
+    }
+    if ctx.project.knowledge_language:
+        structured["language"] = ctx.project.knowledge_language
     return (
         [TextContent(type="text", text="\n".join(lines))],
-        {"server_time": now, "domains": domains},
+        structured,
     )
 
 
