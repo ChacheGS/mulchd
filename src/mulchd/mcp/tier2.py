@@ -325,6 +325,17 @@ _RECORD_SCHEMAS: dict[str, dict] = {
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
+def _mark_superseded(records: list[dict]) -> None:
+    """Tag each record whose ID appears in another record's supersedes list."""
+    superseded_ids: set[str] = set()
+    for r in records:
+        for sid in r.get("supersedes") or []:
+            superseded_ids.add(sid)
+    for r in records:
+        if r.get("id") in superseded_ids:
+            r["_superseded"] = True
+
+
 def _format_single(r: dict) -> str:
     title = r.get("title") or r.get("name") or ""
     body = r.get("content") or r.get("rationale") or r.get("description") or ""
@@ -334,6 +345,8 @@ def _format_single(r: dict) -> str:
     header = f"[{domain}/{rtype}] {rid}"
     if title:
         header += f" — {title}"
+    if r.get("_superseded"):
+        header += " • superseded"
     if body:
         header += f"\n    {body}"
     return header
@@ -356,6 +369,8 @@ def _format_records(records: list[dict]) -> str:
         )
         if title:
             header += f" — {title}"
+        if r.get("_superseded"):
+            header += " • superseded"
         lines.append(header)
         if body:
             lines.append(f"  {body}")
@@ -406,6 +421,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
             r["_domain"] = domain
         all_records.extend(records)
     truncated = len(all_records) > limit
+    _mark_superseded(all_records)
     text = warning + _format_records(all_records[:limit])
     return (
         [TextContent(type="text", text=text)],
@@ -465,6 +481,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     results = await search_domains(mulch_dir(ctx.org.slug, ctx.project.slug), query, domains)
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
+    _mark_superseded(results)
     text = warning + _format_records(results)
     return (
         [TextContent(type="text", text=text)],
@@ -530,6 +547,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
         .values("record_id", "session_id", "author__username", "author__display_name")
     ) if record_ids else []
     meta_by_id = {m["record_id"]: m for m in meta_rows}
+    _mark_superseded(results)
     return [TextContent(type="text", text=_format_recent(results, meta_by_id))]
 
 
@@ -675,5 +693,6 @@ async def read_resource(uri) -> str:
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
         for r in records:
             r["_domain"] = name
+        _mark_superseded(records)
         return _format_records(records)
     raise ValueError(f"Unknown resource URI: {uri_str}")

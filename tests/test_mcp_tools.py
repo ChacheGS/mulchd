@@ -612,6 +612,39 @@ async def test_read_records_unknown_domain_in_structured_output(team, data_path)
     assert "does-not-exist" in structured["unknown_domains"]
 
 
+# Superseded record marking
+# -------------------------
+
+async def test_read_records_marks_superseded(team, data_path):
+    """When record B supersedes record A, A should be marked in text and structured output."""
+    t = team
+    old = _jot(data_path, "acme", "infra", "infra",
+               type="convention", classification="foundational",
+               content="Old approach", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="foundational",
+         content="New approach", owner="carlos",
+         supersedes=[old["id"]])
+
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert "superseded" in text_content[0].text
+    superseded_records = [r for r in structured["records"] if r.get("_superseded")]
+    assert len(superseded_records) == 1
+    assert superseded_records[0]["id"] == old["id"]
+
+
+async def test_non_superseded_records_not_marked(team, data_path):
+    """Records not referenced in any supersedes list should not be marked."""
+    t = team
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="foundational",
+         content="Standalone convention", owner="carlos")
+
+    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert "superseded" not in text_content[0].text
+    assert not any(r.get("_superseded") for r in structured["records"])
+
+
 # delete_domain
 # -------------
 
