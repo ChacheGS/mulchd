@@ -117,11 +117,8 @@ async def _require_membership(user: User, org_slug: str, project_slug: str) -> t
 
 @router.get("", response_class=HTMLResponse)
 async def connect_login_page(request: Request):
-    user_id = _get_connect_user_id(request)
-    if user_id is not None:
-        user = await User.filter(id=user_id, active=True).first()
-        if user is not None:
-            return RedirectResponse("/connect/projects", status_code=303)
+    if await _require_user(request) is not None:
+        return RedirectResponse("/connect/projects", status_code=303)
     return templates.TemplateResponse(request, "connect/entry.html", {})
 
 
