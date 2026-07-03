@@ -6,6 +6,7 @@ __pycache__/
 *.py[cod]
 .venv/
 dist/
+docs/
 *.egg-info/
 .ruff_cache/
 mulch-upstream/
