@@ -700,40 +700,46 @@ async def test_non_superseded_records_not_marked(team, data_path):
     assert not any(r.get("_superseded") for r in structured["records"])
 
 
-# delete_domain
-# -------------
+# delete_record auto-cleanup
+# --------------------------
 
-async def test_delete_domain_removes_empty_domain(team, data_path):
-    """Admin can delete a domain that has no records."""
-    from mulchd.mcp.tier2 import _delete_domain
-    from mulchd.models import Role
+def _make_fake_delete(expertise_dir: Path):
+    """Return a delete_record stand-in that removes the record line from JSONL."""
+    async def _fake(m_dir, domain, rid):
+        path = expertise_dir / f"{domain}.jsonl"
+        lines = [l for l in path.read_text().splitlines() if rid not in l]
+        path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    return _fake
+
+
+async def test_delete_last_record_removes_domain(team, data_path, monkeypatch):
+    """Deleting the last record in a domain removes the domain JSONL automatically."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _delete_record
     t = team
-    # create an empty JSONL
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
-    expertise.mkdir(parents=True, exist_ok=True)
-    (expertise / "scratch.jsonl").write_text("")
+    record = _jot(data_path, "acme", "infra", "scratch",
+                  type="convention", classification="foundational",
+                  content="only record", owner="carlos")
+    monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(expertise))
 
-    result = await _delete_domain({"domain": "scratch"}, ctx(t.carlos, t.org, t.infra, Role.ADMIN))
-    assert "scratch" in result[0].text
+    await _delete_record({"record_id": record["id"], "domain": "scratch"}, ctx(t.carlos, t.org, t.infra))
     assert not (expertise / "scratch.jsonl").exists()
 
 
-async def test_delete_domain_errors_when_domain_has_records(team, data_path):
-    """delete_domain raises when the domain still contains records."""
-    from mulchd.mcp.tier2 import _delete_domain
-    from mulchd.models import Role
+async def test_delete_non_last_record_preserves_domain(team, data_path, monkeypatch):
+    """Deleting one of several records leaves the domain intact."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _delete_record
     t = team
-    _jot(data_path, "acme", "infra", "live",
-         type="convention", classification="foundational", content="keep me", owner="carlos")
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    r1 = _jot(data_path, "acme", "infra", "keep",
+               type="convention", classification="foundational",
+               content="first", owner="carlos")
+    _jot(data_path, "acme", "infra", "keep",
+         type="convention", classification="foundational",
+         content="second", owner="carlos")
+    monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(expertise))
 
-    with pytest.raises(ValueError, match="record"):
-        await _delete_domain({"domain": "live"}, ctx(t.carlos, t.org, t.infra, Role.ADMIN))
-
-
-async def test_delete_domain_errors_for_non_admin(team, data_path):
-    """delete_domain is admin-only."""
-    from mulchd.mcp.tier2 import _delete_domain
-    from mulchd.models import Role
-    t = team
-    with pytest.raises(ValueError, match="admin"):
-        await _delete_domain({"domain": "any"}, ctx(t.carlos, t.org, t.infra, Role.WRITER))
+    await _delete_record({"record_id": r1["id"], "domain": "keep"}, ctx(t.carlos, t.org, t.infra))
+    assert (expertise / "keep.jsonl").exists()
