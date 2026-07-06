@@ -42,9 +42,9 @@ trivial details, anything reversible in minutes, or unsettled speculation.
 If two records conflict: prefer foundational over tactical over observational; within a \
 tier, prefer the newer record; if two live records genuinely contradict, flag it to the \
 user and propose a superseding record rather than silently picking one. \
-If write_record returns a FOUNDATIONAL SUPERSESSION warning, stop immediately and \
-show the user the full warning before doing anything else — do not proceed without \
-explicit acknowledgement.
+If write_record returns a SUPERSESSION WARNING or edit_record returns a \
+CLASSIFICATION DOWNGRADE warning, stop immediately and show the user the full \
+warning before doing anything else — do not proceed without explicit acknowledgement.
 
 If a tool call fails or the connection drops mid-session, don't stall retrying — continue \
 the work, keep a list of records you would have written, and show that list to the user \
@@ -376,19 +376,45 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             r["_supersedes_foundational"] = displaced
 
 
-async def _foundational_superseded(m_dir: Path, supersedes: list[str]) -> list[str]:
-    """Return which IDs in supersedes refer to foundational records."""
+from enum import IntEnum
+
+
+class Classification(IntEnum):
+    observational = 0
+    tactical = 1
+    foundational = 2
+
+    @classmethod
+    def of(cls, s: str) -> "Classification":
+        try:
+            return cls[s]
+        except KeyError:
+            return cls.observational
+
+
+async def _supersede_alerts(
+    m_dir: Path, supersedes: list[str], new_classification: str
+) -> dict[str, str]:
+    """Return {id: old_classification} for superseded records that need a warning.
+
+    Covers two cases:
+    - Any superseded foundational record (same or lower new tier) — guardrail replacement
+    - Any superseded record with higher classification than the new one — tier downgrade
+    """
     if not supersedes:
-        return []
+        return {}
+    new_rank = Classification.of(new_classification)
     targets = set(supersedes)
-    hits: list[str] = []
+    alerts: dict[str, str] = {}
     expertise_dir = m_dir / "expertise"
     if expertise_dir.exists():
         for jsonl_file in expertise_dir.glob("*.jsonl"):
             for r in await read_domain_records(jsonl_file):
-                if r.get("id") in targets and r.get("classification") == "foundational":
-                    hits.append(r["id"])
-    return hits
+                if r.get("id") in targets:
+                    old_cls = r.get("classification", "")
+                    if Classification.of(old_cls) == Classification.foundational or Classification.of(old_cls) > new_rank:
+                        alerts[r["id"]] = old_cls
+    return alerts
 
 
 async def _annotate_edits(records: list[dict], project_id: int) -> None:
@@ -599,13 +625,19 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         session_id=session_id,
     )
     msg = f"Recorded {written['type']} in {domain} ({written['id']})"
-    foundational_hit = await _foundational_superseded(m_dir, list(args.get("supersedes") or []))
-    if foundational_hit:
+    alerts = await _supersede_alerts(m_dir, list(args.get("supersedes") or []), args["classification"])
+    if alerts:
+        new_cls = args["classification"]
+        new_rank = Classification.of(new_cls)
+        lines: list[str] = []
+        for sid, old_cls in alerts.items():
+            if Classification.of(old_cls) > new_rank:
+                lines.append(f"  {sid}: {old_cls} → {new_cls} (classification downgrade)")
+            else:
+                lines.append(f"  {sid}: {old_cls} (foundational guardrail replaced)")
         msg += (
-            f"\n\n⚠ FOUNDATIONAL SUPERSESSION: this record displaces foundational record(s): "
-            f"{', '.join(foundational_hit)}. "
-            f"Stop and flag this to the user before continuing — foundational supersessions "
-            f"may weaken team guardrails and require explicit acknowledgement."
+            f"\n\n⚠ SUPERSESSION WARNING — stop and flag this to the user before continuing:\n"
+            + "\n".join(lines)
         )
     return [TextContent(type="text", text=msg)]
 
@@ -739,7 +771,15 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         actor=ctx.user, before_snapshot=before_snapshot,
         client=ctx.client, session_id=session_id,
     )
-    return [TextContent(type="text", text=f"Updated {record_id} in {domain}")]
+    msg = f"Updated {record_id} in {domain}"
+    old_cls = before_snapshot.get("classification", "")
+    new_cls = updates.get("classification", "")
+    if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
+        msg += (
+            f"\n\n⚠ CLASSIFICATION DOWNGRADE: changed {record_id} from {old_cls} to {new_cls}. "
+            f"Stop and flag this to the user before continuing."
+        )
+    return [TextContent(type="text", text=msg)]
 
 
 async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
