@@ -11,7 +11,7 @@ from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotat
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
-from ..models import RecordEvent, RecordMeta, ToolCall
+from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import delete_record, edit_record, init_ml_project, search_domains, write_record
 from ..records import find_record, read_domain_records
 from .context import _ctx
@@ -605,11 +605,17 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     updates = {k: args[k] for k in update_keys if k in args}
     if not updates:
         raise ValueError("no fields to update — pass at least one content field")
+    before_snapshot = {k: record[k] for k in updates if k in record}
     await edit_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordEvent.create(
         record_id=record_id, project=ctx.project, domain=domain,
         actor=ctx.user, action="edit", client=ctx.client, session_id=session_id,
+    )
+    await RecordEdit.create(
+        record_id=record_id, project=ctx.project, domain=domain,
+        actor=ctx.user, before_snapshot=before_snapshot,
+        client=ctx.client, session_id=session_id,
     )
     return [TextContent(type="text", text=f"Updated {record_id} in {domain}")]
 

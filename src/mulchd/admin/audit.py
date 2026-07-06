@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..domains import mulch_dir
-from ..models import Project, RecordEvent
+from ..models import Project, RecordEdit, RecordEvent
 from ..mulch import restore_record
 from ..records import read_domain_records
 from ._shared import is_admin, redirect_login, templates
@@ -49,6 +49,16 @@ async def audit_page(
                 "id", "record_id", "domain", "action", "client", "at",
                 "actor__username", "actor__display_name",
             )
+
+            # Index edit snapshots by (record_id, at-minute) for annotation
+            edit_rows = await RecordEdit.filter(project=selected_project).order_by("-at").values(
+                "record_id", "before_snapshot", "at"
+            )
+            _edit_index: dict[str, dict] = {
+                f"{e['record_id']}|{e['at'].strftime('%Y-%m-%d %H:%M')}": e["before_snapshot"]
+                for e in edit_rows
+            }
+
             events = [
                 {
                     "record_id": r["record_id"],
@@ -58,6 +68,10 @@ async def audit_page(
                     "actor": r["actor__display_name"] or r["actor__username"],
                     "at": r["at"].strftime("%Y-%m-%d %H:%M"),
                     "client": r["client"],
+                    "before_snapshot": (
+                        _edit_index.get(f"{r['record_id']}|{r['at'].strftime('%Y-%m-%d %H:%M')}")
+                        if r["action"] == "edit" else None
+                    ),
                 }
                 for r in rows
             ]

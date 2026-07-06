@@ -130,3 +130,23 @@ class RecordEvent(models.Model):
 
     class Meta:
         table = "record_events"
+
+
+class RecordEdit(models.Model):
+    """Before-snapshot for every edit_record call."""
+    id = fields.IntField(primary_key=True)
+    record_id = fields.CharField(max_length=32)
+    project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
+        "models.Project", related_name="record_edits"
+    )
+    domain = fields.CharField(max_length=64)
+    actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="record_edits"
+    )
+    before_snapshot = fields.JSONField()  # {field: old_value} for fields that changed
+    client = fields.CharField(max_length=64, default="unknown")
+    session_id = fields.UUIDField(null=True)
+    at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "record_edits"
