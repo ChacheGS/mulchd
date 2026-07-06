@@ -117,7 +117,12 @@ async def audit_page(
 
                 rec = record_map.get(r["record_id"])
                 actor_username = r["actor__username"] or ""
-                owner_username = original_owner.get(r["record_id"], "")
+                # RecordMeta may be absent for records pre-dating that table;
+                # fall back to the owner field embedded in the JSONL record.
+                owner_username = (
+                    original_owner.get(r["record_id"])
+                    or (rec.get("owner", "") if rec else "")
+                )
                 # Detect write events that supersede foundational records
                 supersedes_foundational = (
                     r["action"] == "write"
