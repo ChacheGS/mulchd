@@ -82,7 +82,7 @@
       <span style="color:#475569">{{ e.domain }}</span>
       <span style="flex:1"></span>
       {% if e.classification_downgrade %}
-      <span class="downgrade-badge">classification ↓</span>
+      <span class="downgrade-badge">{{ e.downgrade_label if e.downgrade_label else 'classification ↓' }}</span>
       {% elif e.cross_owner %}
       <span class="cross-owner-badge" title="Original author: {{ e.original_owner }}">on @{{ e.original_owner }}</span>
       {% endif %}
