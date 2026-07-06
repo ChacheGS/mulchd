@@ -63,7 +63,9 @@ async def create_user(username: str, display_name: str) -> tuple[User, str]:
     return user, token
 
 
-async def create_project_token(user: User, project: Project, label: str = "") -> tuple[ProjectToken, str]:
+async def create_project_token(
+    user: User, project: Project, label: str = ""
+) -> tuple[ProjectToken, str]:
     token = generate_token()
     pt = await ProjectToken.create(
         user=user,

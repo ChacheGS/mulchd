@@ -8,9 +8,9 @@ from tortoise import Tortoise
 
 from .admin import router as admin_router
 from .api import router as api_router
-from .connect import router as connect_router
 from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
+from .connect import router as connect_router
 from .mcp import tier_managers, tier_servers
 from .mcp.context import _ctx
 
@@ -88,4 +88,5 @@ async def health() -> dict:
 
 def run() -> None:
     import uvicorn
+
     uvicorn.run("mulchd.main:app", host=settings.host, port=settings.port, reload=settings.reload)

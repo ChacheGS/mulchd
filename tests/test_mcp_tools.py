@@ -25,9 +25,22 @@ import pytest
 
 from mulchd.auth import AuthContext
 from mulchd.domains import list_available_domains
-from mulchd.models import Organization, Project, RecordEdit, RecordEvent, Role, User, UserMembership
+from mulchd.mcp.tier2 import (
+    _get_recent,
+    _list_domains,
+    _read_expertise,
+    _record_expertise,
+)
+from mulchd.models import (
+    Organization,
+    Project,
+    RecordEdit,
+    RecordEvent,
+    Role,
+    User,
+    UserMembership,
+)
 from mulchd.mulch import MulchError
-from mulchd.mcp.tier2 import _get_recent, _list_domains, _read_expertise, _record_expertise
 
 ml_available = pytest.mark.skipif(
     not shutil.which("ml"), reason="ml not in PATH — run via: mise x -- uv run pytest"
@@ -104,9 +117,7 @@ async def team(db, data_path):
     """
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     infra = await Project.create(slug="infra", display_name="Infrastructure", org=org)
-    data_proj = await Project.create(
-        slug="data-platform", display_name="Data Platform", org=org
-    )
+    data_proj = await Project.create(slug="data-platform", display_name="Data Platform", org=org)
 
     carlos = await User.create(username="carlos", display_name="Carlos G.", token_hash="h1")
     jorge = await User.create(username="jorge", display_name="Jorge M.", token_hash="h2")
@@ -147,11 +158,15 @@ async def test_read_isolation_different_projects(team, data_path):
     )
 
     # Member of both projects reading from infra sees the record.
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra)
+    )
     assert "Terraform" in text_content[0].text
 
     # Same user reading from data-platform sees nothing.
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.data))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.jorge, t.org, t.data)
+    )
     assert "Terraform" not in text_content[0].text
     assert "No records found" in text_content[0].text
 
@@ -239,7 +254,9 @@ async def test_cross_user_read_sees_all_project_records(team, data_path):
     )
 
     # jorge reads and sees carlos's record with author attribution
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.jorge, t.org, t.infra)
+    )
     assert "NAT gateway quota exhaustion" in text_content[0].text
     assert "carlos" in text_content[0].text
 
@@ -269,7 +286,9 @@ async def test_multiple_authors_all_visible_to_team(team, data_path):
     )
 
     # ana is not in infra, but carlos is — carlos sees both records
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     text = text_content[0].text
     assert "Aurora Serverless" in text
     assert "Tag all resources" in text
@@ -290,7 +309,9 @@ async def test_cross_user_record_then_read(team, data_path, fake_write_record):
         ctx(t.jorge, t.org, t.infra),
     )
 
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     assert "IMDSv2" in text_content[0].text
     assert "jorge" in text_content[0].text
 
@@ -476,12 +497,20 @@ async def test_read_records_unknown_domain_warns(team, data_path):
 async def test_read_records_cursor_pagination(team, data_path):
     """Cursor-based pagination returns pages in recorded_at order with an opaque next_cursor."""
     import base64
+
     t = team
     for i in range(3):
-        _jot(data_path, "acme", "infra", "infra",
-             type="convention", classification="tactical",
-             content=f"record {i}", owner="carlos",
-             recorded_at=datetime(2026, 1, 1, i, 0, 0, tzinfo=timezone.utc))
+        _jot(
+            data_path,
+            "acme",
+            "infra",
+            "infra",
+            type="convention",
+            classification="tactical",
+            content=f"record {i}",
+            owner="carlos",
+            recorded_at=datetime(2026, 1, 1, i, 0, 0, tzinfo=timezone.utc),
+        )
 
     _, s1 = await _read_expertise({"domains": ["infra"], "limit": 2}, ctx(t.carlos, t.org, t.infra))
     assert len(s1["records"]) == 2
@@ -508,12 +537,28 @@ async def test_read_records_cursor_tiebreak_on_id(team, data_path):
     """Two records with identical timestamps are disambiguated by id so no record is skipped."""
     t = team
     ts = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="tactical",
-         content="twin a", owner="carlos", recorded_at=ts)
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="tactical",
-         content="twin b", owner="carlos", recorded_at=ts)
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="twin a",
+        owner="carlos",
+        recorded_at=ts,
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="twin b",
+        owner="carlos",
+        recorded_at=ts,
+    )
 
     _, s1 = await _read_expertise({"domains": ["infra"], "limit": 1}, ctx(t.carlos, t.org, t.infra))
     assert s1["truncated"] is True
@@ -531,10 +576,26 @@ async def test_read_records_cursor_tiebreak_on_id(team, data_path):
 async def test_read_records_structured_truncation_flag(team, data_path):
     """read_records sets truncated=True when limit is hit."""
     t = team
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="tactical", content="record one", owner="carlos")
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="tactical", content="record two", owner="carlos")
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="record one",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="record two",
+        owner="carlos",
+    )
 
     text_content, structured = await _read_expertise(
         {"domains": ["infra"], "limit": 1},
@@ -557,6 +618,7 @@ async def test_read_records_structured_truncation_flag(team, data_path):
 
 # Critical: write_record broken due to owner_display in ml payload
 # ----------------------------------------------------------------
+
 
 @ml_available
 async def test_live_write_record_succeeds(team, data_path):
@@ -595,6 +657,7 @@ async def test_live_write_record_decision_succeeds(team, data_path):
 # High: domain orphaned when ml write fails
 # ------------------------------------------
 
+
 async def test_write_failure_cleans_up_empty_domain(team, data_path, monkeypatch):
     """A write that fails after ml creates the domain file should not leave an orphan."""
     import mulchd.mcp.tier2 as mcp_tier2
@@ -629,14 +692,15 @@ async def test_write_failure_cleans_up_empty_domain(team, data_path, monkeypatch
 # Medium: list_domains structured output missing self-documenting fields
 # -----------------------------------------------------------------------
 
+
 async def test_list_domains_structured_includes_get_recent_hint(team, data_path):
     """list_domains structured output should carry the get_recent hint so clients
     consuming structured content don't lose the session-start instruction."""
     t = team
     _, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
-    assert "get_recent_hint" in structured or "hint" in structured, (
-        "structured output must include the get_recent timestamp hint"
-    )
+    assert (
+        "get_recent_hint" in structured or "hint" in structured
+    ), "structured output must include the get_recent timestamp hint"
 
 
 async def test_list_domains_structured_includes_language(team, data_path):
@@ -653,6 +717,7 @@ async def test_list_domains_structured_includes_language(team, data_path):
 # Medium: unknown domain not signalled in structured output (§5)
 # ---------------------------------------------------------------
 
+
 async def test_read_records_unknown_domain_in_structured_output(team, data_path):
     """read_records should expose unknown domain names in structured output,
     not just as a text warning that structured clients may never see."""
@@ -661,27 +726,44 @@ async def test_read_records_unknown_domain_in_structured_output(team, data_path)
         {"domains": ["does-not-exist"]},
         ctx(t.carlos, t.org, t.infra),
     )
-    assert "unknown_domains" in structured, (
-        "structured output must include 'unknown_domains' when unrecognised names are requested"
-    )
+    assert (
+        "unknown_domains" in structured
+    ), "structured output must include 'unknown_domains' when unrecognised names are requested"
     assert "does-not-exist" in structured["unknown_domains"]
 
 
 # Superseded record marking
 # -------------------------
 
+
 async def test_read_records_marks_superseded(team, data_path):
     """When record B supersedes record A, A should be marked in text and structured output."""
     t = team
-    old = _jot(data_path, "acme", "infra", "infra",
-               type="convention", classification="foundational",
-               content="Old approach", owner="carlos")
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="foundational",
-         content="New approach", owner="carlos",
-         supersedes=[old["id"]])
+    old = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="Old approach",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="New approach",
+        owner="carlos",
+        supersedes=[old["id"]],
+    )
 
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     new_record = next(r for r in structured["records"] if r.get("supersedes"))
     assert "superseded" in text_content[0].text
     assert new_record["id"] in text_content[0].text  # superseded_by ID appears in text
@@ -694,11 +776,20 @@ async def test_read_records_marks_superseded(team, data_path):
 async def test_non_superseded_records_not_marked(team, data_path):
     """Records not referenced in any supersedes list should not be marked."""
     t = team
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="foundational",
-         content="Standalone convention", owner="carlos")
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="Standalone convention",
+        owner="carlos",
+    )
 
-    text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     assert "superseded" not in text_content[0].text
     assert not any(r.get("_superseded") for r in structured["records"])
 
@@ -706,16 +797,32 @@ async def test_non_superseded_records_not_marked(team, data_path):
 async def test_superseded_marked_when_superseder_in_other_domain(team, data_path):
     """A record is marked superseded even when the superseding record lives in a different domain."""
     t = team
-    old = _jot(data_path, "acme", "infra", "guardrails",
-               type="convention", classification="foundational",
-               content="Old guardrail", owner="carlos")
-    _jot(data_path, "acme", "infra", "policies",
-         type="convention", classification="foundational",
-         content="Replacement rule", owner="carlos",
-         supersedes=[old["id"]])
+    old = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "guardrails",
+        type="convention",
+        classification="foundational",
+        content="Old guardrail",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "policies",
+        type="convention",
+        classification="foundational",
+        content="Replacement rule",
+        owner="carlos",
+        supersedes=[old["id"]],
+    )
 
     # Read only the victim's domain — superseder is not in the result set
-    _, structured = await _read_expertise({"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra))
+    _, structured = await _read_expertise(
+        {"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra)
+    )
     records = structured["records"]
     assert len(records) == 1
     assert records[0]["_superseded"] is True
@@ -725,18 +832,30 @@ async def test_superseded_marked_when_superseder_in_other_domain(team, data_path
 async def test_superseded_marked_when_superseder_not_in_query_results(team, data_path):
     """Same-domain supersession: victim is marked even when the superseder didn't match the query."""
     t = team
-    old = _jot(data_path, "acme", "infra", "infra",
-               type="convention", classification="foundational",
-               content="Old approach", owner="carlos")
-    _jot(data_path, "acme", "infra", "infra",
-         type="convention", classification="foundational",
-         content="New approach", owner="jorge",
-         supersedes=[old["id"]])
+    old = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="Old approach",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="New approach",
+        owner="jorge",
+        supersedes=[old["id"]],
+    )
 
     # Reading only carlos's records — superseder (jorge's) is filtered out
-    _, structured = await _read_expertise(
-        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
-    )
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     # Both records come back (no owner filter on read_records), but confirm
     # the old one is marked regardless of whether we'd have filtered the new one
     old_record = next(r for r in structured["records"] if r["id"] == old["id"])
@@ -746,12 +865,15 @@ async def test_superseded_marked_when_superseder_not_in_query_results(team, data
 # delete_record auto-cleanup
 # --------------------------
 
+
 def _make_fake_delete(expertise_dir: Path):
     """Return a delete_record stand-in that removes the record line from JSONL."""
+
     async def _fake(m_dir, domain, rid):
         path = expertise_dir / f"{domain}.jsonl"
         lines = [l for l in path.read_text().splitlines() if rid not in l]
         path.write_text("\n".join(lines) + ("\n" if lines else ""))
+
     return _fake
 
 
@@ -759,14 +881,24 @@ async def test_delete_last_record_removes_domain(team, data_path, monkeypatch):
     """Deleting the last record in a domain removes the domain JSONL automatically."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _delete_record
+
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
-    record = _jot(data_path, "acme", "infra", "scratch",
-                  type="convention", classification="foundational",
-                  content="only record", owner="carlos")
+    record = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="only record",
+        owner="carlos",
+    )
     monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(expertise))
 
-    await _delete_record({"record_id": record["id"], "domain": "scratch"}, ctx(t.carlos, t.org, t.infra))
+    await _delete_record(
+        {"record_id": record["id"], "domain": "scratch"}, ctx(t.carlos, t.org, t.infra)
+    )
     assert not (expertise / "scratch.jsonl").exists()
 
 
@@ -774,14 +906,29 @@ async def test_delete_non_last_record_preserves_domain(team, data_path, monkeypa
     """Deleting one of several records leaves the domain intact."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _delete_record
+
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
-    r1 = _jot(data_path, "acme", "infra", "keep",
-               type="convention", classification="foundational",
-               content="first", owner="carlos")
-    _jot(data_path, "acme", "infra", "keep",
-         type="convention", classification="foundational",
-         content="second", owner="carlos")
+    r1 = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "keep",
+        type="convention",
+        classification="foundational",
+        content="first",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "keep",
+        type="convention",
+        classification="foundational",
+        content="second",
+        owner="carlos",
+    )
     monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(expertise))
 
     await _delete_record({"record_id": r1["id"], "domain": "keep"}, ctx(t.carlos, t.org, t.infra))
@@ -791,29 +938,45 @@ async def test_delete_non_last_record_preserves_domain(team, data_path, monkeypa
 # RecordEvent audit trail (data layer — not exposed via MCP)
 # ----------------------------------------------------------
 
+
 async def test_record_events_written_for_write_edit_delete(team, data_path, fake_write_record):
     """RecordEvent rows are created for every mutating action (write, edit, delete)."""
     import mulchd.mcp.tier2 as mcp_tier2
-    from mulchd.mcp.tier2 import _edit_record, _delete_record
+    from mulchd.mcp.tier2 import _delete_record, _edit_record
     from mulchd.models import RecordEvent
+
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
 
     await mcp_tier2._record_expertise(
-        {"domain": "audit-test", "type": "convention", "classification": "tactical", "content": "v1"},
+        {
+            "domain": "audit-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "v1",
+        },
         ctx(t.carlos, t.org, t.infra),
     )
-    records_after_write = await mcp_tier2._read_expertise({"domains": ["audit-test"]}, ctx(t.carlos, t.org, t.infra))
+    records_after_write = await mcp_tier2._read_expertise(
+        {"domains": ["audit-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
     record_id = records_after_write[1]["records"][0]["id"]
 
-    async def _noop_edit(m_dir, domain, rid, updates): pass
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
     orig_edit = mcp_tier2.edit_record
     mcp_tier2.edit_record = _noop_edit
-    await _edit_record({"record_id": record_id, "domain": "audit-test", "content": "v2"}, ctx(t.carlos, t.org, t.infra))
+    await _edit_record(
+        {"record_id": record_id, "domain": "audit-test", "content": "v2"},
+        ctx(t.carlos, t.org, t.infra),
+    )
     mcp_tier2.edit_record = orig_edit
 
     mcp_tier2.delete_record = _make_fake_delete(expertise)
-    await _delete_record({"record_id": record_id, "domain": "audit-test"}, ctx(t.carlos, t.org, t.infra))
+    await _delete_record(
+        {"record_id": record_id, "domain": "audit-test"}, ctx(t.carlos, t.org, t.infra)
+    )
 
     events = await RecordEvent.filter(record_id=record_id).values_list("action", flat=True)
     assert set(events) == {"write", "edit", "delete"}
@@ -824,19 +987,32 @@ async def test_edit_record_snapshots_before_values(team, data_path, fake_write_r
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _edit_record
     from mulchd.models import RecordEdit
+
     t = team
 
     await mcp_tier2._record_expertise(
-        {"domain": "snap-test", "type": "convention", "classification": "tactical", "content": "original"},
+        {
+            "domain": "snap-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "original",
+        },
         ctx(t.carlos, t.org, t.infra),
     )
-    records = await mcp_tier2._read_expertise({"domains": ["snap-test"]}, ctx(t.carlos, t.org, t.infra))
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["snap-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
     record_id = records[1]["records"][0]["id"]
 
-    async def _noop_edit(m_dir, domain, rid, updates): pass
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
     orig_edit = mcp_tier2.edit_record
     mcp_tier2.edit_record = _noop_edit
-    await _edit_record({"record_id": record_id, "domain": "snap-test", "content": "updated"}, ctx(t.carlos, t.org, t.infra))
+    await _edit_record(
+        {"record_id": record_id, "domain": "snap-test", "content": "updated"},
+        ctx(t.carlos, t.org, t.infra),
+    )
     mcp_tier2.edit_record = orig_edit
 
     edit = await RecordEdit.filter(record_id=record_id).first()
@@ -853,10 +1029,18 @@ async def test_supersede_alerts_foundational_same_tier(team, data_path):
     """_supersede_alerts fires when a foundational record is superseded, even at the same tier."""
     from mulchd.domains import mulch_dir
     from mulchd.mcp.tier2 import _supersede_alerts
+
     t = team
-    r = _jot(data_path, "acme", "infra", "api",
-             type="convention", classification="foundational",
-             content="Guardrail", owner="carlos")
+    r = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
+    )
     alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "foundational")
     assert r["id"] in alerts
     assert alerts[r["id"]] == "foundational"
@@ -866,10 +1050,18 @@ async def test_supersede_alerts_tier_downgrade(team, data_path):
     """_supersede_alerts fires when a lower tier supersedes a higher one."""
     from mulchd.domains import mulch_dir
     from mulchd.mcp.tier2 import _supersede_alerts
+
     t = team
-    r = _jot(data_path, "acme", "infra", "api",
-             type="convention", classification="tactical",
-             content="Tactical rule", owner="carlos")
+    r = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Tactical rule",
+        owner="carlos",
+    )
     alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "observational")
     assert r["id"] in alerts
 
@@ -878,10 +1070,18 @@ async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_pa
     """_supersede_alerts does not fire when tactical supersedes tactical."""
     from mulchd.domains import mulch_dir
     from mulchd.mcp.tier2 import _supersede_alerts
+
     t = team
-    r = _jot(data_path, "acme", "infra", "api",
-             type="convention", classification="tactical",
-             content="Tactical rule", owner="carlos")
+    r = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Tactical rule",
+        owner="carlos",
+    )
     alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "tactical")
     assert r["id"] not in alerts
 
@@ -889,14 +1089,26 @@ async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_pa
 async def test_annotate_edits_sets_edited_flag(team, data_path):
     """_annotate_edits marks records that have RecordEdit rows with _edited and edit count."""
     from mulchd.mcp.tier2 import _annotate_edits
+
     t = team
-    r = _jot(data_path, "acme", "infra", "api",
-             type="convention", classification="tactical",
-             content="Some rule", owner="carlos")
+    r = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Some rule",
+        owner="carlos",
+    )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api",
-        actor=t.carlos, before_snapshot={"content": "Old rule"},
-        client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "Old rule"},
+        client="test",
+        session_id=uuid.uuid4(),
     )
     records = [r.copy()]
     await _annotate_edits(records, t.infra.id)
@@ -908,15 +1120,27 @@ async def test_annotate_edits_sets_edited_flag(team, data_path):
 async def test_annotate_edits_counts_multiple_edits(team, data_path):
     """_annotate_edits counts each edit and records the last editor."""
     from mulchd.mcp.tier2 import _annotate_edits
+
     t = team
-    r = _jot(data_path, "acme", "infra", "api",
-             type="convention", classification="tactical",
-             content="v1", owner="carlos")
+    r = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
+    )
     for _ in range(3):
         await RecordEdit.create(
-            record_id=r["id"], project=t.infra, domain="api",
-            actor=t.jorge, before_snapshot={"content": "v1"},
-            client="test", session_id=uuid.uuid4(),
+            record_id=r["id"],
+            project=t.infra,
+            domain="api",
+            actor=t.jorge,
+            before_snapshot={"content": "v1"},
+            client="test",
+            session_id=uuid.uuid4(),
         )
     records = [r.copy()]
     await _annotate_edits(records, t.infra.id)
@@ -927,14 +1151,29 @@ async def test_annotate_edits_counts_multiple_edits(team, data_path):
 async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
     """_mark_superseded annotates _supersedes_foundational on the superseding record."""
     from mulchd.mcp.tier2 import _mark_superseded
+
     t = team
-    original = _jot(data_path, "acme", "infra", "api",
-                    type="convention", classification="foundational",
-                    content="Guardrail", owner="carlos")
-    superseder = _jot(data_path, "acme", "infra", "api",
-                      type="convention", classification="tactical",
-                      content="Weakened rule", owner="jorge",
-                      supersedes=[original["id"]])
+    original = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
+    )
+    superseder = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Weakened rule",
+        owner="jorge",
+        supersedes=[original["id"]],
+    )
     original["_domain"] = "api"
     superseder["_domain"] = "api"
 
@@ -945,16 +1184,28 @@ async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
     assert records[1].get("_supersedes_foundational") == [original["id"]]
 
 
-async def test_write_record_supersession_warning_on_foundational(team, data_path, fake_write_record):
+async def test_write_record_supersession_warning_on_foundational(
+    team, data_path, fake_write_record
+):
     """write_record response includes SUPERSESSION WARNING when superseding a foundational record."""
     t = team
-    original = _jot(data_path, "acme", "infra", "api",
-                    type="convention", classification="foundational",
-                    content="Guardrail", owner="carlos")
+    original = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
+    )
     result = await _record_expertise(
         {
-            "domain": "api", "type": "convention", "classification": "tactical",
-            "content": "Weakened", "supersedes": [original["id"]],
+            "domain": "api",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Weakened",
+            "supersedes": [original["id"]],
         },
         ctx(t.carlos, t.org, t.infra),
     )
@@ -964,16 +1215,28 @@ async def test_write_record_supersession_warning_on_foundational(team, data_path
     assert "foundational → tactical" in text
 
 
-async def test_write_record_supersession_warning_same_tier_foundational(team, data_path, fake_write_record):
+async def test_write_record_supersession_warning_same_tier_foundational(
+    team, data_path, fake_write_record
+):
     """write_record warns even when new record is also foundational (guardrail replacement)."""
     t = team
-    original = _jot(data_path, "acme", "infra", "api",
-                    type="convention", classification="foundational",
-                    content="Guardrail", owner="carlos")
+    original = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
+    )
     result = await _record_expertise(
         {
-            "domain": "api", "type": "convention", "classification": "foundational",
-            "content": "New guardrail", "supersedes": [original["id"]],
+            "domain": "api",
+            "type": "convention",
+            "classification": "foundational",
+            "content": "New guardrail",
+            "supersedes": [original["id"]],
         },
         ctx(t.carlos, t.org, t.infra),
     )
@@ -982,16 +1245,28 @@ async def test_write_record_supersession_warning_same_tier_foundational(team, da
     assert "foundational guardrail replaced" in text
 
 
-async def test_write_record_no_warning_when_superseding_tactical(team, data_path, fake_write_record):
+async def test_write_record_no_warning_when_superseding_tactical(
+    team, data_path, fake_write_record
+):
     """write_record does not warn when superseding a lower-tier record at the same tier."""
     t = team
-    original = _jot(data_path, "acme", "infra", "api",
-                    type="convention", classification="tactical",
-                    content="Old approach", owner="carlos")
+    original = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Old approach",
+        owner="carlos",
+    )
     result = await _record_expertise(
         {
-            "domain": "api", "type": "convention", "classification": "tactical",
-            "content": "New approach", "supersedes": [original["id"]],
+            "domain": "api",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "New approach",
+            "supersedes": [original["id"]],
         },
         ctx(t.carlos, t.org, t.infra),
     )
@@ -1002,6 +1277,7 @@ async def test_edit_record_classification_downgrade_warning(team, data_path, fak
     """edit_record response includes CLASSIFICATION DOWNGRADE when classification is lowered."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _edit_record
+
     t = team
 
     await mcp_tier2._record_expertise(
@@ -1011,7 +1287,9 @@ async def test_edit_record_classification_downgrade_warning(team, data_path, fak
     records = await mcp_tier2._read_expertise({"domains": ["api"]}, ctx(t.carlos, t.org, t.infra))
     record_id = records[1]["records"][0]["id"]
 
-    async def _noop_edit(m_dir, domain, rid, updates): pass
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
     orig_edit = mcp_tier2.edit_record
     mcp_tier2.edit_record = _noop_edit
     result = await _edit_record(
@@ -1028,13 +1306,27 @@ async def test_edit_record_classification_downgrade_warning(team, data_path, fak
 async def test_cross_domain_hints_in_read_records(team, data_path):
     """read_records includes cross_domain_hints when a record is superseded from another domain."""
     t = team
-    victim = _jot(data_path, "acme", "infra", "guardrails",
-                  type="convention", classification="foundational",
-                  content="Original guardrail", owner="carlos")
-    _jot(data_path, "acme", "infra", "policies",
-         type="convention", classification="foundational",
-         content="Replacement", owner="carlos",
-         supersedes=[victim["id"]])
+    victim = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "guardrails",
+        type="convention",
+        classification="foundational",
+        content="Original guardrail",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "policies",
+        type="convention",
+        classification="foundational",
+        content="Replacement",
+        owner="carlos",
+        supersedes=[victim["id"]],
+    )
 
     # Read only the victim's domain
     _, structured = await _read_expertise(

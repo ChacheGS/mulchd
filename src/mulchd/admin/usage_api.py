@@ -11,8 +11,8 @@ from ._shared import is_admin
 router = APIRouter()
 
 _PERIODS = {
-    "day":   ("day",   30,  "%Y-%m-%d"),
-    "week":  ("week",  84,  "%Y-%m-%d"),
+    "day": ("day", 30, "%Y-%m-%d"),
+    "week": ("week", 84, "%Y-%m-%d"),
     "month": ("month", 365, "%Y-%m"),
 }
 
@@ -61,9 +61,11 @@ async def usage_data(request: Request, org: str, project: str, period: str = "we
         .values("author__username", "n")
     )
 
-    return JSONResponse({
-        "labels": [r["bucket"].strftime(fmt) for r in chart_rows],
-        "counts": [r["n"] for r in chart_rows],
-        "by_tool": [[r["tool"], r["n"]] for r in by_tool],
-        "by_user": [[r["author__username"], r["n"]] for r in by_user],
-    })
+    return JSONResponse(
+        {
+            "labels": [r["bucket"].strftime(fmt) for r in chart_rows],
+            "counts": [r["n"] for r in chart_rows],
+            "by_tool": [[r["tool"], r["n"]] for r in by_tool],
+            "by_user": [[r["author__username"], r["n"]] for r in by_user],
+        }
+    )

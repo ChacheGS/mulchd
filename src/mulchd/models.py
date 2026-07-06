@@ -114,6 +114,7 @@ class RecordMeta(models.Model):
 
 class RecordEvent(models.Model):
     """Out-of-band audit log for every mutating action on a record."""
+
     id = fields.IntField(primary_key=True)
     record_id = fields.CharField(max_length=32)  # mx-xxxxxx; not FK, survives deletes
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
@@ -134,6 +135,7 @@ class RecordEvent(models.Model):
 
 class RecordEdit(models.Model):
     """Before-snapshot for every edit_record call."""
+
     id = fields.IntField(primary_key=True)
     record_id = fields.CharField(max_length=32)
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(

@@ -239,9 +239,7 @@ async def test_revoke_token_deactivates_it(client, carlos_and_token, infra):
     await UserMembership.create(user=user, project=infra, role=Role.WRITER)
     pt, pt_raw = await create_project_token(user, infra, label="to-revoke")
 
-    resp = await client.delete(
-        f"/api/projects/acme/infra/tokens/{pt.id}", headers=auth(token)
-    )
+    resp = await client.delete(f"/api/projects/acme/infra/tokens/{pt.id}", headers=auth(token))
     assert resp.status_code == 204
     assert await authenticate_project_token(pt_raw) is None
 
@@ -275,7 +273,5 @@ async def test_revoke_already_revoked_token(client, carlos_and_token, infra):
     pt, _ = await create_project_token(user, infra)
     await ProjectToken.filter(id=pt.id).update(active=False)
 
-    resp = await client.delete(
-        f"/api/projects/acme/infra/tokens/{pt.id}", headers=auth(token)
-    )
+    resp = await client.delete(f"/api/projects/acme/infra/tokens/{pt.id}", headers=auth(token))
     assert resp.status_code == 404

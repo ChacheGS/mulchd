@@ -9,9 +9,7 @@ router = APIRouter()
 
 
 @router.get("/memberships")
-async def memberships_page(
-    request: Request, user: str = "", error: str = ""
-) -> Response:
+async def memberships_page(request: Request, user: str = "", error: str = "") -> Response:
     if not is_admin(request):
         return redirect_login()
     memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")

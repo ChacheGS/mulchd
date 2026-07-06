@@ -131,6 +131,7 @@ async def test_users_page_renders(admin_client):
 
 async def test_records_count_requires_auth(client, tmp_path, monkeypatch):
     from mulchd.config import settings
+
     monkeypatch.setattr(settings, "data_path", tmp_path)
     resp = await client.get("/admin/records/count?project=acme/demo", follow_redirects=False)
     assert resp.status_code == 303
@@ -139,6 +140,7 @@ async def test_records_count_requires_auth(client, tmp_path, monkeypatch):
 
 async def test_records_count_no_project(admin_client, tmp_path, monkeypatch):
     from mulchd.config import settings
+
     monkeypatch.setattr(settings, "data_path", tmp_path)
     resp = await admin_client.get("/admin/records/count")
     assert resp.status_code == 200
@@ -147,15 +149,14 @@ async def test_records_count_no_project(admin_client, tmp_path, monkeypatch):
 
 async def test_records_count_with_jsonl(admin_client, tmp_path, monkeypatch):
     from mulchd.config import settings
+
     monkeypatch.setattr(settings, "data_path", tmp_path)
     expertise = tmp_path / "acme" / "demo" / ".mulch" / "expertise"
     expertise.mkdir(parents=True)
     (expertise / "architecture.jsonl").write_text(
         '{"id":"mx-aaa","type":"decision"}\n{"id":"mx-bbb","type":"convention"}\n'
     )
-    (expertise / "ops.jsonl").write_text(
-        '{"id":"mx-ccc","type":"guide"}\n'
-    )
+    (expertise / "ops.jsonl").write_text('{"id":"mx-ccc","type":"guide"}\n')
     resp = await admin_client.get("/admin/records/count?project=acme/demo")
     assert resp.status_code == 200
     assert resp.json() == {"count": 3}
