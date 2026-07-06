@@ -682,10 +682,13 @@ async def test_read_records_marks_superseded(team, data_path):
          supersedes=[old["id"]])
 
     text_content, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    new_record = next(r for r in structured["records"] if r.get("supersedes"))
     assert "superseded" in text_content[0].text
+    assert new_record["id"] in text_content[0].text  # superseded_by ID appears in text
     superseded_records = [r for r in structured["records"] if r.get("_superseded")]
     assert len(superseded_records) == 1
     assert superseded_records[0]["id"] == old["id"]
+    assert superseded_records[0]["_superseded_by"] == new_record["id"]
 
 
 async def test_non_superseded_records_not_marked(team, data_path):
