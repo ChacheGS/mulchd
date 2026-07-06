@@ -1,3 +1,5 @@
+from collections import defaultdict, deque
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
@@ -14,6 +16,34 @@ _ACTION_COLORS = {
     "edit": "background:#dbeafe; color:#1d4ed8",
     "delete": "background:#fee2e2; color:#991b1b",
 }
+
+_CONTENT_KEYS = ("content", "title", "name", "description", "resolution", "rationale")
+
+
+def _record_summary(r: dict) -> str:
+    for key in _CONTENT_KEYS:
+        if r.get(key):
+            val = str(r[key])
+            return val[:140] + ("…" if len(val) > 140 else "")
+    return ""
+
+
+async def _load_record_map(org_slug: str, project_slug: str) -> dict[str, dict]:
+    m_dir = mulch_dir(org_slug, project_slug)
+    result: dict[str, dict] = {}
+    expertise_dir = m_dir / "expertise"
+    if expertise_dir.exists():
+        for f in expertise_dir.glob("*.jsonl"):
+            for r in await read_domain_records(f):
+                if r.get("id"):
+                    result[r["id"]] = r
+    archive_dir = m_dir / "archive"
+    if archive_dir.exists():
+        for f in archive_dir.glob("*.jsonl"):
+            for r in await read_domain_records(f):
+                if r.get("id"):
+                    result.setdefault(r["id"], r)
+    return result
 
 
 @router.get("/audit")
@@ -47,20 +77,36 @@ async def audit_page(
                 qs = qs.filter(domain__icontains=domain)
             rows = await qs.order_by("-at").limit(200).values(
                 "id", "record_id", "domain", "action", "client", "at",
-                "actor__username", "actor__display_name",
+                "session_id", "actor__username", "actor__display_name",
             )
 
-            # Index edit snapshots by (record_id, at-minute) for annotation
-            edit_rows = await RecordEdit.filter(project=selected_project).order_by("-at").values(
-                "record_id", "before_snapshot", "at"
+            # RecordEdit rows per (record_id, session_id), oldest-first.
+            # Each edit event pops one entry from its queue.
+            edit_rows = await RecordEdit.filter(project=selected_project).order_by("at").values(
+                "record_id", "session_id", "before_snapshot"
             )
-            _edit_index: dict[str, dict] = {
-                f"{e['record_id']}|{e['at'].strftime('%Y-%m-%d %H:%M')}": e["before_snapshot"]
-                for e in edit_rows
-            }
+            edit_queues: dict[tuple, deque] = defaultdict(deque)
+            for e in edit_rows:
+                edit_queues[(e["record_id"], str(e["session_id"]))].append(e["before_snapshot"])
 
-            events = [
-                {
+            # Process events oldest-first so queue pops match the right edit,
+            # then reverse for newest-first display.
+            record_map = await _load_record_map(org_slug, project_slug)
+            edit_consumed: dict[tuple, int] = defaultdict(int)
+            processed = []
+            for r in reversed(rows):
+                before_snap = None
+                if r["action"] == "edit":
+                    key = (r["record_id"], str(r["session_id"]))
+                    q = edit_queues.get(key)
+                    if q:
+                        idx = edit_consumed[key]
+                        if idx < len(q):
+                            before_snap = q[idx]
+                            edit_consumed[key] += 1
+
+                rec = record_map.get(r["record_id"])
+                processed.append({
                     "record_id": r["record_id"],
                     "domain": r["domain"],
                     "action": r["action"],
@@ -68,13 +114,11 @@ async def audit_page(
                     "actor": r["actor__display_name"] or r["actor__username"],
                     "at": r["at"].strftime("%Y-%m-%d %H:%M"),
                     "client": r["client"],
-                    "before_snapshot": (
-                        _edit_index.get(f"{r['record_id']}|{r['at'].strftime('%Y-%m-%d %H:%M')}")
-                        if r["action"] == "edit" else None
-                    ),
-                }
-                for r in rows
-            ]
+                    "record_type": (rec or {}).get("type", ""),
+                    "record_summary": _record_summary(rec) if rec else "",
+                    "before_snap": before_snap,
+                })
+            events = list(reversed(processed))
 
             archive_dir = mulch_dir(org_slug, project_slug) / "archive"
             if archive_dir.exists():

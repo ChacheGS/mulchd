@@ -3,16 +3,15 @@
 {% block content %}
 
 <style>
-  .event-row { padding: 9px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; display: grid; grid-template-columns: 120px 60px 120px 1fr 100px 120px; gap: 8px; align-items: center; }
-  .event-row:last-child { border-bottom: none; }
-  .event-header { padding: 7px 16px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; display: grid; grid-template-columns: 120px 60px 120px 1fr 100px 120px; gap: 8px; }
-  .snapshot-row { padding: 0 16px 10px; border-bottom: 1px solid #f1f5f9; }
-  .snapshot-row:last-child { border-bottom: none; }
-  details summary { font-size: 11px; color: #94a3b8; cursor: pointer; user-select: none; }
-  details[open] summary { color: #64748b; margin-bottom: 6px; }
-  .snapshot-field { display: grid; grid-template-columns: 96px 1fr; gap: 6px; font-size: 12px; margin-bottom: 4px; }
-  .snapshot-label { font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 1px; }
-  .snapshot-value { color: #64748b; white-space: pre-wrap; word-break: break-word; font-style: italic; }
+  .event-block { border-bottom: 1px solid #f1f5f9; padding: 10px 16px; }
+  .event-block:last-child { border-bottom: none; }
+  .event-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+  .event-detail { margin-top: 5px; font-size: 12px; color: #64748b; padding-left: 2px; }
+  .event-detail-write { color: #374151; }
+  .field-diff { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+  .field-diff-row { display: grid; grid-template-columns: 80px 1fr; gap: 6px; align-items: baseline; font-size: 12px; }
+  .field-label { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field-was { color: #991b1b; background: #fff1f2; border-radius: 3px; padding: 2px 6px; font-style: italic; white-space: pre-wrap; word-break: break-word; }
   .archive-record { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; font-size: 13px; }
   .archive-record:last-child { border-bottom: none; }
 </style>
@@ -67,31 +66,40 @@
 </div>
 {% else %}
 <div class="card" style="margin-bottom:28px">
-  <div class="event-header">
-    <span>Time</span><span>Action</span><span>Record</span><span>Domain</span><span>Actor</span><span>Client</span>
-  </div>
   {% for e in events %}
-  <div class="event-row{% if e.before_snapshot %}" style="border-bottom:none{% endif %}">
-    <span class="text-muted">{{ e.at }}</span>
-    <span><span class="badge" style="{{ e.action_color }}">{{ e.action }}</span></span>
-    <span class="monospace" style="color:#6d28d9; font-size:11px">{{ e.record_id }}</span>
-    <span style="color:#475569">{{ e.domain }}</span>
-    <span style="color:#374151">{{ e.actor }}</span>
-    <span class="text-muted">{{ e.client }}</span>
-  </div>
-  {% if e.before_snapshot %}
-  <div class="snapshot-row">
-    <details>
-      <summary>before this edit…</summary>
-      {% for field, old_val in e.before_snapshot.items() %}
-      <div class="snapshot-field">
-        <span class="snapshot-label">{{ field }}</span>
-        <span class="snapshot-value">{{ old_val if old_val is string else old_val | join(', ') }}</span>
+  <div class="event-block">
+
+    {# ── main line ── #}
+    <div class="event-main">
+      <span class="text-muted" style="white-space:nowrap; min-width:115px">{{ e.at }}</span>
+      <span class="badge" style="{{ e.action_color }}">{{ e.action }}</span>
+      {% if e.record_type %}<span class="badge" style="background:#f1f5f9; color:#475569">{{ e.record_type }}</span>{% endif %}
+      <span class="monospace" style="color:#6d28d9; font-size:11px">{{ e.record_id }}</span>
+      <span style="color:#475569">{{ e.domain }}</span>
+      <span style="flex:1"></span>
+      <span style="color:#374151">{{ e.actor }}</span>
+      <span class="text-muted">{{ e.client }}</span>
+    </div>
+
+    {# ── detail line ── #}
+    {% if e.action == 'write' and e.record_summary %}
+    <div class="event-detail event-detail-write">{{ e.record_summary }}</div>
+
+    {% elif e.action == 'delete' and e.record_summary %}
+    <div class="event-detail" style="color:#991b1b">{{ e.record_summary }}</div>
+
+    {% elif e.action == 'edit' and e.before_snap %}
+    <div class="field-diff">
+      {% for field, old_val in e.before_snap.items() %}
+      <div class="field-diff-row">
+        <span class="field-label">{{ field }}</span>
+        <span class="field-was">{{ old_val if old_val is string else old_val | join(', ') }}</span>
       </div>
       {% endfor %}
-    </details>
+    </div>
+    {% endif %}
+
   </div>
-  {% endif %}
   {% endfor %}
 </div>
 {% endif %}
