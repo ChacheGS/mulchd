@@ -50,7 +50,12 @@ at session end.
 Session end: call get_recent(since=<noted server timestamp>) and relay anything \
 teammates recorded while you were working.
 
-Unsure which optional fields a record type supports? Call get_record_schema(type) to see them.\
+Unsure which optional fields a record type supports? Call get_record_schema(type) to see them.
+
+A record marked `_edited` has been modified in place since it was first written. For \
+`foundational` records, treat this as a signal to read carefully — the original content \
+has changed. When editing a `foundational` record yourself, prefer writing a superseding \
+record instead so the change appears in-band.\
 """
 
 tier2_server = Server("mulchd", instructions=SESSION_WORKFLOW)
@@ -118,6 +123,7 @@ TIER2_TOOLS = [
                 "truncated": {"type": "boolean"},
                 "next_cursor": {"type": ["string", "null"], "description": "Pass as cursor on the next call to fetch the following page. Null when no more records remain."},
                 "unknown_domains": {"type": "array", "items": {"type": "string"}, "description": "Requested domains not found in this project."},
+                "cross_domain_hints": {"type": "array", "items": {"type": "object"}, "description": "Records superseded by records in domains outside the current read scope. Read those domains for the full picture."},
             },
             "required": ["records", "truncated"],
         },
@@ -328,23 +334,54 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
     Scans all domains — not just the current result set — so cross-domain
     supersession and same-domain supersession where the superseder was not
     co-retrieved are both detected.
+
+    Sets _superseder_domain when the superseder lives in a different domain
+    than the superseded record (used to build cross-domain read hints).
     """
     target_ids = {r.get("id") for r in records if r.get("id")}
     if not target_ids:
         return
-    superseded_by: dict[str, str] = {}
+    # {victim_id: (superseder_id, superseder_domain)}
+    superseded_by: dict[str, tuple[str, str]] = {}
     expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
     if expertise_dir.exists():
         for jsonl_file in expertise_dir.glob("*.jsonl"):
+            superseder_domain = jsonl_file.stem
             for stored in await read_domain_records(jsonl_file):
                 for sid in stored.get("supersedes") or []:
                     if sid in target_ids:
-                        superseded_by[sid] = stored.get("id", "")
+                        superseded_by[sid] = (stored.get("id", ""), superseder_domain)
     for r in records:
         rid = r.get("id")
         if rid in superseded_by:
+            superseder_id, superseder_domain = superseded_by[rid]
             r["_superseded"] = True
-            r["_superseded_by"] = superseded_by[rid]
+            r["_superseded_by"] = superseder_id
+            if superseder_domain and superseder_domain != r.get("_domain", ""):
+                r["_superseder_domain"] = superseder_domain
+
+
+async def _annotate_edits(records: list[dict], project_id: int) -> None:
+    """Annotate records that have been edited in-place with _edited/_edit_count/_last_edited_by."""
+    target_ids = [r.get("id") for r in records if r.get("id")]
+    if not target_ids:
+        return
+    rows = await RecordEdit.filter(
+        project_id=project_id,
+        record_id__in=target_ids,
+    ).order_by("at").values("record_id", "actor__username", "actor__display_name")
+    counts: dict[str, int] = defaultdict(int)
+    last_editors: dict[str, str] = {}
+    for row in rows:
+        rid = row["record_id"]
+        counts[rid] += 1
+        last_editors[rid] = row["actor__display_name"] or row["actor__username"] or ""
+    for r in records:
+        rid = r.get("id")
+        if rid and rid in counts:
+            r["_edited"] = True
+            r["_edit_count"] = counts[rid]
+            r["_last_edited_by"] = last_editors[rid]
 
 
 def _format_single(r: dict) -> str:
@@ -357,7 +394,14 @@ def _format_single(r: dict) -> str:
     if title:
         header += f" — {title}"
     if r.get("_superseded"):
-        header += f" • superseded by {r['_superseded_by']}" if r.get("_superseded_by") else " • superseded"
+        tag = f" • superseded by {r['_superseded_by']}" if r.get("_superseded_by") else " • superseded"
+        if r.get("_superseder_domain"):
+            tag += f" (in {r['_superseder_domain']})"
+        header += tag
+    if r.get("_edited"):
+        n = r.get("_edit_count", "")
+        editor = r.get("_last_edited_by", "")
+        header += f" • edited {n}×" + (f" by {editor}" if editor else "")
     if body:
         header += f"\n    {body}"
     return header
@@ -381,7 +425,14 @@ def _format_records(records: list[dict]) -> str:
         if title:
             header += f" — {title}"
         if r.get("_superseded"):
-            header += f" • superseded by {r['_superseded_by']}" if r.get("_superseded_by") else " • superseded"
+            tag = f" • superseded by {r['_superseded_by']}" if r.get("_superseded_by") else " • superseded"
+            if r.get("_superseder_domain"):
+                tag += f" (in {r['_superseder_domain']})"
+            header += tag
+        if r.get("_edited"):
+            n = r.get("_edit_count", "")
+            editor = r.get("_last_edited_by", "")
+            header += f" • edited {n}×" + (f" by {editor}" if editor else "")
         lines.append(header)
         if body:
             lines.append(f"  {body}")
@@ -446,10 +497,24 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         if truncated and page else None
     )
     await _mark_superseded(page, ctx.org.slug, ctx.project.slug)
-    text = warning + _format_records(page)
+    await _annotate_edits(page, ctx.project.id)
+    cross_domain_hints = [
+        {"record_id": r["id"], "superseded_by": r["_superseded_by"], "in_domain": r["_superseder_domain"]}
+        for r in page
+        if r.get("_superseder_domain")
+    ]
+    hint_text = ""
+    if cross_domain_hints:
+        hint_domains = sorted({h["in_domain"] for h in cross_domain_hints})
+        hint_text = (
+            f"⚠ Cross-domain supersession: {len(cross_domain_hints)} record(s) here are superseded "
+            f"by records in: {', '.join(hint_domains)}. Read those domains for the full picture.\n\n"
+        )
+    text = warning + hint_text + _format_records(page)
     return (
         [TextContent(type="text", text=text)],
-        {"records": page, "truncated": truncated, "next_cursor": next_cursor, "unknown_domains": unknown},
+        {"records": page, "truncated": truncated, "next_cursor": next_cursor,
+         "unknown_domains": unknown, "cross_domain_hints": cross_domain_hints},
     )
 
 
@@ -515,6 +580,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
+    await _annotate_edits(results, ctx.project.id)
     text = warning + _format_records(results)
     return (
         [TextContent(type="text", text=text)],
@@ -581,6 +647,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     ) if record_ids else []
     meta_by_id = {m["record_id"]: m for m in meta_rows}
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
+    await _annotate_edits(results, ctx.project.id)
     return [TextContent(type="text", text=_format_recent(results, meta_by_id))]
 
 
