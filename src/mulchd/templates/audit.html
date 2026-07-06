@@ -99,7 +99,6 @@
 {# ── Archived records ── #}
 <div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px">
   Archived records
-  {% set total_archived = archived_domains | sum(attribute='records') | list | length %}
 </div>
 
 {% if not archived_domains %}
