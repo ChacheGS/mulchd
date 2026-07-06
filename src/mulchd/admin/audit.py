@@ -128,19 +128,29 @@ async def audit_page(
                 # Detect write events that lower classification via supersession,
                 # or replace a foundational record with any tier.
                 classification_downgrade = False
+                downgrade_label = ""
                 if r["action"] == "write" and rec is not None:
-                    new_rank = Classification.of(rec.get("classification", ""))
+                    new_cls = rec.get("classification", "")
+                    new_rank = Classification.of(new_cls)
+                    highest_old: Classification | None = None
+                    highest_old_str = ""
                     for sid in (rec.get("supersedes") or []):
                         old_cls = classification_map.get(sid, "")
-                        if Classification.of(old_cls) == Classification.foundational or Classification.of(old_cls) > new_rank:
-                            classification_downgrade = True
-                            break
+                        old_rank = Classification.of(old_cls)
+                        if old_rank == Classification.foundational or old_rank > new_rank:
+                            if highest_old is None or old_rank > highest_old:
+                                highest_old = old_rank
+                                highest_old_str = old_cls
+                    if highest_old is not None:
+                        classification_downgrade = True
+                        downgrade_label = f"{highest_old_str} → {new_cls}"
                 # Detect edit events that lowered classification
                 elif r["action"] == "edit" and before_snap:
                     old_cls = before_snap.get("classification", "")
                     new_cls = (rec or {}).get("classification", "")
                     if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
                         classification_downgrade = True
+                        downgrade_label = f"{old_cls} → {new_cls}"
                 # cross-owner: actor is not the original author, and it's a mutating action
                 is_cross_owner = (
                     r["action"] in ("edit", "delete")
@@ -161,6 +171,7 @@ async def audit_page(
                     "cross_owner": is_cross_owner,
                     "original_owner": owner_username,
                     "classification_downgrade": classification_downgrade,
+                    "downgrade_label": downgrade_label,
                 })
             events = list(reversed(processed))
 
