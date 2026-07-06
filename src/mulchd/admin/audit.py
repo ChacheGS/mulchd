@@ -4,7 +4,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..domains import mulch_dir
-from ..models import Project, RecordEdit, RecordEvent
+from ..models import Project, RecordEdit, RecordEvent, RecordMeta
 from ..mulch import restore_record
 from ..records import read_domain_records
 from ._shared import is_admin, redirect_login, templates
@@ -80,6 +80,15 @@ async def audit_page(
                 "session_id", "actor__username", "actor__display_name",
             )
 
+            # RecordMeta gives us the original author of each record (may be absent
+            # for records created before this table existed).
+            all_record_ids = [r["record_id"] for r in rows]
+            meta_rows = (
+                await RecordMeta.filter(record_id__in=all_record_ids)
+                .values("record_id", "author__username")
+            ) if all_record_ids else []
+            original_owner: dict[str, str] = {m["record_id"]: m["author__username"] for m in meta_rows}
+
             # RecordEdit rows per (record_id, session_id), oldest-first.
             # Each edit event pops one entry from its queue.
             edit_rows = await RecordEdit.filter(project=selected_project).order_by("at").values(
@@ -106,17 +115,27 @@ async def audit_page(
                             edit_consumed[key] += 1
 
                 rec = record_map.get(r["record_id"])
+                actor_username = r["actor__username"] or ""
+                owner_username = original_owner.get(r["record_id"], "")
+                # cross-owner: actor is not the original author, and it's a mutating action
+                is_cross_owner = (
+                    r["action"] in ("edit", "delete")
+                    and bool(owner_username)
+                    and actor_username != owner_username
+                )
                 processed.append({
                     "record_id": r["record_id"],
                     "domain": r["domain"],
                     "action": r["action"],
                     "action_color": _ACTION_COLORS.get(r["action"], "background:#f1f5f9; color:#475569"),
-                    "actor": r["actor__display_name"] or r["actor__username"],
+                    "actor": r["actor__display_name"] or actor_username,
                     "at": r["at"].strftime("%Y-%m-%d %H:%M"),
                     "client": r["client"],
                     "record_type": (rec or {}).get("type", ""),
                     "record_summary": _record_summary(rec) if rec else "",
                     "before_snap": before_snap,
+                    "cross_owner": is_cross_owner,
+                    "original_owner": owner_username,
                 })
             events = list(reversed(processed))
 
