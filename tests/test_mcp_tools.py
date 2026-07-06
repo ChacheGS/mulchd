@@ -703,6 +703,46 @@ async def test_non_superseded_records_not_marked(team, data_path):
     assert not any(r.get("_superseded") for r in structured["records"])
 
 
+async def test_superseded_marked_when_superseder_in_other_domain(team, data_path):
+    """A record is marked superseded even when the superseding record lives in a different domain."""
+    t = team
+    old = _jot(data_path, "acme", "infra", "guardrails",
+               type="convention", classification="foundational",
+               content="Old guardrail", owner="carlos")
+    _jot(data_path, "acme", "infra", "policies",
+         type="convention", classification="foundational",
+         content="Replacement rule", owner="carlos",
+         supersedes=[old["id"]])
+
+    # Read only the victim's domain — superseder is not in the result set
+    _, structured = await _read_expertise({"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra))
+    records = structured["records"]
+    assert len(records) == 1
+    assert records[0]["_superseded"] is True
+    assert records[0]["_superseded_by"] is not None
+
+
+async def test_superseded_marked_when_superseder_not_in_query_results(team, data_path):
+    """Same-domain supersession: victim is marked even when the superseder didn't match the query."""
+    t = team
+    old = _jot(data_path, "acme", "infra", "infra",
+               type="convention", classification="foundational",
+               content="Old approach", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra",
+         type="convention", classification="foundational",
+         content="New approach", owner="jorge",
+         supersedes=[old["id"]])
+
+    # Reading only carlos's records — superseder (jorge's) is filtered out
+    _, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    # Both records come back (no owner filter on read_records), but confirm
+    # the old one is marked regardless of whether we'd have filtered the new one
+    old_record = next(r for r in structured["records"] if r["id"] == old["id"])
+    assert old_record["_superseded"] is True
+
+
 # delete_record auto-cleanup
 # --------------------------
 

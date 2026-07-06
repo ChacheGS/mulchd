@@ -322,12 +322,24 @@ _RECORD_SCHEMAS: dict[str, dict] = {
 # Formatting helpers
 # ---------------------------------------------------------------------------
 
-def _mark_superseded(records: list[dict]) -> None:
-    """Tag each record whose ID appears in another record's supersedes list."""
-    superseded_by: dict[str, str] = {}  # old_id → new_id
-    for r in records:
-        for sid in r.get("supersedes") or []:
-            superseded_by[sid] = r.get("id", "")
+async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str) -> None:
+    """Tag each record whose ID is referenced in any live record's supersedes list.
+
+    Scans all domains — not just the current result set — so cross-domain
+    supersession and same-domain supersession where the superseder was not
+    co-retrieved are both detected.
+    """
+    target_ids = {r.get("id") for r in records if r.get("id")}
+    if not target_ids:
+        return
+    superseded_by: dict[str, str] = {}
+    expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
+    if expertise_dir.exists():
+        for jsonl_file in expertise_dir.glob("*.jsonl"):
+            for stored in await read_domain_records(jsonl_file):
+                for sid in stored.get("supersedes") or []:
+                    if sid in target_ids:
+                        superseded_by[sid] = stored.get("id", "")
     for r in records:
         rid = r.get("id")
         if rid in superseded_by:
@@ -433,7 +445,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         base64.b64encode(json.dumps([page[-1]["recorded_at"], page[-1].get("id", "")]).encode()).decode()
         if truncated and page else None
     )
-    _mark_superseded(page)
+    await _mark_superseded(page, ctx.org.slug, ctx.project.slug)
     text = warning + _format_records(page)
     return (
         [TextContent(type="text", text=text)],
@@ -502,7 +514,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     results = await search_domains(mulch_dir(ctx.org.slug, ctx.project.slug), query, domains)
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
-    _mark_superseded(results)
+    await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     text = warning + _format_records(results)
     return (
         [TextContent(type="text", text=text)],
@@ -568,7 +580,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
         .values("record_id", "session_id", "author__username", "author__display_name")
     ) if record_ids else []
     meta_by_id = {m["record_id"]: m for m in meta_rows}
-    _mark_superseded(results)
+    await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     return [TextContent(type="text", text=_format_recent(results, meta_by_id))]
 
 
@@ -716,6 +728,6 @@ async def read_resource(uri) -> str:
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
         for r in records:
             r["_domain"] = name
-        _mark_superseded(records)
+        await _mark_superseded(records, ctx.org.slug, ctx.project.slug)
         return _format_records(records)
     raise ValueError(f"Unknown resource URI: {uri_str}")
