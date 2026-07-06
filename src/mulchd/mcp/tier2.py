@@ -11,7 +11,7 @@ from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotat
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
-from ..models import RecordMeta, ToolCall
+from ..models import RecordEvent, RecordMeta, ToolCall
 from ..mulch import delete_record, edit_record, init_ml_project, search_domains, write_record
 from ..records import find_record, read_domain_records
 from .context import _ctx
@@ -290,6 +290,28 @@ TIER2_TOOLS = [
         annotations=ToolAnnotations(destructiveHint=True),
     ),
     Tool(
+        name="get_audit_log",
+        description=(
+            "Return the write/edit/delete history for a record or domain. Admin only."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string", "description": "Filter to a specific record (mx-xxxxxx)."},
+                "domain": {"type": "string", "description": "Filter to a specific domain."},
+                "limit": {"type": "integer", "default": 50, "description": "Max events to return."},
+            },
+        },
+        outputSchema={
+            "type": "object",
+            "properties": {
+                "events": {"type": "array", "items": {"type": "object"}},
+            },
+            "required": ["events"],
+        },
+        annotations=ToolAnnotations(readOnlyHint=True),
+    ),
+    Tool(
         name="delete_record",
         description=(
             "Delete a record by ID. "
@@ -478,6 +500,15 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         session_id=session_id,
         client=ctx.client,
     )
+    await RecordEvent.create(
+        record_id=written["id"],
+        project=ctx.project,
+        domain=domain,
+        actor=ctx.user,
+        action="write",
+        client=ctx.client,
+        session_id=session_id,
+    )
     return [TextContent(type="text", text=f"Recorded {written['type']} in {domain} ({written['id']})")]
 
 
@@ -597,6 +628,11 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     if not updates:
         raise ValueError("no fields to update — pass at least one content field")
     await edit_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id, updates)
+    session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
+    await RecordEvent.create(
+        record_id=record_id, project=ctx.project, domain=domain,
+        actor=ctx.user, action="edit", client=ctx.client, session_id=session_id,
+    )
     return [TextContent(type="text", text=f"Updated {record_id} in {domain}")]
 
 
@@ -613,10 +649,50 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         raise ValueError("you can only delete your own records (writer role)")
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await delete_record(m_dir, domain, record_id)
+    session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
+    await RecordEvent.create(
+        record_id=record_id, project=ctx.project, domain=domain,
+        actor=ctx.user, action="delete", client=ctx.client, session_id=session_id,
+    )
     domain_path = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     if domain_path.exists() and not await read_domain_records(domain_path):
         domain_path.unlink()
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
+
+
+async def _get_audit_log(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
+    from ..models import Role
+    if ctx.role != Role.ADMIN:
+        raise ValueError("only admins can query the audit log")
+    limit = int(args.get("limit", 50))
+    qs = RecordEvent.filter(project=ctx.project).prefetch_related("actor")
+    if args.get("record_id"):
+        qs = qs.filter(record_id=args["record_id"])
+    if args.get("domain"):
+        qs = qs.filter(domain=args["domain"])
+    rows = await qs.order_by("-at").limit(limit).values(
+        "record_id", "domain", "action", "client", "session_id", "at",
+        "actor__username", "actor__display_name",
+    )
+    events = [
+        {
+            "record_id": r["record_id"],
+            "domain": r["domain"],
+            "action": r["action"],
+            "actor": r["actor__display_name"] or r["actor__username"],
+            "at": r["at"].isoformat(),
+            "client": r["client"],
+            "session_id": str(r["session_id"]) if r["session_id"] else None,
+        }
+        for r in rows
+    ]
+    lines = [f"# Audit log — {ctx.org.display_name} / {ctx.project.display_name}\n"]
+    for e in events:
+        lines.append(f"[{e['at'][:19]}] {e['action']:6} {e['record_id']} ({e['domain']}) by {e['actor']}")
+    return (
+        [TextContent(type="text", text="\n".join(lines))],
+        {"events": events},
+    )
 
 
 async def _record_tool_call(name: str, ctx: AuthContext) -> None:
@@ -648,6 +724,7 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         case "get_record_schema":  return await _get_record_schema(args)
         case "edit_record":        return await _edit_record(args, ctx)
         case "delete_record":      return await _delete_record(args, ctx)
+        case "get_audit_log":      return await _get_audit_log(args, ctx)
         case _:                    raise ValueError(f"Unknown tool: {name}")
 
 

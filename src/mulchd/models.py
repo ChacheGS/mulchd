@@ -110,3 +110,23 @@ class RecordMeta(models.Model):
 
     class Meta:
         table = "record_meta"
+
+
+class RecordEvent(models.Model):
+    """Out-of-band audit log for every mutating action on a record."""
+    id = fields.IntField(primary_key=True)
+    record_id = fields.CharField(max_length=32)  # mx-xxxxxx; not FK, survives deletes
+    project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
+        "models.Project", related_name="record_events"
+    )
+    domain = fields.CharField(max_length=64)
+    actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="record_events"
+    )
+    action = fields.CharField(max_length=16)  # "write" | "edit" | "delete"
+    client = fields.CharField(max_length=64, default="unknown")
+    session_id = fields.UUIDField(null=True)
+    at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "record_events"
