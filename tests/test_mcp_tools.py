@@ -25,7 +25,7 @@ import pytest
 
 from mulchd.auth import AuthContext
 from mulchd.domains import list_available_domains
-from mulchd.models import Organization, Project, Role, User, UserMembership
+from mulchd.models import Organization, Project, RecordEdit, RecordEvent, Role, User, UserMembership
 from mulchd.mulch import MulchError
 from mulchd.mcp.tier2 import _get_recent, _list_domains, _read_expertise, _record_expertise
 
@@ -842,3 +842,205 @@ async def test_edit_record_snapshots_before_values(team, data_path, fake_write_r
     edit = await RecordEdit.filter(record_id=record_id).first()
     assert edit is not None
     assert edit.before_snapshot == {"content": "original"}
+
+
+# ---------------------------------------------------------------------------
+# Classification enum and supersession/downgrade detection
+# ---------------------------------------------------------------------------
+
+
+async def test_supersede_alerts_foundational_same_tier(team, data_path):
+    """_supersede_alerts fires when a foundational record is superseded, even at the same tier."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mcp.tier2 import _supersede_alerts
+    t = team
+    r = _jot(data_path, "acme", "infra", "api",
+             type="convention", classification="foundational",
+             content="Guardrail", owner="carlos")
+    alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "foundational")
+    assert r["id"] in alerts
+    assert alerts[r["id"]] == "foundational"
+
+
+async def test_supersede_alerts_tier_downgrade(team, data_path):
+    """_supersede_alerts fires when a lower tier supersedes a higher one."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mcp.tier2 import _supersede_alerts
+    t = team
+    r = _jot(data_path, "acme", "infra", "api",
+             type="convention", classification="tactical",
+             content="Tactical rule", owner="carlos")
+    alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "observational")
+    assert r["id"] in alerts
+
+
+async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_path):
+    """_supersede_alerts does not fire when tactical supersedes tactical."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mcp.tier2 import _supersede_alerts
+    t = team
+    r = _jot(data_path, "acme", "infra", "api",
+             type="convention", classification="tactical",
+             content="Tactical rule", owner="carlos")
+    alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "tactical")
+    assert r["id"] not in alerts
+
+
+async def test_annotate_edits_sets_edited_flag(team, data_path):
+    """_annotate_edits marks records that have RecordEdit rows with _edited and edit count."""
+    from mulchd.mcp.tier2 import _annotate_edits
+    t = team
+    r = _jot(data_path, "acme", "infra", "api",
+             type="convention", classification="tactical",
+             content="Some rule", owner="carlos")
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api",
+        actor=t.carlos, before_snapshot={"content": "Old rule"},
+        client="test", session_id=uuid.uuid4(),
+    )
+    records = [r.copy()]
+    await _annotate_edits(records, t.infra.id)
+    assert records[0].get("_edited") is True
+    assert records[0].get("_edit_count") == 1
+    assert records[0].get("_last_edited_by") == "Carlos G."
+
+
+async def test_annotate_edits_counts_multiple_edits(team, data_path):
+    """_annotate_edits counts each edit and records the last editor."""
+    from mulchd.mcp.tier2 import _annotate_edits
+    t = team
+    r = _jot(data_path, "acme", "infra", "api",
+             type="convention", classification="tactical",
+             content="v1", owner="carlos")
+    for _ in range(3):
+        await RecordEdit.create(
+            record_id=r["id"], project=t.infra, domain="api",
+            actor=t.jorge, before_snapshot={"content": "v1"},
+            client="test", session_id=uuid.uuid4(),
+        )
+    records = [r.copy()]
+    await _annotate_edits(records, t.infra.id)
+    assert records[0]["_edit_count"] == 3
+    assert records[0]["_last_edited_by"] == "Jorge M."
+
+
+async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
+    """_mark_superseded annotates _supersedes_foundational on the superseding record."""
+    from mulchd.mcp.tier2 import _mark_superseded
+    t = team
+    original = _jot(data_path, "acme", "infra", "api",
+                    type="convention", classification="foundational",
+                    content="Guardrail", owner="carlos")
+    superseder = _jot(data_path, "acme", "infra", "api",
+                      type="convention", classification="tactical",
+                      content="Weakened rule", owner="jorge",
+                      supersedes=[original["id"]])
+    original["_domain"] = "api"
+    superseder["_domain"] = "api"
+
+    records = [original, superseder]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert records[0].get("_superseded") is True
+    assert records[1].get("_supersedes_foundational") == [original["id"]]
+
+
+async def test_write_record_supersession_warning_on_foundational(team, data_path, fake_write_record):
+    """write_record response includes SUPERSESSION WARNING when superseding a foundational record."""
+    t = team
+    original = _jot(data_path, "acme", "infra", "api",
+                    type="convention", classification="foundational",
+                    content="Guardrail", owner="carlos")
+    result = await _record_expertise(
+        {
+            "domain": "api", "type": "convention", "classification": "tactical",
+            "content": "Weakened", "supersedes": [original["id"]],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    text = result[0].text
+    assert "SUPERSESSION WARNING" in text
+    assert original["id"] in text
+    assert "foundational → tactical" in text
+
+
+async def test_write_record_supersession_warning_same_tier_foundational(team, data_path, fake_write_record):
+    """write_record warns even when new record is also foundational (guardrail replacement)."""
+    t = team
+    original = _jot(data_path, "acme", "infra", "api",
+                    type="convention", classification="foundational",
+                    content="Guardrail", owner="carlos")
+    result = await _record_expertise(
+        {
+            "domain": "api", "type": "convention", "classification": "foundational",
+            "content": "New guardrail", "supersedes": [original["id"]],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    text = result[0].text
+    assert "SUPERSESSION WARNING" in text
+    assert "foundational guardrail replaced" in text
+
+
+async def test_write_record_no_warning_when_superseding_tactical(team, data_path, fake_write_record):
+    """write_record does not warn when superseding a lower-tier record at the same tier."""
+    t = team
+    original = _jot(data_path, "acme", "infra", "api",
+                    type="convention", classification="tactical",
+                    content="Old approach", owner="carlos")
+    result = await _record_expertise(
+        {
+            "domain": "api", "type": "convention", "classification": "tactical",
+            "content": "New approach", "supersedes": [original["id"]],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "SUPERSESSION WARNING" not in result[0].text
+
+
+async def test_edit_record_classification_downgrade_warning(team, data_path, fake_write_record):
+    """edit_record response includes CLASSIFICATION DOWNGRADE when classification is lowered."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+    t = team
+
+    await mcp_tier2._record_expertise(
+        {"domain": "api", "type": "convention", "classification": "foundational", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["api"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates): pass
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    result = await _edit_record(
+        {"record_id": record_id, "domain": "api", "classification": "tactical"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    mcp_tier2.edit_record = orig_edit
+
+    assert "CLASSIFICATION DOWNGRADE" in result[0].text
+    assert "foundational" in result[0].text
+    assert "tactical" in result[0].text
+
+
+async def test_cross_domain_hints_in_read_records(team, data_path):
+    """read_records includes cross_domain_hints when a record is superseded from another domain."""
+    t = team
+    victim = _jot(data_path, "acme", "infra", "guardrails",
+                  type="convention", classification="foundational",
+                  content="Original guardrail", owner="carlos")
+    _jot(data_path, "acme", "infra", "policies",
+         type="convention", classification="foundational",
+         content="Replacement", owner="carlos",
+         supersedes=[victim["id"]])
+
+    # Read only the victim's domain
+    _, structured = await _read_expertise(
+        {"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    hints = structured.get("cross_domain_hints", [])
+    assert len(hints) == 1
+    assert hints[0]["record_id"] == victim["id"]
+    assert hints[0]["in_domain"] == "policies"
