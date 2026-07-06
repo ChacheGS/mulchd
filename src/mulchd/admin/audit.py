@@ -11,6 +11,8 @@ from ._shared import is_admin, redirect_login, templates
 
 router = APIRouter()
 
+from ..mcp.tier2 import Classification
+
 _ACTION_COLORS = {
     "write": "background:#d1fae5; color:#065f46",
     "edit": "background:#dbeafe; color:#1d4ed8",
@@ -123,15 +125,22 @@ async def audit_page(
                     original_owner.get(r["record_id"])
                     or (rec.get("owner", "") if rec else "")
                 )
-                # Detect write events that supersede foundational records
-                supersedes_foundational = (
-                    r["action"] == "write"
-                    and rec is not None
-                    and any(
-                        classification_map.get(sid) == "foundational"
-                        for sid in (rec.get("supersedes") or [])
-                    )
-                )
+                # Detect write events that lower classification via supersession,
+                # or replace a foundational record with any tier.
+                classification_downgrade = False
+                if r["action"] == "write" and rec is not None:
+                    new_rank = Classification.of(rec.get("classification", ""))
+                    for sid in (rec.get("supersedes") or []):
+                        old_cls = classification_map.get(sid, "")
+                        if Classification.of(old_cls) == Classification.foundational or Classification.of(old_cls) > new_rank:
+                            classification_downgrade = True
+                            break
+                # Detect edit events that lowered classification
+                elif r["action"] == "edit" and before_snap:
+                    old_cls = before_snap.get("classification", "")
+                    new_cls = (rec or {}).get("classification", "")
+                    if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
+                        classification_downgrade = True
                 # cross-owner: actor is not the original author, and it's a mutating action
                 is_cross_owner = (
                     r["action"] in ("edit", "delete")
@@ -151,7 +160,7 @@ async def audit_page(
                     "before_snap": before_snap,
                     "cross_owner": is_cross_owner,
                     "original_owner": owner_username,
-                    "supersedes_foundational": supersedes_foundational,
+                    "classification_downgrade": classification_downgrade,
                 })
             events = list(reversed(processed))
 
