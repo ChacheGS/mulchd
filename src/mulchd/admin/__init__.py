@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from .audit import router as audit_router
 from .auth import router as auth_router
 from .dashboard import router as dashboard_router
 from .memberships import router as memberships_router
@@ -20,3 +21,4 @@ router.include_router(projects_router)
 router.include_router(memberships_router)
 router.include_router(project_tokens_router)
 router.include_router(records_router)
+router.include_router(audit_router)
