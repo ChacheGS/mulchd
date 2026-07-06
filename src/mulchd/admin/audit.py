@@ -87,9 +87,13 @@ async def audit_page(
             all_record_ids = [r["record_id"] for r in rows]
             meta_rows = (
                 await RecordMeta.filter(record_id__in=all_record_ids)
-                .values("record_id", "author__username")
+                .values("record_id", "author__username", "author__display_name")
             ) if all_record_ids else []
             original_owner: dict[str, str] = {m["record_id"]: m["author__username"] for m in meta_rows}
+            original_owner_display: dict[str, str] = {
+                m["record_id"]: m["author__display_name"] or m["author__username"]
+                for m in meta_rows
+            }
 
             # RecordEdit rows per (record_id, session_id), oldest-first.
             # Each edit event pops one entry from its queue.
@@ -125,6 +129,10 @@ async def audit_page(
                     original_owner.get(r["record_id"])
                     or (rec.get("owner", "") if rec else "")
                 )
+                owner_display_name = (
+                    original_owner_display.get(r["record_id"])
+                    or owner_username
+                )
                 # Detect write events that lower classification via supersession,
                 # or replace a foundational record with any tier.
                 classification_downgrade = False
@@ -143,7 +151,10 @@ async def audit_page(
                                 highest_old_str = old_cls
                     if highest_old is not None:
                         classification_downgrade = True
-                        downgrade_label = f"{highest_old_str} → {new_cls}"
+                        if highest_old_str == new_cls:
+                            downgrade_label = f"supersedes {highest_old_str}"
+                        else:
+                            downgrade_label = f"{highest_old_str} → {new_cls}"
                 # Detect edit events that lowered classification
                 elif r["action"] == "edit" and before_snap:
                     old_cls = before_snap.get("classification", "")
@@ -169,7 +180,7 @@ async def audit_page(
                     "record_summary": _record_summary(rec) if rec else "",
                     "before_snap": before_snap,
                     "cross_owner": is_cross_owner,
-                    "original_owner": owner_username,
+                    "original_owner": owner_display_name,
                     "classification_downgrade": classification_downgrade,
                     "downgrade_label": downgrade_label,
                 })
