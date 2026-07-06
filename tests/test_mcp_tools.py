@@ -777,3 +777,28 @@ async def test_record_events_written_for_write_edit_delete(team, data_path, fake
 
     events = await RecordEvent.filter(record_id=record_id).values_list("action", flat=True)
     assert set(events) == {"write", "edit", "delete"}
+
+
+async def test_edit_record_snapshots_before_values(team, data_path, fake_write_record):
+    """RecordEdit captures the pre-edit values of changed fields."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+    from mulchd.models import RecordEdit
+    t = team
+
+    await mcp_tier2._record_expertise(
+        {"domain": "snap-test", "type": "convention", "classification": "tactical", "content": "original"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["snap-test"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates): pass
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    await _edit_record({"record_id": record_id, "domain": "snap-test", "content": "updated"}, ctx(t.carlos, t.org, t.infra))
+    mcp_tier2.edit_record = orig_edit
+
+    edit = await RecordEdit.filter(record_id=record_id).first()
+    assert edit is not None
+    assert edit.before_snapshot == {"content": "original"}
