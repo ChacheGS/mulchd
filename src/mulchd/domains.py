@@ -5,6 +5,7 @@ import yaml
 from .config import settings
 from .records import get_file_mod_time, read_domain_records
 
+
 def mulch_dir(org: str, project: str) -> Path:
     return settings.data_path / org / project / ".mulch"
 

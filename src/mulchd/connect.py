@@ -27,40 +27,41 @@ def _slug_to_env(s: str) -> str:
 def build_connect_snippets(base_url: str, org: str, project: str, token: str) -> dict:
     env_var = f"MULCHD_TOKEN_{_slug_to_env(org)}_{_slug_to_env(project)}"
     mcp_json = (
-        '{\n'
+        "{\n"
         '  "mcpServers": {\n'
         '    "mulchd": {\n'
         '      "type": "http",\n'
         f'      "url": "{base_url}/mcp",\n'
         f'      "headers": {{ "Authorization": "Bearer ${{{env_var}}}" }}\n'
-        '    }\n'
-        '  }\n'
-        '}'
+        "    }\n"
+        "  }\n"
+        "}"
     )
     settings_local = (
-        '{\n'
+        "{\n"
         '  "enabledMcpServersJson": ["mulchd"],\n'
         '  "env": {\n'
         f'    "{env_var}": "{token}"\n'
-        '  }\n'
-        '}'
+        "  }\n"
+        "}"
     )
     desktop = (
-        '{\n'
+        "{\n"
         '  "mcpServers": {\n'
         f'    "mulchd-{org}-{project}": {{\n'
         '      "command": "npx",\n'
         f'      "args": ["-y", "mcp-remote@latest", "{base_url}/mcp",\n'
         f'               "--header", "Authorization:${{{env_var}}}"],\n'
         f'      "env": {{ "{env_var}": "Bearer {token}" }}\n'
-        '    }}\n'
-        '  }\n'
-        '}'
+        "    }}\n"
+        "  }\n"
+        "}"
     )
     return {"mcp_json": mcp_json, "settings_local": settings_local, "desktop": desktop}
 
 
 # ── Cookie auth helpers ───────────────────────────────────────────────────────
+
 
 def _set_connect_cookie(response: Response, user_id: int, remember: bool) -> None:
     signed = _signer().dumps(user_id)
@@ -86,6 +87,7 @@ def _get_connect_user_id(request: Request) -> int | None:
 
 # ── Auth requirement helpers ──────────────────────────────────────────────────
 
+
 async def _require_user(request: Request) -> User | None:
     """
     Extract and validate the user from the connect cookie.
@@ -97,7 +99,9 @@ async def _require_user(request: Request) -> User | None:
     return await User.filter(id=user_id, active=True).first()
 
 
-async def _require_membership(user: User, org_slug: str, project_slug: str) -> tuple[Organization, Project]:
+async def _require_membership(
+    user: User, org_slug: str, project_slug: str
+) -> tuple[Organization, Project]:
     """
     Validate user membership to org/project.
     Returns (org, project) or raises HTTPException(404) if invalid.
@@ -114,6 +118,7 @@ async def _require_membership(user: User, org_slug: str, project_slug: str) -> t
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("", response_class=HTMLResponse)
 async def connect_login_page(request: Request):
@@ -194,7 +199,9 @@ async def connect_mint_token(
     org, project = await _require_membership(user, org_slug, project_slug)
 
     _, token_value = await create_project_token(user, project, label)
-    snippets = build_connect_snippets(settings.resolved_base_url, org.slug, project.slug, token_value)
+    snippets = build_connect_snippets(
+        settings.resolved_base_url, org.slug, project.slug, token_value
+    )
     tokens = await ProjectToken.filter(user=user, project=project, active=True).all()
     return templates.TemplateResponse(
         request,

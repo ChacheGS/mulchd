@@ -12,7 +12,13 @@ from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotat
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
-from ..mulch import delete_record, edit_record, init_ml_project, search_domains, write_record
+from ..mulch import (
+    delete_record,
+    edit_record,
+    init_ml_project,
+    search_domains,
+    write_record,
+)
 from ..records import find_record, read_domain_records
 from .context import _ctx
 
@@ -93,10 +99,20 @@ def _get_or_create_session(user_id: int, project_id: int) -> UUID:
 # Tool registry
 # ---------------------------------------------------------------------------
 
-_RECORD_FIELD_KEYS = frozenset({
-    "content", "title", "rationale", "description", "resolution",
-    "name", "files", "relates_to", "supersedes", "date",
-})
+_RECORD_FIELD_KEYS = frozenset(
+    {
+        "content",
+        "title",
+        "rationale",
+        "description",
+        "resolution",
+        "name",
+        "files",
+        "relates_to",
+        "supersedes",
+        "date",
+    }
+)
 
 TIER2_TOOLS = [
     Tool(
@@ -130,9 +146,20 @@ TIER2_TOOLS = [
             "properties": {
                 "records": {"type": "array", "items": {"type": "object"}},
                 "truncated": {"type": "boolean"},
-                "next_cursor": {"type": ["string", "null"], "description": "Pass as cursor on the next call to fetch the following page. Null when no more records remain."},
-                "unknown_domains": {"type": "array", "items": {"type": "string"}, "description": "Requested domains not found in this project."},
-                "cross_domain_hints": {"type": "array", "items": {"type": "object"}, "description": "Records superseded by records in domains outside the current read scope. Read those domains for the full picture."},
+                "next_cursor": {
+                    "type": ["string", "null"],
+                    "description": "Pass as cursor on the next call to fetch the following page. Null when no more records remain.",
+                },
+                "unknown_domains": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Requested domains not found in this project.",
+                },
+                "cross_domain_hints": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Records superseded by records in domains outside the current read scope. Read those domains for the full picture.",
+                },
             },
             "required": ["records", "truncated"],
         },
@@ -161,13 +188,31 @@ TIER2_TOOLS = [
                 "content": {"type": "string", "description": "convention: body text"},
                 "title": {"type": "string", "description": "decision: title"},
                 "rationale": {"type": "string", "description": "decision: rationale"},
-                "description": {"type": "string", "description": "failure/pattern/reference/guide: description"},
+                "description": {
+                    "type": "string",
+                    "description": "failure/pattern/reference/guide: description",
+                },
                 "resolution": {"type": "string", "description": "failure: resolution"},
                 "name": {"type": "string", "description": "pattern/reference/guide: name"},
-                "files": {"type": "array", "items": {"type": "string"}, "description": "Related file paths"},
-                "relates_to": {"type": "array", "items": {"type": "string"}, "description": "Related record IDs"},
-                "supersedes": {"type": "array", "items": {"type": "string"}, "description": "Record IDs this record replaces"},
-                "date": {"type": "string", "description": "decision: date the decision was made (ISO 8601); defaults to recorded_at"},
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related file paths",
+                },
+                "relates_to": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related record IDs",
+                },
+                "supersedes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Record IDs this record replaces",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "decision: date the decision was made (ISO 8601); defaults to recorded_at",
+                },
             },
             "required": ["domain", "type", "classification"],
         },
@@ -210,8 +255,14 @@ TIER2_TOOLS = [
             "type": "object",
             "properties": {
                 "server_time": {"type": "string"},
-                "get_recent_hint": {"type": "string", "description": "Reminder to call get_recent(since=server_time) at session end."},
-                "language": {"type": "string", "description": "Knowledge base language code, if set."},
+                "get_recent_hint": {
+                    "type": "string",
+                    "description": "Reminder to call get_recent(since=server_time) at session end.",
+                },
+                "language": {
+                    "type": "string",
+                    "description": "Knowledge base language code, if set.",
+                },
                 "domains": {
                     "type": "array",
                     "items": {
@@ -296,9 +347,21 @@ TIER2_TOOLS = [
                 },
                 "resolution": {"type": "string", "description": "failure: resolution field"},
                 "name": {"type": "string", "description": "pattern/reference/guide: name field"},
-                "files": {"type": "array", "items": {"type": "string"}, "description": "Related file paths"},
-                "relates_to": {"type": "array", "items": {"type": "string"}, "description": "Related record IDs"},
-                "supersedes": {"type": "array", "items": {"type": "string"}, "description": "Record IDs this record replaces"},
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related file paths",
+                },
+                "relates_to": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Related record IDs",
+                },
+                "supersedes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Record IDs this record replaces",
+                },
             },
             "required": ["record_id", "domain"],
         },
@@ -325,10 +388,19 @@ TIER2_TOOLS = [
 
 _RECORD_SCHEMAS: dict[str, dict] = {
     "convention": {"required": {"content": "string"}, "optional": {}},
-    "decision": {"required": {"title": "string", "rationale": "string"}, "optional": {"date": "string"}},
+    "decision": {
+        "required": {"title": "string", "rationale": "string"},
+        "optional": {"date": "string"},
+    },
     "failure": {"required": {"description": "string", "resolution": "string"}, "optional": {}},
-    "pattern": {"required": {"name": "string", "description": "string"}, "optional": {"files": "array of strings"}},
-    "reference": {"required": {"name": "string", "description": "string"}, "optional": {"files": "array of strings"}},
+    "pattern": {
+        "required": {"name": "string", "description": "string"},
+        "optional": {"files": "array of strings"},
+    },
+    "reference": {
+        "required": {"name": "string", "description": "string"},
+        "optional": {"files": "array of strings"},
+    },
     "guide": {"required": {"name": "string", "description": "string"}, "optional": {}},
 }
 
@@ -336,6 +408,7 @@ _RECORD_SCHEMAS: dict[str, dict] = {
 # ---------------------------------------------------------------------------
 # Formatting helpers
 # ---------------------------------------------------------------------------
+
 
 async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str) -> None:
     """Tag each record whose ID is referenced in any live record's supersedes list.
@@ -375,8 +448,7 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
                 r["_superseder_domain"] = superseder_domain
         # Flag records that themselves supersede foundational records
         displaced = [
-            sid for sid in (r.get("supersedes") or [])
-            if classifications.get(sid) == "foundational"
+            sid for sid in (r.get("supersedes") or []) if classifications.get(sid) == "foundational"
         ]
         if displaced:
             r["_supersedes_foundational"] = displaced
@@ -418,7 +490,10 @@ async def _supersede_alerts(
             for r in await read_domain_records(jsonl_file):
                 if r.get("id") in targets:
                     old_cls = r.get("classification", "")
-                    if Classification.of(old_cls) == Classification.foundational or Classification.of(old_cls) > new_rank:
+                    if (
+                        Classification.of(old_cls) == Classification.foundational
+                        or Classification.of(old_cls) > new_rank
+                    ):
                         alerts[r["id"]] = old_cls
     return alerts
 
@@ -428,10 +503,14 @@ async def _annotate_edits(records: list[dict], project_id: int) -> None:
     target_ids = [r.get("id") for r in records if r.get("id")]
     if not target_ids:
         return
-    rows = await RecordEdit.filter(
-        project_id=project_id,
-        record_id__in=target_ids,
-    ).order_by("at").values("record_id", "actor__username", "actor__display_name")
+    rows = (
+        await RecordEdit.filter(
+            project_id=project_id,
+            record_id__in=target_ids,
+        )
+        .order_by("at")
+        .values("record_id", "actor__username", "actor__display_name")
+    )
     counts: dict[str, int] = defaultdict(int)
     last_editors: dict[str, str] = {}
     for row in rows:
@@ -456,7 +535,11 @@ def _format_single(r: dict) -> str:
     if title:
         header += f" — {title}"
     if r.get("_superseded"):
-        tag = f" • superseded by {r['_superseded_by']}" if r.get("_superseded_by") else " • superseded"
+        tag = (
+            f" • superseded by {r['_superseded_by']}"
+            if r.get("_superseded_by")
+            else " • superseded"
+        )
         if r.get("_superseder_domain"):
             tag += f" (in {r['_superseder_domain']})"
         header += tag
@@ -489,7 +572,11 @@ def _format_records(records: list[dict]) -> str:
         if title:
             header += f" — {title}"
         if r.get("_superseded"):
-            tag = f" • superseded by {r['_superseded_by']}" if r.get("_superseded_by") else " • superseded"
+            tag = (
+                f" • superseded by {r['_superseded_by']}"
+                if r.get("_superseded_by")
+                else " • superseded"
+            )
             if r.get("_superseder_domain"):
                 tag += f" (in {r['_superseder_domain']})"
             header += tag
@@ -521,7 +608,11 @@ def _format_recent(records: list[dict], meta_by_id: dict) -> str:
     for sid in session_keys:
         entries = sessions[sid]
         first_meta = next((m for _, m in entries if m), None)
-        author = (first_meta.get("author__display_name") or first_meta["author__username"]) if first_meta else "unknown"
+        author = (
+            (first_meta.get("author__display_name") or first_meta["author__username"])
+            if first_meta
+            else "unknown"
+        )
         first_ts = entries[-1][0].get("recorded_at", "")[:16].replace("T", " ")
         lines.append(f"## Session — {author} from {first_ts} UTC")
         for r, _ in entries:
@@ -533,6 +624,7 @@ def _format_recent(records: list[dict], meta_by_id: dict) -> str:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     domains = args.get("domains", [])
@@ -553,19 +645,27 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     if cursor:
         cursor_ts, cursor_id = json.loads(base64.b64decode(cursor))
         all_records = [
-            r for r in all_records
+            r
+            for r in all_records
             if (r.get("recorded_at", ""), r.get("id", "")) > (cursor_ts, cursor_id)
         ]
     truncated = len(all_records) > limit
     page = all_records[:limit]
     next_cursor = (
-        base64.b64encode(json.dumps([page[-1]["recorded_at"], page[-1].get("id", "")]).encode()).decode()
-        if truncated and page else None
+        base64.b64encode(
+            json.dumps([page[-1]["recorded_at"], page[-1].get("id", "")]).encode()
+        ).decode()
+        if truncated and page
+        else None
     )
     await _mark_superseded(page, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(page, ctx.project.id)
     cross_domain_hints = [
-        {"record_id": r["id"], "superseded_by": r["_superseded_by"], "in_domain": r["_superseder_domain"]}
+        {
+            "record_id": r["id"],
+            "superseded_by": r["_superseded_by"],
+            "in_domain": r["_superseder_domain"],
+        }
         for r in page
         if r.get("_superseder_domain")
     ]
@@ -579,13 +679,19 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     text = warning + hint_text + _format_records(page)
     return (
         [TextContent(type="text", text=text)],
-        {"records": page, "truncated": truncated, "next_cursor": next_cursor,
-         "unknown_domains": unknown, "cross_domain_hints": cross_domain_hints},
+        {
+            "records": page,
+            "truncated": truncated,
+            "next_cursor": next_cursor,
+            "unknown_domains": unknown,
+            "cross_domain_hints": cross_domain_hints,
+        },
     )
 
 
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
+
     if ctx.role == Role.READER:
         raise ValueError("reader role cannot write records")
     rtype = args["type"]
@@ -606,6 +712,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     domain_file = m_dir / "expertise" / f"{domain}.jsonl"
     pre_existed = domain_file.exists()
     from ..mulch import MulchError
+
     try:
         written = await write_record(m_dir, domain, record)
     except MulchError:
@@ -631,7 +738,9 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         session_id=session_id,
     )
     msg = f"Recorded {written['type']} in {domain} ({written['id']})"
-    alerts = await _supersede_alerts(m_dir, list(args.get("supersedes") or []), args["classification"])
+    alerts = await _supersede_alerts(
+        m_dir, list(args.get("supersedes") or []), args["classification"]
+    )
     if alerts:
         new_cls = args["classification"]
         new_rank = Classification.of(new_cls)
@@ -672,8 +781,10 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
 async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
     domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    lines = [f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
-             f"**Server time:** {now} — note this for get_recent at session end.\n"]
+    lines = [
+        f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
+        f"**Server time:** {now} — note this for get_recent at session end.\n",
+    ]
     if ctx.project.knowledge_language:
         lang = ctx.project.knowledge_language
         lines.append(
@@ -722,10 +833,14 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     results.sort(key=lambda r: r.get("recorded_at", ""), reverse=True)
     record_ids = [r["id"] for r in results if r.get("id")]
     meta_rows = (
-        await RecordMeta.filter(record_id__in=record_ids)
-        .prefetch_related("author")
-        .values("record_id", "session_id", "author__username", "author__display_name")
-    ) if record_ids else []
+        (
+            await RecordMeta.filter(record_id__in=record_ids)
+            .prefetch_related("author")
+            .values("record_id", "session_id", "author__username", "author__display_name")
+        )
+        if record_ids
+        else []
+    )
     meta_by_id = {m["record_id"]: m for m in meta_rows}
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
@@ -749,6 +864,7 @@ async def _get_record_schema(args: dict) -> list[TextContent]:
 
 async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
+
     if ctx.role == Role.READER:
         raise ValueError("reader role cannot edit records")
     record_id = args["record_id"]
@@ -759,8 +875,16 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     if ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
         raise ValueError("you can only edit your own records (writer role)")
     update_keys = {
-        "classification", "title", "rationale", "content", "description",
-        "resolution", "name", "files", "relates_to", "supersedes",
+        "classification",
+        "title",
+        "rationale",
+        "content",
+        "description",
+        "resolution",
+        "name",
+        "files",
+        "relates_to",
+        "supersedes",
     }
     updates = {k: args[k] for k in update_keys if k in args}
     if not updates:
@@ -769,13 +893,22 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     await edit_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordEvent.create(
-        record_id=record_id, project=ctx.project, domain=domain,
-        actor=ctx.user, action="edit", client=ctx.client, session_id=session_id,
+        record_id=record_id,
+        project=ctx.project,
+        domain=domain,
+        actor=ctx.user,
+        action="edit",
+        client=ctx.client,
+        session_id=session_id,
     )
     await RecordEdit.create(
-        record_id=record_id, project=ctx.project, domain=domain,
-        actor=ctx.user, before_snapshot=before_snapshot,
-        client=ctx.client, session_id=session_id,
+        record_id=record_id,
+        project=ctx.project,
+        domain=domain,
+        actor=ctx.user,
+        before_snapshot=before_snapshot,
+        client=ctx.client,
+        session_id=session_id,
     )
     msg = f"Updated {record_id} in {domain}"
     old_cls = before_snapshot.get("classification", "")
@@ -790,6 +923,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
 
 async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
+
     if ctx.role == Role.READER:
         raise ValueError("reader role cannot delete records")
     record_id = args["record_id"]
@@ -803,8 +937,13 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     await delete_record(m_dir, domain, record_id)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordEvent.create(
-        record_id=record_id, project=ctx.project, domain=domain,
-        actor=ctx.user, action="delete", client=ctx.client, session_id=session_id,
+        record_id=record_id,
+        project=ctx.project,
+        domain=domain,
+        actor=ctx.user,
+        action="delete",
+        client=ctx.client,
+        session_id=session_id,
     )
     domain_path = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     if domain_path.exists() and not await read_domain_records(domain_path):
@@ -820,6 +959,7 @@ async def _record_tool_call(name: str, ctx: AuthContext) -> None:
 # MCP handlers
 # ---------------------------------------------------------------------------
 
+
 @tier2_server.list_tools()
 async def list_tools() -> list[Tool]:
     return TIER2_TOOLS
@@ -833,15 +973,24 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         raise ValueError("No auth context — use a project token for this connection")
     asyncio.create_task(_record_tool_call(name, ctx))
     match name:
-        case "read_records":       return await _read_expertise(args, ctx)
-        case "write_record":       return await _record_expertise(args, ctx)
-        case "search_records":     return await _search_expertise(args, ctx)
-        case "list_domains":       return await _list_domains(ctx)
-        case "get_recent":         return await _get_recent(args, ctx)
-        case "get_record_schema":  return await _get_record_schema(args)
-        case "edit_record":        return await _edit_record(args, ctx)
-        case "delete_record":      return await _delete_record(args, ctx)
-        case _:                    raise ValueError(f"Unknown tool: {name}")
+        case "read_records":
+            return await _read_expertise(args, ctx)
+        case "write_record":
+            return await _record_expertise(args, ctx)
+        case "search_records":
+            return await _search_expertise(args, ctx)
+        case "list_domains":
+            return await _list_domains(ctx)
+        case "get_recent":
+            return await _get_recent(args, ctx)
+        case "get_record_schema":
+            return await _get_record_schema(args)
+        case "edit_record":
+            return await _edit_record(args, ctx)
+        case "delete_record":
+            return await _delete_record(args, ctx)
+        case _:
+            raise ValueError(f"Unknown tool: {name}")
 
 
 @tier2_server.list_resources()
@@ -880,7 +1029,7 @@ async def read_resource(uri) -> str:
         raise ValueError("No auth context")
     uri_str = str(uri)
     if uri_str.startswith("mulchd://domain/"):
-        name = uri_str[len("mulchd://domain/"):]
+        name = uri_str[len("mulchd://domain/") :]
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
         for r in records:
             r["_domain"] = name

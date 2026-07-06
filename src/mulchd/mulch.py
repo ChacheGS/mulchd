@@ -143,7 +143,9 @@ async def edit_record(mulch_dir: Path, domain: str, record_id: str, updates: dic
 
 async def delete_record(mulch_dir: Path, domain: str, record_id: str) -> None:
     """Archive a record via ml archive (soft-delete). Ownership check is the caller's responsibility."""
-    await _run(mulch_dir, ["archive", domain, "--records", record_id, "--reason", "deleted via MCP"])
+    await _run(
+        mulch_dir, ["archive", domain, "--records", record_id, "--reason", "deleted via MCP"]
+    )
 
 
 async def restore_record(mulch_dir: Path, record_id: str) -> dict:

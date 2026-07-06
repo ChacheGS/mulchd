@@ -77,19 +77,37 @@ async def audit_page(
                 qs = qs.filter(action=action)
             if domain:
                 qs = qs.filter(domain__icontains=domain)
-            rows = await qs.order_by("-at").limit(200).values(
-                "id", "record_id", "domain", "action", "client", "at",
-                "session_id", "actor__username", "actor__display_name",
+            rows = (
+                await qs.order_by("-at")
+                .limit(200)
+                .values(
+                    "id",
+                    "record_id",
+                    "domain",
+                    "action",
+                    "client",
+                    "at",
+                    "session_id",
+                    "actor__username",
+                    "actor__display_name",
+                )
             )
 
             # RecordMeta gives us the original author of each record (may be absent
             # for records created before this table existed).
             all_record_ids = [r["record_id"] for r in rows]
             meta_rows = (
-                await RecordMeta.filter(record_id__in=all_record_ids)
-                .values("record_id", "author__username", "author__display_name")
-            ) if all_record_ids else []
-            original_owner: dict[str, str] = {m["record_id"]: m["author__username"] for m in meta_rows}
+                (
+                    await RecordMeta.filter(record_id__in=all_record_ids).values(
+                        "record_id", "author__username", "author__display_name"
+                    )
+                )
+                if all_record_ids
+                else []
+            )
+            original_owner: dict[str, str] = {
+                m["record_id"]: m["author__username"] for m in meta_rows
+            }
             original_owner_display: dict[str, str] = {
                 m["record_id"]: m["author__display_name"] or m["author__username"]
                 for m in meta_rows
@@ -97,8 +115,10 @@ async def audit_page(
 
             # RecordEdit rows per (record_id, session_id), oldest-first.
             # Each edit event pops one entry from its queue.
-            edit_rows = await RecordEdit.filter(project=selected_project).order_by("at").values(
-                "record_id", "session_id", "before_snapshot"
+            edit_rows = (
+                await RecordEdit.filter(project=selected_project)
+                .order_by("at")
+                .values("record_id", "session_id", "before_snapshot")
             )
             edit_queues: dict[tuple, deque] = defaultdict(deque)
             for e in edit_rows:
@@ -125,14 +145,10 @@ async def audit_page(
                 actor_username = r["actor__username"] or ""
                 # RecordMeta may be absent for records pre-dating that table;
                 # fall back to the owner field embedded in the JSONL record.
-                owner_username = (
-                    original_owner.get(r["record_id"])
-                    or (rec.get("owner", "") if rec else "")
+                owner_username = original_owner.get(r["record_id"]) or (
+                    rec.get("owner", "") if rec else ""
                 )
-                owner_display_name = (
-                    original_owner_display.get(r["record_id"])
-                    or owner_username
-                )
+                owner_display_name = original_owner_display.get(r["record_id"]) or owner_username
                 # Detect write events that lower classification via supersession,
                 # or replace a foundational record with any tier.
                 classification_downgrade = False
@@ -142,7 +158,7 @@ async def audit_page(
                     new_rank = Classification.of(new_cls)
                     highest_old: Classification | None = None
                     highest_old_str = ""
-                    for sid in (rec.get("supersedes") or []):
+                    for sid in rec.get("supersedes") or []:
                         old_cls = classification_map.get(sid, "")
                         old_rank = Classification.of(old_cls)
                         if old_rank == Classification.foundational or old_rank > new_rank:
@@ -159,7 +175,11 @@ async def audit_page(
                 elif r["action"] == "edit" and before_snap:
                     old_cls = before_snap.get("classification", "")
                     new_cls = (rec or {}).get("classification", "")
-                    if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
+                    if (
+                        old_cls
+                        and new_cls
+                        and Classification.of(old_cls) > Classification.of(new_cls)
+                    ):
                         classification_downgrade = True
                         downgrade_label = f"{old_cls} → {new_cls}"
                 # cross-owner: actor is not the original author, and it's a mutating action
@@ -168,22 +188,26 @@ async def audit_page(
                     and bool(owner_username)
                     and actor_username != owner_username
                 )
-                processed.append({
-                    "record_id": r["record_id"],
-                    "domain": r["domain"],
-                    "action": r["action"],
-                    "action_color": _ACTION_COLORS.get(r["action"], "background:#f1f5f9; color:#475569"),
-                    "actor": r["actor__display_name"] or actor_username,
-                    "at": r["at"].strftime("%Y-%m-%d %H:%M"),
-                    "client": r["client"],
-                    "record_type": (rec or {}).get("type", ""),
-                    "record_summary": _record_summary(rec) if rec else "",
-                    "before_snap": before_snap,
-                    "cross_owner": is_cross_owner,
-                    "original_owner": owner_display_name,
-                    "classification_downgrade": classification_downgrade,
-                    "downgrade_label": downgrade_label,
-                })
+                processed.append(
+                    {
+                        "record_id": r["record_id"],
+                        "domain": r["domain"],
+                        "action": r["action"],
+                        "action_color": _ACTION_COLORS.get(
+                            r["action"], "background:#f1f5f9; color:#475569"
+                        ),
+                        "actor": r["actor__display_name"] or actor_username,
+                        "at": r["at"].strftime("%Y-%m-%d %H:%M"),
+                        "client": r["client"],
+                        "record_type": (rec or {}).get("type", ""),
+                        "record_summary": _record_summary(rec) if rec else "",
+                        "before_snap": before_snap,
+                        "cross_owner": is_cross_owner,
+                        "original_owner": owner_display_name,
+                        "classification_downgrade": classification_downgrade,
+                        "downgrade_label": downgrade_label,
+                    }
+                )
             events = list(reversed(processed))
 
             archive_dir = mulch_dir(org_slug, project_slug) / "archive"

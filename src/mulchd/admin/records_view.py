@@ -81,9 +81,7 @@ async def records_page(request: Request, project: str = "") -> Response:
                 for jsonl_file in sorted(expertise_dir.glob("*.jsonl")):
                     records = await read_domain_records(jsonl_file)
                     if records:
-                        domains_data.append(
-                            {"name": jsonl_file.stem, "records": records}
-                        )
+                        domains_data.append({"name": jsonl_file.stem, "records": records})
 
     total_record_count = sum(len(d["records"]) for d in domains_data)
 

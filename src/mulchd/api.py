@@ -30,9 +30,7 @@ async def get_global_user(
 
 async def _get_accessible_project(user: User, org_slug: str, project_slug: str) -> Project:
     project = (
-        await Project.filter(slug=project_slug, org__slug=org_slug)
-        .select_related("org")
-        .first()
+        await Project.filter(slug=project_slug, org__slug=org_slug).select_related("org").first()
     )
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -88,13 +86,15 @@ class MintTokenRequest(BaseModel):
 
 @router.get("/me/projects", response_model=list[ProjectAccessOut])
 async def list_my_projects(user: User = Depends(get_global_user)):
-    memberships = (
-        await UserMembership.filter(user=user).select_related("project__org").all()
-    )
+    memberships = await UserMembership.filter(user=user).select_related("project__org").all()
     return [
         ProjectAccessOut(
             org=OrgOut(slug=m.project.org.slug, display_name=m.project.org.display_name),
-            project=ProjectOut(slug=m.project.slug, display_name=m.project.display_name, knowledge_language=m.project.knowledge_language),
+            project=ProjectOut(
+                slug=m.project.slug,
+                display_name=m.project.display_name,
+                knowledge_language=m.project.knowledge_language,
+            ),
             role=m.role,
         )
         for m in memberships
@@ -132,8 +132,8 @@ async def revoke_project_token(
     user: User = Depends(get_global_user),
 ):
     proj = await _get_accessible_project(user, org, project)
-    updated = await ProjectToken.filter(
-        id=token_id, user=user, project=proj, active=True
-    ).update(active=False)
+    updated = await ProjectToken.filter(id=token_id, user=user, project=proj, active=True).update(
+        active=False
+    )
     if not updated:
         raise HTTPException(status_code=404, detail="Token not found")

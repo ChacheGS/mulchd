@@ -5,6 +5,7 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 def test_build_snippets_code_contains_env_var():
     from mulchd.connect import build_connect_snippets
+
     s = build_connect_snippets("https://example.com", "acme", "demo", "tok-abc")
     assert "MULCHD_TOKEN_ACME_DEMO" in s["mcp_json"]
     assert "${MULCHD_TOKEN_ACME_DEMO}" in s["mcp_json"]
@@ -14,6 +15,7 @@ def test_build_snippets_code_contains_env_var():
 
 def test_build_snippets_settings_local_contains_token():
     from mulchd.connect import build_connect_snippets
+
     s = build_connect_snippets("https://example.com", "acme", "demo", "tok-abc")
     assert "MULCHD_TOKEN_ACME_DEMO" in s["settings_local"]
     assert "tok-abc" in s["settings_local"]
@@ -22,6 +24,7 @@ def test_build_snippets_settings_local_contains_token():
 
 def test_build_snippets_desktop_contains_mcp_remote():
     from mulchd.connect import build_connect_snippets
+
     s = build_connect_snippets("https://example.com", "acme", "demo", "tok-abc")
     assert "mcp-remote" in s["desktop"]
     assert "mulchd-acme-demo" in s["desktop"]
@@ -31,17 +34,18 @@ def test_build_snippets_desktop_contains_mcp_remote():
 
 def test_build_snippets_hyphens_become_underscores():
     from mulchd.connect import build_connect_snippets
+
     s = build_connect_snippets("https://x.com", "my-org", "my-project", "t")
     assert "MULCHD_TOKEN_MY_ORG_MY_PROJECT" in s["mcp_json"]
     assert "MULCHD_TOKEN_MY_ORG_MY_PROJECT" in s["settings_local"]
     assert "MULCHD_TOKEN_MY_ORG_MY_PROJECT" in s["desktop"]
 
 
-from mulchd.auth import create_user, create_project_token  # existing helpers
+from mulchd.auth import create_project_token, create_user  # existing helpers
 from mulchd.models import Organization, Project, UserMembership
 
-
 # ── fixtures ────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 async def alice_and_project(db):
@@ -55,12 +59,15 @@ async def alice_and_project(db):
 
 async def _authed_client(client, token: str):
     """Log in and return client (cookie set by side effect)."""
-    resp = await client.post("/connect", data={"token": token, "remember_me": ""}, follow_redirects=False)
+    resp = await client.post(
+        "/connect", data={"token": token, "remember_me": ""}, follow_redirects=False
+    )
     assert resp.status_code == 303
     return client
 
 
 # ── login ────────────────────────────────────────────────────────────────────
+
 
 async def test_connect_login_page_renders(client):
     resp = await client.get("/connect")
@@ -75,7 +82,9 @@ async def test_connect_login_wrong_token_returns_401(client):
 
 async def test_connect_login_sets_cookie_and_redirects(client, alice_and_project):
     user, token, *_ = alice_and_project
-    resp = await client.post("/connect", data={"token": token, "remember_me": ""}, follow_redirects=False)
+    resp = await client.post(
+        "/connect", data={"token": token, "remember_me": ""}, follow_redirects=False
+    )
     assert resp.status_code == 303
     assert resp.headers["location"] == "/connect/projects"
     assert "mulchd_connect" in resp.cookies
@@ -95,6 +104,7 @@ async def test_connect_login_htmx_returns_hx_redirect(client, alice_and_project)
 
 # ── projects ────────────────────────────────────────────────────────────────
 
+
 async def test_connect_projects_requires_auth(client):
     resp = await client.get("/connect/projects", follow_redirects=False)
     assert resp.status_code == 303
@@ -110,6 +120,7 @@ async def test_connect_projects_lists_memberships(client, alice_and_project):
 
 
 # ── project page ────────────────────────────────────────────────────────────
+
 
 async def test_connect_project_page_renders(client, alice_and_project):
     user, token, org, project = alice_and_project
@@ -131,6 +142,7 @@ async def test_connect_project_page_nonmember_404(client, alice_and_project):
 
 # ── mint ────────────────────────────────────────────────────────────────────
 
+
 async def test_connect_mint_returns_snippets(client, alice_and_project):
     user, token, *_ = alice_and_project
     await _authed_client(client, token)
@@ -143,11 +155,13 @@ async def test_connect_mint_creates_token_in_db(client, alice_and_project):
     await _authed_client(client, token)
     await client.post("/connect/projects/acme/demo/mint", data={"label": "laptop"})
     from mulchd.models import ProjectToken
+
     count = await ProjectToken.filter(user=user, project=project, active=True).count()
     assert count == 1
 
 
 # ── revoke ───────────────────────────────────────────────────────────────────
+
 
 async def test_connect_revoke_token(client, alice_and_project):
     user, token, org, project = alice_and_project
@@ -170,6 +184,7 @@ async def test_connect_revoke_wrong_user_404(client, alice_and_project):
 
 
 # ── logout ───────────────────────────────────────────────────────────────────
+
 
 async def test_connect_logout_clears_cookie(client, alice_and_project):
     user, token, *_ = alice_and_project
