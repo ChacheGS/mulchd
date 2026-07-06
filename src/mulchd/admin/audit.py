@@ -101,6 +101,7 @@ async def audit_page(
             # Process events oldest-first so queue pops match the right edit,
             # then reverse for newest-first display.
             record_map = await _load_record_map(org_slug, project_slug)
+            classification_map = {rid: r.get("classification", "") for rid, r in record_map.items()}
             edit_consumed: dict[tuple, int] = defaultdict(int)
             processed = []
             for r in reversed(rows):
@@ -117,6 +118,15 @@ async def audit_page(
                 rec = record_map.get(r["record_id"])
                 actor_username = r["actor__username"] or ""
                 owner_username = original_owner.get(r["record_id"], "")
+                # Detect write events that supersede foundational records
+                supersedes_foundational = (
+                    r["action"] == "write"
+                    and rec is not None
+                    and any(
+                        classification_map.get(sid) == "foundational"
+                        for sid in (rec.get("supersedes") or [])
+                    )
+                )
                 # cross-owner: actor is not the original author, and it's a mutating action
                 is_cross_owner = (
                     r["action"] in ("edit", "delete")
@@ -136,6 +146,7 @@ async def audit_page(
                     "before_snap": before_snap,
                     "cross_owner": is_cross_owner,
                     "original_owner": owner_username,
+                    "supersedes_foundational": supersedes_foundational,
                 })
             events = list(reversed(processed))
 

@@ -41,7 +41,10 @@ trivial details, anything reversible in minutes, or unsettled speculation.
 
 If two records conflict: prefer foundational over tactical over observational; within a \
 tier, prefer the newer record; if two live records genuinely contradict, flag it to the \
-user and propose a superseding record rather than silently picking one.
+user and propose a superseding record rather than silently picking one. \
+If write_record returns a FOUNDATIONAL SUPERSESSION warning, stop immediately and \
+show the user the full warning before doing anything else — do not proceed without \
+explicit acknowledgement.
 
 If a tool call fails or the connection drops mid-session, don't stall retrying — continue \
 the work, keep a list of records you would have written, and show that list to the user \
@@ -343,14 +346,19 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
         return
     # {victim_id: (superseder_id, superseder_domain)}
     superseded_by: dict[str, tuple[str, str]] = {}
+    # {record_id: classification} — built while scanning, used for _supersedes_foundational
+    classifications: dict[str, str] = {}
     expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
     if expertise_dir.exists():
         for jsonl_file in expertise_dir.glob("*.jsonl"):
             superseder_domain = jsonl_file.stem
             for stored in await read_domain_records(jsonl_file):
-                for sid in stored.get("supersedes") or []:
-                    if sid in target_ids:
-                        superseded_by[sid] = (stored.get("id", ""), superseder_domain)
+                sid = stored.get("id", "")
+                if sid:
+                    classifications[sid] = stored.get("classification", "")
+                for vid in stored.get("supersedes") or []:
+                    if vid in target_ids:
+                        superseded_by[vid] = (sid, superseder_domain)
     for r in records:
         rid = r.get("id")
         if rid in superseded_by:
@@ -359,6 +367,28 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             r["_superseded_by"] = superseder_id
             if superseder_domain and superseder_domain != r.get("_domain", ""):
                 r["_superseder_domain"] = superseder_domain
+        # Flag records that themselves supersede foundational records
+        displaced = [
+            sid for sid in (r.get("supersedes") or [])
+            if classifications.get(sid) == "foundational"
+        ]
+        if displaced:
+            r["_supersedes_foundational"] = displaced
+
+
+async def _foundational_superseded(m_dir: Path, supersedes: list[str]) -> list[str]:
+    """Return which IDs in supersedes refer to foundational records."""
+    if not supersedes:
+        return []
+    targets = set(supersedes)
+    hits: list[str] = []
+    expertise_dir = m_dir / "expertise"
+    if expertise_dir.exists():
+        for jsonl_file in expertise_dir.glob("*.jsonl"):
+            for r in await read_domain_records(jsonl_file):
+                if r.get("id") in targets and r.get("classification") == "foundational":
+                    hits.append(r["id"])
+    return hits
 
 
 async def _annotate_edits(records: list[dict], project_id: int) -> None:
@@ -402,6 +432,8 @@ def _format_single(r: dict) -> str:
         n = r.get("_edit_count", "")
         editor = r.get("_last_edited_by", "")
         header += f" • edited {n}×" + (f" by {editor}" if editor else "")
+    if r.get("_supersedes_foundational"):
+        header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
     if body:
         header += f"\n    {body}"
     return header
@@ -433,6 +465,8 @@ def _format_records(records: list[dict]) -> str:
             n = r.get("_edit_count", "")
             editor = r.get("_last_edited_by", "")
             header += f" • edited {n}×" + (f" by {editor}" if editor else "")
+        if r.get("_supersedes_foundational"):
+            header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
         lines.append(header)
         if body:
             lines.append(f"  {body}")
@@ -564,7 +598,16 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         client=ctx.client,
         session_id=session_id,
     )
-    return [TextContent(type="text", text=f"Recorded {written['type']} in {domain} ({written['id']})")]
+    msg = f"Recorded {written['type']} in {domain} ({written['id']})"
+    foundational_hit = await _foundational_superseded(m_dir, list(args.get("supersedes") or []))
+    if foundational_hit:
+        msg += (
+            f"\n\n⚠ FOUNDATIONAL SUPERSESSION: this record displaces foundational record(s): "
+            f"{', '.join(foundational_hit)}. "
+            f"Stop and flag this to the user before continuing — foundational supersessions "
+            f"may weaken team guardrails and require explicit acknowledgement."
+        )
+    return [TextContent(type="text", text=msg)]
 
 
 async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
