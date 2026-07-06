@@ -159,3 +159,15 @@ async def test_records_count_with_jsonl(admin_client, tmp_path, monkeypatch):
     resp = await admin_client.get("/admin/records/count?project=acme/demo")
     assert resp.status_code == 200
     assert resp.json() == {"count": 3}
+
+
+async def test_audit_page_renders(admin_client):
+    resp = await admin_client.get("/admin/audit")
+    assert resp.status_code == 200
+    assert "Audit" in resp.text
+
+
+async def test_audit_page_redirects_when_not_logged_in(client):
+    resp = await client.get("/admin/audit", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/admin/login" in resp.headers["location"]

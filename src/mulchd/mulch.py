@@ -146,6 +146,12 @@ async def delete_record(mulch_dir: Path, domain: str, record_id: str) -> None:
     await _run(mulch_dir, ["archive", domain, "--records", record_id, "--reason", "deleted via MCP"])
 
 
+async def restore_record(mulch_dir: Path, record_id: str) -> dict:
+    """Restore a soft-archived record via ml restore. Returns the restored record dict."""
+    result = await _run(mulch_dir, ["restore", record_id])
+    return result if isinstance(result, dict) else {}
+
+
 async def init_ml_project(mulch_dir: Path) -> None:
     """Bootstrap a project directory via `ml init` if not yet initialised."""
     mulch_dir.parent.mkdir(parents=True, exist_ok=True)

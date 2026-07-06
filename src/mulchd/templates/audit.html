@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — audit{% endblock %}
+{% block content %}
+
+<style>
+  .event-row { padding: 9px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; display: grid; grid-template-columns: 120px 60px 120px 1fr 100px 120px; gap: 8px; align-items: center; }
+  .event-row:last-child { border-bottom: none; }
+  .event-header { padding: 7px 16px; border-bottom: 1px solid #e2e8f0; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; display: grid; grid-template-columns: 120px 60px 120px 1fr 100px 120px; gap: 8px; }
+  .archive-record { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .archive-record:last-child { border-bottom: none; }
+</style>
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+  <div class="page-title" style="margin-bottom:0">Audit</div>
+  <form method="get" action="/admin/audit" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+    <select name="project" onchange="this.form.submit()"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
+      <option value="">— project —</option>
+      {% for p in projects %}
+      <option value="{{ p.org.slug }}/{{ p.slug }}"
+        {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
+        {{ p.org.slug }} / {{ p.slug }}
+      </option>
+      {% endfor %}
+    </select>
+    {% if selected %}
+    <select name="action"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
+      <option value="">all actions</option>
+      <option value="write"  {% if filter_action == 'write'  %}selected{% endif %}>write</option>
+      <option value="edit"   {% if filter_action == 'edit'   %}selected{% endif %}>edit</option>
+      <option value="delete" {% if filter_action == 'delete' %}selected{% endif %}>delete</option>
+    </select>
+    <input type="text" name="domain" value="{{ filter_domain }}" placeholder="domain filter"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; width:140px; outline:none">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    {% if filter_action or filter_domain %}
+    <a href="/admin/audit?project={{ selected }}" class="btn btn-secondary">Clear</a>
+    {% endif %}
+    {% endif %}
+  </form>
+</div>
+
+{% if not selected %}
+<div class="card">
+  <div class="empty-state">Select a project above to view its audit log.</div>
+</div>
+
+{% else %}
+
+{# ── Event log ── #}
+<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px">
+  Event log
+  {% if events %}<span style="font-weight:400; text-transform:none; letter-spacing:0; color:#94a3b8">— {{ events | length }} event{{ 's' if events | length != 1 else '' }}</span>{% endif %}
+</div>
+
+{% if not events %}
+<div class="card">
+  <div class="empty-state">No events found{% if filter_action or filter_domain %} for this filter{% endif %}.</div>
+</div>
+{% else %}
+<div class="card" style="margin-bottom:28px">
+  <div class="event-header">
+    <span>Time</span><span>Action</span><span>Record</span><span>Domain</span><span>Actor</span><span>Client</span>
+  </div>
+  {% for e in events %}
+  <div class="event-row">
+    <span class="text-muted">{{ e.at }}</span>
+    <span><span class="badge" style="{{ e.action_color }}">{{ e.action }}</span></span>
+    <span class="monospace" style="color:#6d28d9; font-size:11px">{{ e.record_id }}</span>
+    <span style="color:#475569">{{ e.domain }}</span>
+    <span style="color:#374151">{{ e.actor }}</span>
+    <span class="text-muted">{{ e.client }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── Archived records ── #}
+<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px">
+  Archived records
+  {% set total_archived = archived_domains | sum(attribute='records') | list | length %}
+</div>
+
+{% if not archived_domains %}
+<div class="card">
+  <div class="empty-state">No archived records for this project.</div>
+</div>
+{% else %}
+{% for domain in archived_domains %}
+<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin:{% if not loop.first %}20px{% else %}0{% endif %} 0 6px">
+  {{ domain.name }}
+  <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#94a3b8">— {{ domain.records | length }} archived</span>
+</div>
+<div class="card">
+  {% for r in domain.records %}
+  <div class="archive-record">
+    <span class="monospace" style="color:#6d28d9; font-size:11px; min-width:90px">{{ r.id or '—' }}</span>
+    <span class="badge" style="background:#fee2e2; color:#991b1b; flex-shrink:0">{{ r.type }}</span>
+    <span style="flex:1; color:#475569">
+      {{ r.content or r.title or r.name or r.description or '—' }}
+    </span>
+    <span class="text-muted" style="white-space:nowrap">{{ (r.archived_at or '')[:10] }}</span>
+    {% if r.archive_reason %}
+    <span class="text-muted" style="font-style:italic; white-space:nowrap; max-width:160px; overflow:hidden; text-overflow:ellipsis" title="{{ r.archive_reason }}">{{ r.archive_reason }}</span>
+    {% endif %}
+    {% if r.id %}
+    <form method="post" action="/admin/audit/restore"
+          onsubmit="return confirm('Restore {{ r.id }} to live records?')" style="margin:0">
+      <input type="hidden" name="project" value="{{ selected }}">
+      <input type="hidden" name="record_id" value="{{ r.id }}">
+      <button type="submit" class="btn btn-secondary" style="padding:4px 10px; font-size:12px">Restore</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
