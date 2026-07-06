@@ -748,18 +748,17 @@ async def test_delete_non_last_record_preserves_domain(team, data_path, monkeypa
     assert (expertise / "keep.jsonl").exists()
 
 
-# Audit log
-# ---------
+# RecordEvent audit trail (data layer — not exposed via MCP)
+# ----------------------------------------------------------
 
-async def test_audit_log_records_write_edit_delete(team, data_path, fake_write_record):
-    """get_audit_log returns one event per mutating action in reverse-chronological order."""
+async def test_record_events_written_for_write_edit_delete(team, data_path, fake_write_record):
+    """RecordEvent rows are created for every mutating action (write, edit, delete)."""
     import mulchd.mcp.tier2 as mcp_tier2
-    from mulchd.mcp.tier2 import _get_audit_log, _edit_record, _delete_record
-    from mulchd.models import Role
+    from mulchd.mcp.tier2 import _edit_record, _delete_record
+    from mulchd.models import RecordEvent
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
 
-    # write
     await mcp_tier2._record_expertise(
         {"domain": "audit-test", "type": "convention", "classification": "tactical", "content": "v1"},
         ctx(t.carlos, t.org, t.infra),
@@ -767,25 +766,14 @@ async def test_audit_log_records_write_edit_delete(team, data_path, fake_write_r
     records_after_write = await mcp_tier2._read_expertise({"domains": ["audit-test"]}, ctx(t.carlos, t.org, t.infra))
     record_id = records_after_write[1]["records"][0]["id"]
 
-    # edit (monkeypatch ml edit to be a no-op)
     async def _noop_edit(m_dir, domain, rid, updates): pass
-    monkeypatch_edit = mcp_tier2.edit_record
+    orig_edit = mcp_tier2.edit_record
     mcp_tier2.edit_record = _noop_edit
     await _edit_record({"record_id": record_id, "domain": "audit-test", "content": "v2"}, ctx(t.carlos, t.org, t.infra))
-    mcp_tier2.edit_record = monkeypatch_edit
+    mcp_tier2.edit_record = orig_edit
 
-    # delete
     mcp_tier2.delete_record = _make_fake_delete(expertise)
     await _delete_record({"record_id": record_id, "domain": "audit-test"}, ctx(t.carlos, t.org, t.infra))
 
-    _, structured = await _get_audit_log({"record_id": record_id}, ctx(t.carlos, t.org, t.infra, Role.ADMIN))
-    actions = [e["action"] for e in structured["events"]]
-    assert set(actions) == {"write", "edit", "delete"}
-
-
-async def test_audit_log_requires_admin(team, data_path):
-    """get_audit_log raises for non-admin callers."""
-    from mulchd.mcp.tier2 import _get_audit_log
-    t = team
-    with pytest.raises(ValueError, match="admin"):
-        await _get_audit_log({}, ctx(t.carlos, t.org, t.infra))
+    events = await RecordEvent.filter(record_id=record_id).values_list("action", flat=True)
+    assert set(events) == {"write", "edit", "delete"}

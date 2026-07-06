@@ -142,8 +142,8 @@ async def edit_record(mulch_dir: Path, domain: str, record_id: str, updates: dic
 
 
 async def delete_record(mulch_dir: Path, domain: str, record_id: str) -> None:
-    """Delete a single record via ml delete. Ownership check is the caller's responsibility."""
-    await _run(mulch_dir, ["delete", domain, "--records", record_id])
+    """Archive a record via ml archive (soft-delete). Ownership check is the caller's responsibility."""
+    await _run(mulch_dir, ["archive", domain, "--records", record_id, "--reason", "deleted via MCP"])
 
 
 async def init_ml_project(mulch_dir: Path) -> None:

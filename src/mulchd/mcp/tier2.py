@@ -290,28 +290,6 @@ TIER2_TOOLS = [
         annotations=ToolAnnotations(destructiveHint=True),
     ),
     Tool(
-        name="get_audit_log",
-        description=(
-            "Return the write/edit/delete history for a record or domain. Admin only."
-        ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "record_id": {"type": "string", "description": "Filter to a specific record (mx-xxxxxx)."},
-                "domain": {"type": "string", "description": "Filter to a specific domain."},
-                "limit": {"type": "integer", "default": 50, "description": "Max events to return."},
-            },
-        },
-        outputSchema={
-            "type": "object",
-            "properties": {
-                "events": {"type": "array", "items": {"type": "object"}},
-            },
-            "required": ["events"],
-        },
-        annotations=ToolAnnotations(readOnlyHint=True),
-    ),
-    Tool(
         name="delete_record",
         description=(
             "Delete a record by ID. "
@@ -660,41 +638,6 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
 
 
-async def _get_audit_log(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
-    from ..models import Role
-    if ctx.role != Role.ADMIN:
-        raise ValueError("only admins can query the audit log")
-    limit = int(args.get("limit", 50))
-    qs = RecordEvent.filter(project=ctx.project).prefetch_related("actor")
-    if args.get("record_id"):
-        qs = qs.filter(record_id=args["record_id"])
-    if args.get("domain"):
-        qs = qs.filter(domain=args["domain"])
-    rows = await qs.order_by("-at").limit(limit).values(
-        "record_id", "domain", "action", "client", "session_id", "at",
-        "actor__username", "actor__display_name",
-    )
-    events = [
-        {
-            "record_id": r["record_id"],
-            "domain": r["domain"],
-            "action": r["action"],
-            "actor": r["actor__display_name"] or r["actor__username"],
-            "at": r["at"].isoformat(),
-            "client": r["client"],
-            "session_id": str(r["session_id"]) if r["session_id"] else None,
-        }
-        for r in rows
-    ]
-    lines = [f"# Audit log — {ctx.org.display_name} / {ctx.project.display_name}\n"]
-    for e in events:
-        lines.append(f"[{e['at'][:19]}] {e['action']:6} {e['record_id']} ({e['domain']}) by {e['actor']}")
-    return (
-        [TextContent(type="text", text="\n".join(lines))],
-        {"events": events},
-    )
-
-
 async def _record_tool_call(name: str, ctx: AuthContext) -> None:
     await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=ctx.client)
 
@@ -724,7 +667,6 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
         case "get_record_schema":  return await _get_record_schema(args)
         case "edit_record":        return await _edit_record(args, ctx)
         case "delete_record":      return await _delete_record(args, ctx)
-        case "get_audit_log":      return await _get_audit_log(args, ctx)
         case _:                    raise ValueError(f"Unknown tool: {name}")
 
 
