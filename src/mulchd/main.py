@@ -37,6 +37,19 @@ async def resolve_mcp_tier(request: Request) -> tuple[str, AuthContext | None]:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    import logging
+
+    # Configure mcp/mulchd loggers here (after uvicorn's dictConfig has run)
+    # so our handler and level are not overridden.
+    level = settings.log_level.upper()
+    _handler = logging.StreamHandler()
+    _handler.setLevel(level)
+    for _name in ("mcp", "mulchd"):
+        _lg = logging.getLogger(_name)
+        _lg.setLevel(level)
+        if not _lg.handlers:
+            _lg.addHandler(_handler)
+
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas()
     async with (
