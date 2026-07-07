@@ -7,6 +7,7 @@ from uuid import UUID, uuid7
 
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotations
 
 import urllib.parse
@@ -79,12 +80,17 @@ A record marked `_edited` has been modified in place since it was first written.
 has changed. When editing a `foundational` record yourself, prefer writing a superseding \
 record instead so the change appears in-band.
 
+Domain subscriptions: this server exposes each domain as a resource at \
+mulchd://domain/<name>. After loading a domain with read_records, subscribe to it via \
+resources/subscribe so the server can push live updates when teammates write, edit, or \
+delete records in that domain. Call resources/unsubscribe when you are done with a domain.
+
 Notification handling: when you receive a notifications/resources/updated notification \
-for a mulchd:// URI, parse its query parameters — actor (display name of the teammate \
-who acted), action (write/edit/delete), type, classification, title, and at (timestamp). \
-Assess relevance before acting: if the actor is a teammate, the type is 'decision' or \
-'convention', the classification is 'foundational' or 'tactical', and the domain is one \
-you have been actively reading or writing in this session — call \
+for a mulchd://domain/<name> URI, parse its query parameters — actor (display name of \
+the teammate who acted), action (write/edit/delete), type, classification, title, and \
+at (timestamp). Assess relevance before acting: if the actor is a teammate, the type is \
+'decision' or 'convention', the classification is 'foundational' or 'tactical', and the \
+domain is one you have been actively reading or writing in this session — call \
 get_recent(domains=[<domain>], since=<session_start_timestamp>) and tell the user what \
 changed and whether it may conflict with the current work. For observational records, \
 deletions in unfamiliar domains, or domains you have not touched this session, note the \
@@ -159,11 +165,6 @@ TIER2_TOOLS = [
                 "cursor": {
                     "type": "string",
                     "description": "Pass next_cursor from the previous response verbatim. Omit for the first page.",
-                },
-                "subscribe": {
-                    "type": "boolean",
-                    "default": True,
-                    "description": "Register this session as a watcher of the read domains. Pass False for one-off reads unrelated to the current task.",
                 },
             },
             "required": ["domains"],
@@ -240,11 +241,6 @@ TIER2_TOOLS = [
                     "type": "string",
                     "description": "decision: date the decision was made (ISO 8601); defaults to recorded_at",
                 },
-                "subscribe": {
-                    "type": "boolean",
-                    "default": True,
-                    "description": "Subscribe to this domain after writing. Pass False for one-off writes to domains unrelated to the current task.",
-                },
             },
             "required": ["domain", "type", "classification"],
         },
@@ -265,11 +261,6 @@ TIER2_TOOLS = [
                 "owner": {
                     "type": "string",
                     "description": "Filter to records written by this username.",
-                },
-                "subscribe": {
-                    "type": "boolean",
-                    "default": False,
-                    "description": "Subscribe to the searched domains. Off by default — searches are exploratory.",
                 },
             },
             "required": ["query"],
@@ -399,11 +390,6 @@ TIER2_TOOLS = [
                     "items": {"type": "string"},
                     "description": "Record IDs this record replaces",
                 },
-                "subscribe": {
-                    "type": "boolean",
-                    "default": True,
-                    "description": "Subscribe to this domain after editing. Pass False for one-off edits.",
-                },
             },
             "required": ["record_id", "domain"],
         },
@@ -421,11 +407,6 @@ TIER2_TOOLS = [
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
                 "domain": {"type": "string"},
-                "subscribe": {
-                    "type": "boolean",
-                    "default": True,
-                    "description": "Subscribe to this domain after deleting. Pass False for one-off deletes.",
-                },
             },
             "required": ["record_id", "domain"],
         },
@@ -724,13 +705,6 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
             f"by records in: {', '.join(hint_domains)}. Read those domains for the full picture.\n\n"
         )
     text = warning + hint_text + _format_records(page)
-    if args.get("subscribe", True):
-        try:
-            req_ctx = tier2_server.request_context
-            for domain in domains:
-                registry.register(req_ctx.session, domain)
-        except LookupError:
-            pass  # no request context in tests or stateless fallback
     return (
         [TextContent(type="text", text=text)],
         {
@@ -847,13 +821,11 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         )
     try:
         req_ctx = tier2_server.request_context
-        if args.get("subscribe", True):
-            registry.register(req_ctx.session, domain)
         _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "write", written))
         _background_tasks.add(_t)
         _t.add_done_callback(_background_tasks.discard)
     except LookupError:
-        pass  # no request context in tests or stateless fallback
+        pass
     return [TextContent(type="text", text=msg)]
 
 
@@ -872,13 +844,6 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
     text = warning + _format_records(results)
-    if args.get("subscribe", False) and domains:
-        try:
-            req_ctx = tier2_server.request_context
-            for d in domains:
-                registry.register(req_ctx.session, d)
-        except LookupError:
-            pass
     return (
         [TextContent(type="text", text=text)],
         {"records": results, "truncated": False},
@@ -1027,8 +992,6 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         )
     try:
         req_ctx = tier2_server.request_context
-        if args.get("subscribe", True):
-            registry.register(req_ctx.session, domain)
         notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
         _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "edit", notif_record))
         _background_tasks.add(_t)
@@ -1067,8 +1030,6 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         domain_path.unlink()
     try:
         req_ctx = tier2_server.request_context
-        if args.get("subscribe", True):
-            registry.register(req_ctx.session, domain)
         _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "delete", record))
         _background_tasks.add(_t)
         _t.add_done_callback(_background_tasks.discard)
@@ -1151,16 +1112,60 @@ async def list_resource_templates() -> list[ResourceTemplate]:
 
 
 @tier2_server.read_resource()
-async def read_resource(uri) -> str:
+async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
     ctx = _ctx.get()
     if ctx is None:
         raise ValueError("No auth context")
     uri_str = str(uri)
     if uri_str.startswith("mulchd://domain/"):
-        name = uri_str[len("mulchd://domain/") :]
+        name = uri_str[len("mulchd://domain/"):]
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
         for r in records:
             r["_domain"] = name
         await _mark_superseded(records, ctx.org.slug, ctx.project.slug)
-        return _format_records(records)
+        text = _format_records(records) if records else f"No records in domain '{name}' yet."
+        return [ReadResourceContents(content=text, mime_type="text/plain")]
     raise ValueError(f"Unknown resource URI: {uri_str}")
+
+
+@tier2_server.subscribe_resource()
+async def subscribe_resource(uri: AnyUrl) -> None:
+    ctx = _ctx.get()
+    if ctx is None:
+        return
+    uri_str = str(uri)
+    if uri_str.startswith("mulchd://domain/"):
+        domain = uri_str[len("mulchd://domain/"):]
+        try:
+            registry.register(tier2_server.request_context.session, domain)
+        except LookupError:
+            pass
+
+
+@tier2_server.unsubscribe_resource()
+async def unsubscribe_resource(uri: AnyUrl) -> None:
+    ctx = _ctx.get()
+    if ctx is None:
+        return
+    uri_str = str(uri)
+    if uri_str.startswith("mulchd://domain/"):
+        domain = uri_str[len("mulchd://domain/"):]
+        try:
+            registry.unregister(tier2_server.request_context.session, domain)
+        except LookupError:
+            pass
+
+
+# The MCP SDK hardcodes resources.subscribe=False regardless of registered handlers.
+# Patch get_capabilities to advertise our subscribe_resource support correctly.
+_orig_get_capabilities = tier2_server.get_capabilities
+
+
+def _get_capabilities_with_subscribe(notification_options, experimental_capabilities):
+    caps = _orig_get_capabilities(notification_options, experimental_capabilities)
+    if caps.resources is not None:
+        caps.resources.subscribe = True
+    return caps
+
+
+tier2_server.get_capabilities = _get_capabilities_with_subscribe

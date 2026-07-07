@@ -18,6 +18,10 @@ class SubscriptionRegistry:
     def register(self, session: Any, domain: str) -> None:
         self._subs.setdefault(domain, set()).add(session)
 
+    def unregister(self, session: Any, domain: str) -> None:
+        if domain in self._subs:
+            self._subs[domain].discard(session)
+
     def unregister_session(self, session: Any) -> None:
         for subs in self._subs.values():
             subs.discard(session)
