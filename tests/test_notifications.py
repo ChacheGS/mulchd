@@ -301,3 +301,162 @@ async def test_search_records_skips_register_when_no_domains(
 
     # No domains specified → should not register anything
     assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)
+
+
+@pytest.mark.asyncio
+async def test_write_record_registers_and_dispatches_notify(notify_data_path, monkeypatch, db):
+    """_record_expertise registers session and fires _notify_domain when subscribe=True."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+    from mulchd.auth import AuthContext
+    from mulchd.models import Organization, Project, User, Role
+
+    org = await Organization.create(slug="w1", display_name="W")
+    project = await Project.create(slug="w1p", display_name="W", org=org)
+    user = await User.create(username="w1u", display_name="Writer", token_hash="w1t")
+
+    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
+
+    fake_registry = SubscriptionRegistry()
+    fake_session = object()
+    fake_ctx = MagicMock()
+    fake_ctx.session = fake_session
+
+    dispatched = []
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+    monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
+                        property(lambda self: fake_ctx))
+    monkeypatch.setattr(tier2_module, "write_record",
+                        AsyncMock(return_value={"id": "mx-w1", "type": "convention",
+                                                "classification": "tactical",
+                                                "content": "x", "recorded_at": "2026-07-07T00:00:00Z"}))
+    monkeypatch.setattr(tier2_module, "init_ml_project", AsyncMock())
+    monkeypatch.setattr(tier2_module, "_get_or_create_session", MagicMock(return_value="s1"))
+    monkeypatch.setattr(tier2_module, "_supersede_alerts", AsyncMock(return_value={}))
+    monkeypatch.setattr("mulchd.models.RecordMeta.create", AsyncMock())
+    monkeypatch.setattr("mulchd.models.RecordEvent.create", AsyncMock())
+
+    original_create_task = asyncio.create_task
+    def capture_create_task(coro, **kwargs):
+        dispatched.append(coro.__qualname__ if hasattr(coro, "__qualname__") else str(coro))
+        return original_create_task(coro, **kwargs)
+    monkeypatch.setattr(asyncio, "create_task", capture_create_task)
+
+    from mulchd.mcp.tier2 import _record_expertise
+    await _record_expertise({
+        "domain": "conventions",
+        "type": "convention",
+        "classification": "tactical",
+        "content": "Always validate at boundaries",
+        "subscribe": True,
+    }, ctx)
+
+    assert fake_session in fake_registry.subscribers_for("conventions", exclude=None)
+    assert any("_notify_domain" in d for d in dispatched)
+
+
+@pytest.mark.asyncio
+async def test_edit_record_registers_when_subscribe_true(notify_data_path, monkeypatch, db):
+    """_edit_record registers session and dispatches _notify_domain when subscribe=True."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+    from mulchd.auth import AuthContext
+    from mulchd.models import Organization, Project, User, Role
+
+    org = await Organization.create(slug="e1", display_name="E")
+    project = await Project.create(slug="e1p", display_name="E", org=org)
+    user = await User.create(username="e1u", display_name="Editor", token_hash="e1t")
+
+    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
+
+    fake_registry = SubscriptionRegistry()
+    fake_session = object()
+    fake_ctx = MagicMock()
+    fake_ctx.session = fake_session
+
+    dispatched = []
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+    monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
+                        property(lambda self: fake_ctx))
+    monkeypatch.setattr(tier2_module, "find_record",
+                        AsyncMock(return_value={"type": "convention", "classification": "tactical",
+                                                "content": "old content", "owner": "e1u"}))
+    monkeypatch.setattr(tier2_module, "edit_record", AsyncMock())
+    monkeypatch.setattr(tier2_module, "_get_or_create_session", MagicMock(return_value="s2"))
+    monkeypatch.setattr("mulchd.models.RecordEvent.create", AsyncMock())
+    monkeypatch.setattr("mulchd.models.RecordEdit.create", AsyncMock())
+
+    original_create_task = asyncio.create_task
+    def capture_create_task(coro, **kwargs):
+        dispatched.append(coro.__qualname__ if hasattr(coro, "__qualname__") else str(coro))
+        return original_create_task(coro, **kwargs)
+    monkeypatch.setattr(asyncio, "create_task", capture_create_task)
+
+    from mulchd.mcp.tier2 import _edit_record
+    await _edit_record({
+        "record_id": "mx-e1",
+        "domain": "conventions",
+        "content": "new content",
+        "subscribe": True,
+    }, ctx)
+
+    assert fake_session in fake_registry.subscribers_for("conventions", exclude=None)
+    assert any("_notify_domain" in d for d in dispatched)
+
+
+@pytest.mark.asyncio
+async def test_delete_record_registers_when_subscribe_true(notify_data_path, monkeypatch, db):
+    """_delete_record registers session and dispatches _notify_domain when subscribe=True."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+    from mulchd.auth import AuthContext
+    from mulchd.models import Organization, Project, User, Role
+
+    org = await Organization.create(slug="d1", display_name="D")
+    project = await Project.create(slug="d1p", display_name="D", org=org)
+    user = await User.create(username="d1u", display_name="Deleter", token_hash="d1t")
+
+    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
+
+    fake_registry = SubscriptionRegistry()
+    fake_session = object()
+    fake_ctx = MagicMock()
+    fake_ctx.session = fake_session
+
+    dispatched = []
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+    monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
+                        property(lambda self: fake_ctx))
+    monkeypatch.setattr(tier2_module, "find_record",
+                        AsyncMock(return_value={"type": "convention", "classification": "tactical",
+                                                "content": "doomed record", "owner": "d1u"}))
+    monkeypatch.setattr(tier2_module, "delete_record", AsyncMock())
+    monkeypatch.setattr(tier2_module, "_get_or_create_session", MagicMock(return_value="s3"))
+    monkeypatch.setattr(tier2_module, "read_domain_records",
+                        AsyncMock(return_value=[{"content": "other stuff"}]))
+    monkeypatch.setattr("mulchd.models.RecordEvent.create", AsyncMock())
+
+    original_create_task = asyncio.create_task
+    def capture_create_task(coro, **kwargs):
+        dispatched.append(coro.__qualname__ if hasattr(coro, "__qualname__") else str(coro))
+        return original_create_task(coro, **kwargs)
+    monkeypatch.setattr(asyncio, "create_task", capture_create_task)
+
+    from mulchd.mcp.tier2 import _delete_record
+    await _delete_record({
+        "record_id": "mx-d1",
+        "domain": "conventions",
+        "subscribe": True,
+    }, ctx)
+
+    assert fake_session in fake_registry.subscribers_for("conventions", exclude=None)
+    assert any("_notify_domain" in d for d in dispatched)
