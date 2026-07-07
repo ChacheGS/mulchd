@@ -9,6 +9,10 @@ from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import Resource, ResourceTemplate, TextContent, Tool, ToolAnnotations
 
+import urllib.parse
+
+from pydantic import AnyUrl
+
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
@@ -21,6 +25,7 @@ from ..mulch import (
 )
 from ..records import find_record, read_domain_records
 from .context import _ctx
+from .subscriptions import registry
 
 SESSION_WORKFLOW = """\
 mulchd stores shared team expertise for this project. Everything you record is visible \
@@ -141,6 +146,11 @@ TIER2_TOOLS = [
                 "cursor": {
                     "type": "string",
                     "description": "Pass next_cursor from the previous response verbatim. Omit for the first page.",
+                },
+                "subscribe": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Register this session as a watcher of the read domains. Pass False for one-off reads unrelated to the current task.",
                 },
             },
             "required": ["domains"],
@@ -681,6 +691,13 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
             f"by records in: {', '.join(hint_domains)}. Read those domains for the full picture.\n\n"
         )
     text = warning + hint_text + _format_records(page)
+    if args.get("subscribe", True):
+        try:
+            req_ctx = tier2_server.request_context
+            for domain in domains:
+                registry.register(req_ctx.session, domain)
+        except LookupError:
+            pass  # no request context in tests or stateless fallback
     return (
         [TextContent(type="text", text=text)],
         {
