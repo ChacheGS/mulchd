@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from starlette.responses import Response
 from mcp.server.sse import SseServerTransport
 from starlette.middleware.sessions import SessionMiddleware
 from tortoise import Tortoise
@@ -74,11 +75,12 @@ async def sse_endpoint(request: Request):
     server = tier_servers[tier]
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())
+    return Response()
 
 
-@app.post("/messages/")
-async def handle_messages(request: Request):
-    await sse.handle_post_message(request.scope, request.receive, request._send)
+# handle_post_message is a raw ASGI callable — mounting it directly prevents
+# FastAPI from trying to send a second response after it has already sent 202.
+app.mount("/messages", app=sse.handle_post_message)
 
 
 @app.get("/health")
@@ -90,7 +92,17 @@ def run() -> None:
     import logging
     import uvicorn
 
-    logging.getLogger("mcp").setLevel(settings.log_level.upper())
+    level = settings.log_level.upper()
+    # uvicorn only configures its own loggers; "mcp" and "mulchd" propagate to
+    # the root logger whose handler defaults to WARNING, dropping DEBUG records.
+    # Give them dedicated handlers so the configured level is respected.
+    _handler = logging.StreamHandler()
+    _handler.setLevel(level)
+    for _name in ("mcp", "mulchd"):
+        _lg = logging.getLogger(_name)
+        _lg.setLevel(level)
+        _lg.addHandler(_handler)
+
     uvicorn.run(
         "mulchd.main:app",
         host=settings.host,
