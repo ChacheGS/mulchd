@@ -18,9 +18,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen --no-install-project
 
-# Source + migrations
+# Source (includes migrations/)
 COPY src/ ./src/
-COPY migrations/ ./migrations/
 
 # Install the project itself
 RUN uv sync --no-dev --frozen

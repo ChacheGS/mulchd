@@ -40,7 +40,7 @@ packages = ["src/mulchd"]
 
 [tool.aerich]
 tortoise_orm = "mulchd.config.TORTOISE_ORM"
-location = "./migrations"
+location = "./src/migrations"
 src_folder = "./src"
 
 [tool.pytest.ini_options]
@@ -70,3 +70,13 @@ package = true
 dev = [
     "pyright>=1.1.411",
 ]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.14"
+pythonPlatform = "Linux"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+reportMissingTypeStubs = false
+reportIncompatibleVariableOverride = false
