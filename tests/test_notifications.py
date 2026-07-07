@@ -58,68 +58,14 @@ def test_multiple_domains_independent():
     assert r.subscribers_for("conventions", exclude=None) == {s2}
 
 
-@pytest.mark.asyncio
-async def test_read_records_registers_when_subscribe_true(notify_data_path, db, monkeypatch):
-    """_read_expertise registers the session for each domain when subscribe=True."""
-    from mulchd.auth import AuthContext
-    from mulchd.models import Organization, Project, User, Role
-
-    org = await Organization.create(slug="o", display_name="O")
-    project = await Project.create(slug="p", display_name="P", org=org)
-    user = await User.create(username="u", display_name="U", token_hash="x")
-
-    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
-
-    # Seed an empty domain JSONL so _read_expertise doesn't fail on missing file
-    expertise = notify_data_path / "o" / "p" / ".mulch" / "expertise"
-    expertise.mkdir(parents=True, exist_ok=True)
-    (expertise / "arch.jsonl").write_text("")
-
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
-    fake_ctx = MagicMock()
-    fake_ctx.session = fake_session
-
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
-    monkeypatch.setattr(
-        type(tier2_module.tier2_server),
-        "request_context",
-        property(lambda self: fake_ctx),
-    )
-
-    from mulchd.mcp.tier2 import _read_expertise
-    await _read_expertise({"domains": ["arch"], "subscribe": True}, ctx)
-
-    assert fake_session in fake_registry.subscribers_for("arch", exclude=None)
-
-
-@pytest.mark.asyncio
-async def test_read_records_skips_register_when_subscribe_false(notify_data_path, db, monkeypatch):
-    from mulchd.auth import AuthContext
-    from mulchd.models import Organization, Project, User, Role
-
-    org = await Organization.create(slug="o2", display_name="O")
-    project = await Project.create(slug="p2", display_name="P", org=org)
-    user = await User.create(username="u2", display_name="U", token_hash="y")
-
-    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
-
-    expertise = notify_data_path / "o2" / "p2" / ".mulch" / "expertise"
-    expertise.mkdir(parents=True, exist_ok=True)
-    (expertise / "arch.jsonl").write_text("")
-
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
-    fake_ctx = MagicMock()
-    fake_ctx.session = fake_session
-
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
-    # subscribe=False: no need to mock request_context at all
-
-    from mulchd.mcp.tier2 import _read_expertise
-    await _read_expertise({"domains": ["arch"], "subscribe": False}, ctx)
-
-    assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)
+def test_unregister_domain_specific():
+    r = SubscriptionRegistry()
+    s = _session("a")
+    r.register(s, "arch")
+    r.register(s, "conventions")
+    r.unregister(s, "arch")
+    assert r.subscribers_for("arch", exclude=None) == set()
+    assert r.subscribers_for("conventions", exclude=None) == {s}
 
 
 @pytest.mark.asyncio
@@ -208,104 +154,12 @@ async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
     record = {"type": "pattern", "classification": "observational", "name": "foo"}
     await _notify_domain("arch", actor_session, ctx, "write", record)
 
-    # Dead session should be removed from registry
     assert dead_session not in fake_registry.subscribers_for("arch", exclude=None)
 
 
 @pytest.mark.asyncio
-async def test_search_records_registers_when_subscribe_true_and_domains_given(
-    notify_data_path, monkeypatch, db
-):
-    """search_records registers domains when subscribe=True and domains is specified."""
-    from unittest.mock import MagicMock, AsyncMock
-    from mulchd.mcp import tier2 as tier2_module
-    from mulchd.mcp.tier2 import _search_expertise
-    from mulchd.mcp.subscriptions import SubscriptionRegistry
-    from mulchd.auth import AuthContext
-    from mulchd.models import Organization, Project, User, Role
-
-    org = await Organization.create(slug="s1", display_name="S")
-    project = await Project.create(slug="p1", display_name="P", org=org)
-    user = await User.create(username="s1u", display_name="U", token_hash="s1t")
-    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
-
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
-    fake_ctx = MagicMock()
-    fake_ctx.session = fake_session
-
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
-    monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
-                        property(lambda self: fake_ctx))
-    monkeypatch.setattr(tier2_module, "search_domains", AsyncMock(return_value=[]))
-    monkeypatch.setattr(tier2_module, "list_available_domains", AsyncMock(return_value=[{"name": "arch"}]))
-
-    await _search_expertise({"query": "anything", "domains": ["arch"], "subscribe": True}, ctx)
-
-    assert fake_session in fake_registry.subscribers_for("arch", exclude=None)
-
-
-@pytest.mark.asyncio
-async def test_search_records_skips_register_when_subscribe_false(
-    notify_data_path, monkeypatch, db
-):
-    """search_records does not register when subscribe=False."""
-    from unittest.mock import MagicMock, AsyncMock
-    from mulchd.mcp import tier2 as tier2_module
-    from mulchd.mcp.tier2 import _search_expertise
-    from mulchd.mcp.subscriptions import SubscriptionRegistry
-    from mulchd.auth import AuthContext
-    from mulchd.models import Organization, Project, User, Role
-
-    org = await Organization.create(slug="s2", display_name="S")
-    project = await Project.create(slug="p2", display_name="P", org=org)
-    user = await User.create(username="s2u", display_name="U", token_hash="s2t")
-    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
-
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
-
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
-    monkeypatch.setattr(tier2_module, "search_domains", AsyncMock(return_value=[]))
-    monkeypatch.setattr(tier2_module, "list_available_domains", AsyncMock(return_value=[{"name": "arch"}]))
-
-    await _search_expertise({"query": "anything", "domains": ["arch"], "subscribe": False}, ctx)
-
-    assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)
-
-
-@pytest.mark.asyncio
-async def test_search_records_skips_register_when_no_domains(
-    notify_data_path, monkeypatch, db
-):
-    """search_records does not register when domains is not specified (search-all)."""
-    from unittest.mock import MagicMock, AsyncMock
-    from mulchd.mcp import tier2 as tier2_module
-    from mulchd.mcp.tier2 import _search_expertise
-    from mulchd.mcp.subscriptions import SubscriptionRegistry
-    from mulchd.auth import AuthContext
-    from mulchd.models import Organization, Project, User, Role
-
-    org = await Organization.create(slug="s3", display_name="S")
-    project = await Project.create(slug="p3", display_name="P", org=org)
-    user = await User.create(username="s3u", display_name="U", token_hash="s3t")
-    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
-
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
-    monkeypatch.setattr(tier2_module, "search_domains", AsyncMock(return_value=[]))
-    monkeypatch.setattr(tier2_module, "list_available_domains", AsyncMock(return_value=[]))
-
-    await _search_expertise({"query": "anything", "subscribe": True}, ctx)
-
-    # No domains specified → should not register anything
-    assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)
-
-
-@pytest.mark.asyncio
-async def test_write_record_registers_and_dispatches_notify(notify_data_path, monkeypatch, db):
-    """_record_expertise registers session and fires _notify_domain when subscribe=True."""
+async def test_write_record_dispatches_notify(notify_data_path, monkeypatch, db):
+    """_record_expertise fires _notify_domain on write."""
     import asyncio
     from unittest.mock import AsyncMock, MagicMock
     from mulchd.mcp import tier2 as tier2_module
@@ -319,14 +173,11 @@ async def test_write_record_registers_and_dispatches_notify(notify_data_path, mo
 
     ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
 
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
     fake_ctx = MagicMock()
-    fake_ctx.session = fake_session
+    fake_ctx.session = object()
 
     dispatched = []
 
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
     monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
                         property(lambda self: fake_ctx))
     monkeypatch.setattr(tier2_module, "write_record",
@@ -351,20 +202,17 @@ async def test_write_record_registers_and_dispatches_notify(notify_data_path, mo
         "type": "convention",
         "classification": "tactical",
         "content": "Always validate at boundaries",
-        "subscribe": True,
     }, ctx)
 
-    assert fake_session in fake_registry.subscribers_for("conventions", exclude=None)
     assert any("_notify_domain" in d for d in dispatched)
 
 
 @pytest.mark.asyncio
-async def test_edit_record_registers_when_subscribe_true(notify_data_path, monkeypatch, db):
-    """_edit_record registers session and dispatches _notify_domain when subscribe=True."""
+async def test_edit_record_dispatches_notify(notify_data_path, monkeypatch, db):
+    """_edit_record dispatches _notify_domain."""
     import asyncio
     from unittest.mock import AsyncMock, MagicMock
     from mulchd.mcp import tier2 as tier2_module
-    from mulchd.mcp.subscriptions import SubscriptionRegistry
     from mulchd.auth import AuthContext
     from mulchd.models import Organization, Project, User, Role
 
@@ -374,14 +222,11 @@ async def test_edit_record_registers_when_subscribe_true(notify_data_path, monke
 
     ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
 
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
     fake_ctx = MagicMock()
-    fake_ctx.session = fake_session
+    fake_ctx.session = object()
 
     dispatched = []
 
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
     monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
                         property(lambda self: fake_ctx))
     monkeypatch.setattr(tier2_module, "find_record",
@@ -403,20 +248,17 @@ async def test_edit_record_registers_when_subscribe_true(notify_data_path, monke
         "record_id": "mx-e1",
         "domain": "conventions",
         "content": "new content",
-        "subscribe": True,
     }, ctx)
 
-    assert fake_session in fake_registry.subscribers_for("conventions", exclude=None)
     assert any("_notify_domain" in d for d in dispatched)
 
 
 @pytest.mark.asyncio
-async def test_delete_record_registers_when_subscribe_true(notify_data_path, monkeypatch, db):
-    """_delete_record registers session and dispatches _notify_domain when subscribe=True."""
+async def test_delete_record_dispatches_notify(notify_data_path, monkeypatch, db):
+    """_delete_record dispatches _notify_domain."""
     import asyncio
     from unittest.mock import AsyncMock, MagicMock
     from mulchd.mcp import tier2 as tier2_module
-    from mulchd.mcp.subscriptions import SubscriptionRegistry
     from mulchd.auth import AuthContext
     from mulchd.models import Organization, Project, User, Role
 
@@ -426,14 +268,11 @@ async def test_delete_record_registers_when_subscribe_true(notify_data_path, mon
 
     ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
 
-    fake_registry = SubscriptionRegistry()
-    fake_session = object()
     fake_ctx = MagicMock()
-    fake_ctx.session = fake_session
+    fake_ctx.session = object()
 
     dispatched = []
 
-    monkeypatch.setattr(tier2_module, "registry", fake_registry)
     monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
                         property(lambda self: fake_ctx))
     monkeypatch.setattr(tier2_module, "find_record",
@@ -455,8 +294,6 @@ async def test_delete_record_registers_when_subscribe_true(notify_data_path, mon
     await _delete_record({
         "record_id": "mx-d1",
         "domain": "conventions",
-        "subscribe": True,
     }, ctx)
 
-    assert fake_session in fake_registry.subscribers_for("conventions", exclude=None)
     assert any("_notify_domain" in d for d in dispatched)
