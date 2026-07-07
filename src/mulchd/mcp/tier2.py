@@ -27,6 +27,8 @@ from ..records import find_record, read_domain_records
 from .context import _ctx
 from .subscriptions import registry
 
+_background_tasks: set[asyncio.Task] = set()
+
 SESSION_WORKFLOW = """\
 mulchd stores shared team expertise for this project. Everything you record is visible \
 to the whole team, attributed to you, and persists indefinitely.
@@ -847,7 +849,9 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         req_ctx = tier2_server.request_context
         if args.get("subscribe", True):
             registry.register(req_ctx.session, domain)
-        asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "write", written))
+        _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "write", written))
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
     except LookupError:
         pass  # no request context in tests or stateless fallback
     return [TextContent(type="text", text=msg)]
@@ -1026,7 +1030,9 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         if args.get("subscribe", True):
             registry.register(req_ctx.session, domain)
         notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
-        asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "edit", notif_record))
+        _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "edit", notif_record))
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
     except LookupError:
         pass
     return [TextContent(type="text", text=msg)]
@@ -1063,7 +1069,9 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         req_ctx = tier2_server.request_context
         if args.get("subscribe", True):
             registry.register(req_ctx.session, domain)
-        asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "delete", record))
+        _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "delete", record))
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
     except LookupError:
         pass
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
@@ -1089,7 +1097,9 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     ctx = _ctx.get()
     if ctx is None:
         raise ValueError("No auth context — use a project token for this connection")
-    asyncio.create_task(_record_tool_call(name, ctx))
+    _t = asyncio.create_task(_record_tool_call(name, ctx))
+    _background_tasks.add(_t)
+    _t.add_done_callback(_background_tasks.discard)
     match name:
         case "read_records":
             return await _read_expertise(args, ctx)
