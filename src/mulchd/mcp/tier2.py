@@ -1,9 +1,12 @@
 import asyncio
 import base64
 import json
+import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid7
+
+_log = logging.getLogger("mulchd.mcp")
 
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
@@ -726,6 +729,7 @@ async def _notify_domain(
 ) -> None:
     """Fan out notifications/resources/updated to all subscribed sessions except the actor."""
     subscribers = registry.subscribers_for(domain, exclude=actor_session)
+    _log.debug("_notify_domain: domain=%s action=%s subscribers=%d", domain, action, len(subscribers))
     if not subscribers:
         return
     title = (
@@ -748,7 +752,9 @@ async def _notify_domain(
     for session in list(subscribers):
         try:
             await session.send_resource_updated(uri)
-        except Exception:
+            _log.debug("_notify_domain: sent to session %s", id(session))
+        except Exception as exc:
+            _log.debug("_notify_domain: dead session %s (%s)", id(session), exc)
             dead.add(session)
     for s in dead:
         registry.unregister_session(s)
@@ -1130,20 +1136,25 @@ async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
 
 @tier2_server.subscribe_resource()
 async def subscribe_resource(uri: AnyUrl) -> None:
+    _log.debug("subscribe_resource: uri=%s", uri)
     ctx = _ctx.get()
     if ctx is None:
+        _log.debug("subscribe_resource: no auth context, skipping")
         return
     uri_str = str(uri)
     if uri_str.startswith("mulchd://domain/"):
         domain = uri_str[len("mulchd://domain/"):]
         try:
-            registry.register(tier2_server.request_context.session, domain)
-        except LookupError:
-            pass
+            session = tier2_server.request_context.session
+            registry.register(session, domain)
+            _log.debug("subscribe_resource: registered session %s for domain %s", id(session), domain)
+        except LookupError as exc:
+            _log.debug("subscribe_resource: no request context (%s)", exc)
 
 
 @tier2_server.unsubscribe_resource()
 async def unsubscribe_resource(uri: AnyUrl) -> None:
+    _log.debug("unsubscribe_resource: uri=%s", uri)
     ctx = _ctx.get()
     if ctx is None:
         return
@@ -1151,7 +1162,9 @@ async def unsubscribe_resource(uri: AnyUrl) -> None:
     if uri_str.startswith("mulchd://domain/"):
         domain = uri_str[len("mulchd://domain/"):]
         try:
-            registry.unregister(tier2_server.request_context.session, domain)
+            session = tier2_server.request_context.session
+            registry.unregister(session, domain)
+            _log.debug("unsubscribe_resource: unregistered session %s from domain %s", id(session), domain)
         except LookupError:
             pass
 
