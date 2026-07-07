@@ -2,40 +2,41 @@
 
 Stop re-explaining your stack to every new Claude session — mulchd gives Claude a memory your whole team shares.
 
-mulchd is a self-hosted MCP server that stores and serves structured team knowledge. Engineers record decisions, conventions, and patterns once; every Claude session loads exactly what's relevant, attributed to whoever wrote it, without re-prompting.
+mulchd is a self-hosted MCP server that stores and serves structured team knowledge. Engineers record decisions, conventions, and patterns once; every AI session loads exactly what's relevant, attributed to whoever wrote it, without re-prompting.
 
 ## How it works
 
-mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes eight MCP tools (`list_domains`, `read_records`, `write_record`, `edit_record`, `delete_record`, `search_records`, `get_recent`, `get_record_schema`) over the current MCP Streamable HTTP transport.
+mulchd builds on [mulch](https://github.com/os-eco/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes eight MCP tools over the standard Streamable HTTP and legacy SSE transports:
 
-Knowledge is organized into domains (e.g. `architecture`, `conventions`, `ops`). Records have types — `decision`, `convention`, `pattern`, `failure`, `guide` — and carry attribution, classification, and optional supersession links so the team can track how thinking evolves over time.
+| Tool | Description |
+|---|---|
+| `list_domains` | List all knowledge domains and the current server timestamp |
+| `read_records` | Load records from one or more domains |
+| `write_record` | Record a new decision, convention, pattern, failure, or guide |
+| `edit_record` | Update an existing record in place |
+| `delete_record` | Soft-delete a record (recoverable from `/admin`) |
+| `search_records` | BM25 full-text search across domains |
+| `get_recent` | Surface teammate activity since a given timestamp |
+| `get_record_schema` | Get required and optional fields for a record type |
+
+Knowledge is organized into domains (e.g. `architecture`, `conventions`, `ops`). Records carry attribution, classification (`foundational` / `tactical` / `observational`), and optional supersession links so the team can track how thinking evolves.
 
 An admin UI at `/admin` covers user and project management, a live record browser, and a full audit log with soft-delete and restore. A self-service `/connect` portal lets team members mint their own project-scoped tokens without admin involvement.
 
-## Quick start
+## Try it locally
 
-Requires Docker and Docker Compose.
+The demo script seeds a database with sample users, records, and tool-call history, then starts the server:
 
 ```bash
-git clone https://github.com/your-org/mulchd
+git clone https://github.com/ChacheGS/mulchd
 cd mulchd
-cp .env.example .env
+uv sync
+./scripts/demo.sh
 ```
 
-Edit `.env` — at minimum set `MULCHD_SECRET_KEY` and `MULCHD_ADMIN_PASSWORD`:
+Open `http://localhost:8000/admin` — log in as `admin` / `admin`. The demo creates three users (alice, bob, claude) and a `backend-api` project with records across four domains.
 
-```bash
-# generate a secret key
-python -c "import secrets; print(secrets.token_hex(32))"
-```
-
-Then:
-
-```bash
-docker compose up
-```
-
-Open `http://localhost:8000/admin`, log in with `admin` / the password you set, create a user and a project, then jump to [Connecting a client](#connecting-a-client).
+To connect a client to the demo server, use the project tokens printed by the seed script and point it at `http://localhost:8000/mcp`.
 
 ## Production setup
 
@@ -43,26 +44,22 @@ Requirements: a VPS with Docker, a domain, and a DNS provider supported by Traef
 
 **1. Configure environment files**
 
-Copy the examples in `deploy/`:
-
 ```bash
 cp deploy/mulchd.env.example deploy/mulchd.env
 cp deploy/postgres.env.example deploy/postgres.env
 cp deploy/traefik.env.example deploy/traefik.env
 ```
 
-Fill in all values. For `mulchd.env`:
+Fill in all values. Key variables for `mulchd.env`:
 
 | Variable | Description |
 |---|---|
-| `MULCHD_SECRET_KEY` | 64-char hex string (`secrets.token_hex(32)`) |
+| `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `MULCHD_ADMIN_PASSWORD` | Initial admin password — change after first login |
-
-For `postgres.env`, pick any username, password, and database name. For `traefik.env`, add your DigitalOcean API token and ACME email.
 
 **2. Set your hostname**
 
-Edit `deploy/docker-compose.yml` and replace the Traefik host rule with your domain:
+Edit `deploy/docker-compose.yml` and replace the Traefik host rule:
 
 ```yaml
 - traefik.http.routers.mulchd.rule=Host(`mulchd.your-domain.com`)
@@ -74,19 +71,17 @@ Edit `deploy/docker-compose.yml` and replace the Traefik host rule with your dom
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-The entrypoint runs `aerich upgrade` before starting, so migrations apply automatically on each deploy. The admin UI will be at `https://mulchd.your-domain.com/admin`.
+Migrations run automatically on each deploy. The admin UI will be at `https://mulchd.your-domain.com/admin`.
 
-**4. Create your first user**
+**4. Create users**
 
-Log in to `/admin` and create a user account for each team member. Each user gets a global token on creation — this is shown once and used to log in to `/connect`.
+Log in to `/admin` and create an account for each team member. Each user gets a global token on creation — shown once, used to log in to `/connect`.
 
 ## Connecting a client
 
-mulchd works with any MCP-compatible client. The examples below are for Claude Code.
+mulchd works with any MCP-compatible client. The `/connect` portal generates ready-to-paste config snippets for Claude Code and Claude Desktop — use those rather than hand-editing.
 
-**1.** Log in to `/connect` with your global token. Pick a project, mint a project token, and copy the generated config snippets.
-
-**2.** Add to your project's `.mcp.json`:
+For Claude Code, the generated `.mcp.json` entry looks like:
 
 ```json
 {
@@ -102,7 +97,7 @@ mulchd works with any MCP-compatible client. The examples below are for Claude C
 }
 ```
 
-**3.** Add the token to `.claude/settings.local.json` (not committed):
+The token goes in `.claude/settings.local.json` (not committed):
 
 ```json
 {
@@ -112,20 +107,30 @@ mulchd works with any MCP-compatible client. The examples below are for Claude C
 }
 ```
 
-The `/connect` portal generates both snippets with the correct variable names — copy and paste rather than hand-editing.
+For clients that use the legacy SSE transport, the endpoint is `/sse` with the same `Authorization` header.
+
+## Development
+
+```bash
+uv sync
+make dev          # start mulchd + postgres with live reload
+make test         # run the test suite
+make dev-inspector  # start the MCP Inspector on :6274 alongside mulchd
+```
+
+`make dev-inspector` is useful for inspecting the MCP protocol directly — subscribe to resources, call tools, and observe notifications without a full AI client.
 
 ## Roadmap
 
-- **Automated alerting** — webhook or email notifications when structural audit events fire (cross-owner edits, foundational-record supersessions) rather than relying on manual log review
-- **Seed script** — reproducible demo dataset for testing and screenshots
+- **Automated alerting** — webhook or email notifications when structural audit events fire (cross-owner edits, foundational-record supersessions)
+- **Live notifications** — server-side resource subscriptions are implemented and spec-compliant; waiting on client support (`resources/subscribe` is not yet implemented in Claude Code or Codex)
 - **Claude Desktop snippets** — `/connect` already generates them; document the flow end-to-end
-- **BM25 tuning** — expose search relevance knobs via config
 - **OAuth / SSO** — replace global-token login with a standard provider
 
 ## Contributing
 
-Issues and pull requests are welcome. For non-trivial changes, open an issue first to discuss the approach — especially anything touching the MCP tool interface or the audit trail, where backward compatibility and security posture matter. Please run `make format` and `make test` before submitting.
+Issues and pull requests are welcome. For non-trivial changes, open an issue first to discuss the approach — especially anything touching the MCP tool interface or the audit trail, where backward compatibility and security posture matter. Run `make format` and `make test` before submitting.
 
 ## Acknowledgements
 
-mulchd builds on [mulch](https://github.com/jayminwest/mulch) by Jaymin West, which provides the JSONL knowledge store, BM25 search, and the `ml` CLI that mulchd shells out to for all record operations. mulch is MIT licensed.
+mulchd builds on [mulch](https://github.com/os-eco/mulch) by Jaymin West, which provides the JSONL knowledge store, BM25 search, and the `ml` CLI that mulchd shells out to for all record operations. mulch is MIT licensed.
