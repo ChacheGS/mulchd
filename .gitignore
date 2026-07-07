@@ -10,10 +10,9 @@ docs/
 *.egg-info/
 .ruff_cache/
 mulch-upstream/
-.superpowers/
 backups/
 deploy/*.env
 node_modules/
 .mulch/
+.mulch-demo/
 .coverage
-.claude/settings.local.json
