@@ -87,6 +87,14 @@ async def health() -> dict:
 
 
 def run() -> None:
+    import logging
     import uvicorn
 
-    uvicorn.run("mulchd.main:app", host=settings.host, port=settings.port, reload=settings.reload)
+    logging.getLogger("mcp").setLevel(settings.log_level.upper())
+    uvicorn.run(
+        "mulchd.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        log_level=settings.log_level.lower(),
+    )

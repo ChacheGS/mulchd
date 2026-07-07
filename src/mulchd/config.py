@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         None  # MULCHD_ADMIN_CONTACT — shown in /connect portal and tier1 setup instructions
     )
     base_url: str | None = None  # MULCHD_BASE_URL — derived from host+port if unset
+    log_level: str = "info"  # MULCHD_LOG_LEVEL — uvicorn + mcp logger level
 
     model_config = {"env_file": ".env", "env_prefix": "MULCHD_"}
 
