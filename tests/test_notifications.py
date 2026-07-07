@@ -120,3 +120,93 @@ async def test_read_records_skips_register_when_subscribe_false(notify_data_path
     await _read_expertise({"domains": ["arch"], "subscribe": False}, ctx)
 
     assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)
+
+
+@pytest.mark.asyncio
+async def test_notify_domain_sends_to_subscribers(monkeypatch, db):
+    """_notify_domain fans out send_resource_updated to all subscribers except the actor."""
+    from unittest.mock import AsyncMock, MagicMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.tier2 import _notify_domain
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+
+    fake_registry = SubscriptionRegistry()
+    subscriber = MagicMock()
+    subscriber.send_resource_updated = AsyncMock()
+    actor_session = object()
+    fake_registry.register(subscriber, "arch")
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+
+    ctx = MagicMock()
+    ctx.user.display_name = "Alice"
+    ctx.org.slug = "myorg"
+    ctx.project.slug = "myproj"
+
+    record = {
+        "type": "decision",
+        "classification": "foundational",
+        "title": "Always validate at the boundary",
+        "recorded_at": "2026-07-07T10:00:00Z",
+    }
+    await _notify_domain("arch", actor_session, ctx, "write", record)
+
+    subscriber.send_resource_updated.assert_called_once()
+    called_uri = str(subscriber.send_resource_updated.call_args[0][0])
+    assert "arch" in called_uri
+    assert "actor=Alice" in called_uri
+    assert "action=write" in called_uri
+
+
+@pytest.mark.asyncio
+async def test_notify_domain_skips_actor_session(monkeypatch, db):
+    """Actor does not receive their own notification."""
+    from unittest.mock import AsyncMock, MagicMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.tier2 import _notify_domain
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+
+    fake_registry = SubscriptionRegistry()
+    actor_session = MagicMock()
+    actor_session.send_resource_updated = AsyncMock()
+    fake_registry.register(actor_session, "arch")
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+
+    ctx = MagicMock()
+    ctx.user.display_name = "Bob"
+    ctx.org.slug = "o"
+    ctx.project.slug = "p"
+
+    record = {"type": "convention", "classification": "tactical", "content": "x"}
+    await _notify_domain("arch", actor_session, ctx, "write", record)
+
+    actor_session.send_resource_updated.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
+    """Sessions that raise on send_resource_updated are unregistered."""
+    from unittest.mock import AsyncMock, MagicMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.tier2 import _notify_domain
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+
+    fake_registry = SubscriptionRegistry()
+    dead_session = MagicMock()
+    dead_session.send_resource_updated = AsyncMock(side_effect=Exception("connection closed"))
+    actor_session = object()
+    fake_registry.register(dead_session, "arch")
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+
+    ctx = MagicMock()
+    ctx.user.display_name = "Carol"
+    ctx.org.slug = "o"
+    ctx.project.slug = "p"
+
+    record = {"type": "pattern", "classification": "observational", "name": "foo"}
+    await _notify_domain("arch", actor_session, ctx, "write", record)
+
+    # Dead session should be removed from registry
+    assert dead_session not in fake_registry.subscribers_for("arch", exclude=None)

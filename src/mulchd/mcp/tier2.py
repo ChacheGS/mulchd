@@ -227,6 +227,11 @@ TIER2_TOOLS = [
                     "type": "string",
                     "description": "decision: date the decision was made (ISO 8601); defaults to recorded_at",
                 },
+                "subscribe": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Subscribe to this domain after writing. Pass False for one-off writes to domains unrelated to the current task.",
+                },
             },
             "required": ["domain", "type", "classification"],
         },
@@ -710,6 +715,43 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     )
 
 
+async def _notify_domain(
+    domain: str,
+    actor_session: object,
+    ctx: AuthContext,
+    action: str,
+    record: dict,
+) -> None:
+    """Fan out notifications/resources/updated to all subscribed sessions except the actor."""
+    subscribers = registry.subscribers_for(domain, exclude=actor_session)
+    if not subscribers:
+        return
+    title = (
+        record.get("title")
+        or record.get("name")
+        or (record.get("content") or record.get("description") or "")[:80]
+    )
+    params = urllib.parse.urlencode(
+        {
+            "actor": ctx.user.display_name,
+            "action": action,
+            "type": record.get("type", ""),
+            "classification": record.get("classification", ""),
+            "title": title,
+            "at": record.get("recorded_at", ""),
+        }
+    )
+    uri = AnyUrl(f"mulchd://{ctx.org.slug}/{ctx.project.slug}/{domain}?{params}")
+    dead: set[object] = set()
+    for session in list(subscribers):
+        try:
+            await session.send_resource_updated(uri)
+        except Exception:
+            dead.add(session)
+    for s in dead:
+        registry.unregister_session(s)
+
+
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
 
@@ -775,6 +817,13 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
             f"\n\n⚠ SUPERSESSION WARNING — stop and flag this to the user before continuing:\n"
             + "\n".join(lines)
         )
+    try:
+        req_ctx = tier2_server.request_context
+        if args.get("subscribe", True):
+            registry.register(req_ctx.session, domain)
+        asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "write", written))
+    except LookupError:
+        pass  # no request context in tests or stateless fallback
     return [TextContent(type="text", text=msg)]
 
 
