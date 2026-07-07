@@ -75,7 +75,18 @@ Unsure which optional fields a record type supports? Call get_record_schema(type
 A record marked `_edited` has been modified in place since it was first written. For \
 `foundational` records, treat this as a signal to read carefully — the original content \
 has changed. When editing a `foundational` record yourself, prefer writing a superseding \
-record instead so the change appears in-band.\
+record instead so the change appears in-band.
+
+Notification handling: when you receive a notifications/resources/updated notification \
+for a mulchd:// URI, parse its query parameters — actor (display name of the teammate \
+who acted), action (write/edit/delete), type, classification, title, and at (timestamp). \
+Assess relevance before acting: if the actor is a teammate, the type is 'decision' or \
+'convention', the classification is 'foundational' or 'tactical', and the domain is one \
+you have been actively reading or writing in this session — call \
+get_recent(domains=[<domain>], since=<session_start_timestamp>) and tell the user what \
+changed and whether it may conflict with the current work. For observational records, \
+deletions in unfamiliar domains, or domains you have not touched this session, note the \
+activity silently or skip it.\
 """
 
 tier2_server = Server("mulchd", instructions=SESSION_WORKFLOW)
