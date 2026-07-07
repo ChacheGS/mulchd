@@ -6,7 +6,7 @@ mulchd is a self-hosted MCP server that stores and serves structured team knowle
 
 ## How it works
 
-mulchd builds on [mulch](https://github.com/os-eco/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes eight MCP tools over the standard Streamable HTTP and legacy SSE transports:
+mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes eight MCP tools over the standard Streamable HTTP and legacy SSE transports:
 
 | Tool | Description |
 |---|---|
@@ -133,4 +133,4 @@ Issues and pull requests are welcome. For non-trivial changes, open an issue fir
 
 ## Acknowledgements
 
-mulchd builds on [mulch](https://github.com/os-eco/mulch) by Jaymin West, which provides the JSONL knowledge store, BM25 search, and the `ml` CLI that mulchd shells out to for all record operations. mulch is MIT licensed.
+mulchd builds on [mulch](https://github.com/jayminwest/mulch) by Jaymin West, which provides the JSONL knowledge store, BM25 search, and the `ml` CLI that mulchd shells out to for all record operations. mulch is MIT licensed.
