@@ -210,3 +210,94 @@ async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
 
     # Dead session should be removed from registry
     assert dead_session not in fake_registry.subscribers_for("arch", exclude=None)
+
+
+@pytest.mark.asyncio
+async def test_search_records_registers_when_subscribe_true_and_domains_given(
+    notify_data_path, monkeypatch, db
+):
+    """search_records registers domains when subscribe=True and domains is specified."""
+    from unittest.mock import MagicMock, AsyncMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.tier2 import _search_expertise
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+    from mulchd.auth import AuthContext
+    from mulchd.models import Organization, Project, User, Role
+
+    org = await Organization.create(slug="s1", display_name="S")
+    project = await Project.create(slug="p1", display_name="P", org=org)
+    user = await User.create(username="s1u", display_name="U", token_hash="s1t")
+    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
+
+    fake_registry = SubscriptionRegistry()
+    fake_session = object()
+    fake_ctx = MagicMock()
+    fake_ctx.session = fake_session
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+    monkeypatch.setattr(type(tier2_module.tier2_server), "request_context",
+                        property(lambda self: fake_ctx))
+    monkeypatch.setattr(tier2_module, "search_domains", AsyncMock(return_value=[]))
+    monkeypatch.setattr(tier2_module, "list_available_domains", AsyncMock(return_value=[{"name": "arch"}]))
+
+    await _search_expertise({"query": "anything", "domains": ["arch"], "subscribe": True}, ctx)
+
+    assert fake_session in fake_registry.subscribers_for("arch", exclude=None)
+
+
+@pytest.mark.asyncio
+async def test_search_records_skips_register_when_subscribe_false(
+    notify_data_path, monkeypatch, db
+):
+    """search_records does not register when subscribe=False."""
+    from unittest.mock import MagicMock, AsyncMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.tier2 import _search_expertise
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+    from mulchd.auth import AuthContext
+    from mulchd.models import Organization, Project, User, Role
+
+    org = await Organization.create(slug="s2", display_name="S")
+    project = await Project.create(slug="p2", display_name="P", org=org)
+    user = await User.create(username="s2u", display_name="U", token_hash="s2t")
+    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
+
+    fake_registry = SubscriptionRegistry()
+    fake_session = object()
+
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+    monkeypatch.setattr(tier2_module, "search_domains", AsyncMock(return_value=[]))
+    monkeypatch.setattr(tier2_module, "list_available_domains", AsyncMock(return_value=[{"name": "arch"}]))
+
+    await _search_expertise({"query": "anything", "domains": ["arch"], "subscribe": False}, ctx)
+
+    assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)
+
+
+@pytest.mark.asyncio
+async def test_search_records_skips_register_when_no_domains(
+    notify_data_path, monkeypatch, db
+):
+    """search_records does not register when domains is not specified (search-all)."""
+    from unittest.mock import MagicMock, AsyncMock
+    from mulchd.mcp import tier2 as tier2_module
+    from mulchd.mcp.tier2 import _search_expertise
+    from mulchd.mcp.subscriptions import SubscriptionRegistry
+    from mulchd.auth import AuthContext
+    from mulchd.models import Organization, Project, User, Role
+
+    org = await Organization.create(slug="s3", display_name="S")
+    project = await Project.create(slug="p3", display_name="P", org=org)
+    user = await User.create(username="s3u", display_name="U", token_hash="s3t")
+    ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
+
+    fake_registry = SubscriptionRegistry()
+    fake_session = object()
+    monkeypatch.setattr(tier2_module, "registry", fake_registry)
+    monkeypatch.setattr(tier2_module, "search_domains", AsyncMock(return_value=[]))
+    monkeypatch.setattr(tier2_module, "list_available_domains", AsyncMock(return_value=[]))
+
+    await _search_expertise({"query": "anything", "subscribe": True}, ctx)
+
+    # No domains specified → should not register anything
+    assert fake_session not in fake_registry.subscribers_for("arch", exclude=None)

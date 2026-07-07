@@ -253,6 +253,11 @@ TIER2_TOOLS = [
                     "type": "string",
                     "description": "Filter to records written by this username.",
                 },
+                "subscribe": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Subscribe to the searched domains. Off by default — searches are exploratory.",
+                },
             },
             "required": ["query"],
         },
@@ -381,6 +386,11 @@ TIER2_TOOLS = [
                     "items": {"type": "string"},
                     "description": "Record IDs this record replaces",
                 },
+                "subscribe": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Subscribe to this domain after editing. Pass False for one-off edits.",
+                },
             },
             "required": ["record_id", "domain"],
         },
@@ -398,6 +408,11 @@ TIER2_TOOLS = [
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
                 "domain": {"type": "string"},
+                "subscribe": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Subscribe to this domain after deleting. Pass False for one-off deletes.",
+                },
             },
             "required": ["record_id", "domain"],
         },
@@ -842,6 +857,13 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
     text = warning + _format_records(results)
+    if args.get("subscribe", False) and domains:
+        try:
+            req_ctx = tier2_server.request_context
+            for d in domains:
+                registry.register(req_ctx.session, d)
+        except LookupError:
+            pass
     return (
         [TextContent(type="text", text=text)],
         {"records": results, "truncated": False},
@@ -988,6 +1010,14 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             f"\n\n⚠ CLASSIFICATION DOWNGRADE: changed {record_id} from {old_cls} to {new_cls}. "
             f"Stop and flag this to the user before continuing."
         )
+    try:
+        req_ctx = tier2_server.request_context
+        if args.get("subscribe", True):
+            registry.register(req_ctx.session, domain)
+        notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
+        asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "edit", notif_record))
+    except LookupError:
+        pass
     return [TextContent(type="text", text=msg)]
 
 
@@ -1018,6 +1048,13 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     domain_path = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     if domain_path.exists() and not await read_domain_records(domain_path):
         domain_path.unlink()
+    try:
+        req_ctx = tier2_server.request_context
+        if args.get("subscribe", True):
+            registry.register(req_ctx.session, domain)
+        asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "delete", record))
+    except LookupError:
+        pass
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
 
 
