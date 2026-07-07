@@ -1,5 +1,6 @@
 # Local development override — use alongside the base compose file:
 #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml up mulchd postgres
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml --profile tools up inspector
 #
 # Exposes mulchd on localhost:8000 directly. Traefik is omitted by only
 # starting the services named on the command line.
@@ -23,3 +24,16 @@ services:
         - action: sync
           path: ../migrations
           target: /app/migrations
+  inspector:
+    image: ghcr.io/modelcontextprotocol/inspector:latest
+    profiles:
+      - tools
+    depends_on:
+      mulchd:
+        condition: service_healthy
+    environment:
+      HOST: 0.0.0.0
+      MCP_AUTO_OPEN_ENABLED: "false"
+    ports:
+      - "127.0.0.1:6274:6274"
+      - "127.0.0.1:6277:6277"

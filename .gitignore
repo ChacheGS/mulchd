@@ -9,10 +9,9 @@ dist/
 docs/
 *.egg-info/
 .ruff_cache/
-mulch-upstream/
 backups/
 deploy/*.env
 node_modules/
 .mulch/
-.mulch-demo/
+demo/
 .coverage
