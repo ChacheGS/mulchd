@@ -74,7 +74,11 @@ record instead so the change appears in-band.\
 """
 
 tier2_server = Server("mulchd", instructions=SESSION_WORKFLOW)
-tier2_manager = StreamableHTTPSessionManager(app=tier2_server, stateless=True)
+tier2_manager = StreamableHTTPSessionManager(
+    app=tier2_server,
+    stateless=False,
+    session_idle_timeout=1800,
+)
 
 # ---------------------------------------------------------------------------
 # Session tracking
