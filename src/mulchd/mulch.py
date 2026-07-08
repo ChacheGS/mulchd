@@ -32,7 +32,12 @@ async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) 
     stdout, stderr = await proc.communicate(stdin_bytes)
 
     if proc.returncode != 0:
-        raise MulchError(f"ml {' '.join(args)} exited {proc.returncode}: {stderr.decode().strip()}")
+        raw = stderr.decode().strip()
+        try:
+            msg = json.loads(raw).get("error", raw)
+        except json.JSONDecodeError:
+            msg = raw
+        raise MulchError(msg)
 
     text = stdout.decode().strip()
     if not text:
