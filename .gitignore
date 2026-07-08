@@ -13,5 +13,6 @@ backups/
 deploy/*.env
 node_modules/
 .mulch/
+.bin/
 demo/
 .coverage
