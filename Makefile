@@ -1,4 +1,4 @@
-.PHONY: format test coverage dev dev-down dev-logs migrate-up migrate backup restore
+.PHONY: format test coverage dev dev-inspector dev-down dev-logs migrate-up migrate backup restore
 
 COMPOSE     = docker compose -f deploy/docker-compose.yml
 COMPOSE_DEV = $(COMPOSE) -f deploy/docker-compose.local.yml
@@ -10,6 +10,9 @@ BACKUP_DIR ?= backups
 
 dev:
 	$(COMPOSE_DEV) up --build mulchd postgres
+
+dev-inspector:
+	$(COMPOSE_DEV) --profile tools up inspector
 
 dev-down:
 	$(COMPOSE_DEV) down
