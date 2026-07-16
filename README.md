@@ -48,24 +48,18 @@ Requirements: a VPS with Docker, a domain, and a DNS provider supported by Traef
 cp deploy/mulchd.env.example deploy/mulchd.env
 cp deploy/postgres.env.example deploy/postgres.env
 cp deploy/traefik.env.example deploy/traefik.env
+cp deploy/.env.example deploy/.env
 ```
 
-Fill in all values. Key variables for `mulchd.env`:
+Fill in all values. Key variables:
 
-| Variable | Description |
-|---|---|
-| `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `MULCHD_ADMIN_PASSWORD` | Initial admin password — change after first login |
+| File | Variable | Description |
+|---|---|---|
+| `mulchd.env` | `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `mulchd.env` | `MULCHD_ADMIN_PASSWORD` | Initial admin password — change after first login |
+| `.env` | `MULCHD_HOSTNAME` | Public hostname, e.g. `mulchd.your-domain.com` |
 
-**2. Set your hostname**
-
-Edit `deploy/docker-compose.yml` and replace the Traefik host rule:
-
-```yaml
-- traefik.http.routers.mulchd.rule=Host(`mulchd.your-domain.com`)
-```
-
-**3. Deploy**
+**2. Deploy**
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d

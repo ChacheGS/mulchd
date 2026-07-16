@@ -36,6 +36,8 @@ services:
       - postgres.env
     environment:
       MULCHD_DATA_PATH: /data/mulch
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
     volumes:
       - mulch_data:/data
     depends_on:
@@ -48,7 +50,7 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.mulchd.rule=Host(`mulchd.magolabs.cloud`)
+      - traefik.http.routers.mulchd.rule=Host(`${MULCHD_HOSTNAME}`)
       - traefik.http.routers.mulchd.entrypoints=websecure
       - traefik.http.routers.mulchd.tls=true
       - traefik.http.routers.mulchd.tls.certresolver=letsencrypt
