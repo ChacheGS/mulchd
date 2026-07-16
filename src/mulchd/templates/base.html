@@ -18,6 +18,7 @@
   .sidebar-spacer { flex: 1; }
   .sidebar-logout { width: 100%; text-align: left; background: none; border: none; cursor: pointer; display: block; padding: 7px 10px; color: #64748b; font-size: 13px; border-radius: 4px; font-family: inherit; }
   .sidebar-logout:hover { color: #94a3b8; }
+  .sidebar-version { padding: 4px 10px; color: #475569; font-size: 11px; }
 
   .main { flex: 1; background: #f8fafc; padding: 28px 32px; }
   .page-title { font-size: 17px; font-weight: 600; margin-bottom: 20px; }
@@ -109,6 +110,7 @@
     <form method="post" action="/admin/logout">
       <button type="submit" class="sidebar-logout">Logout</button>
     </form>
+    <div class="sidebar-version">v{{ mulchd_version }}</div>
   </nav>
   <main class="main">
     {% block content %}{% endblock %}
