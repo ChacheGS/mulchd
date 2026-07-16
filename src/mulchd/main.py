@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from importlib.metadata import version as _pkg_version
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
@@ -107,7 +108,7 @@ app.mount("/messages", app=sse.handle_post_message)
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "version": _pkg_version("mulchd")}
 
 
 def run() -> None:
