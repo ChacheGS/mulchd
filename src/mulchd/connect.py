@@ -5,9 +5,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
 
+from authlib.integrations.base_client import OAuthError
+
 from .auth import authenticate_global_token, create_project_token
 from .config import settings
-from .models import Organization, Project, ProjectToken, User, UserMembership
+from .models import OAuthIdentity, Organization, Project, ProjectToken, User, UserMembership
+from .oauth import get_configured_providers, oauth
 
 router = APIRouter(prefix="/connect")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -117,6 +120,29 @@ async def _require_membership(
     return org, project
 
 
+async def _resolve_oauth_identity(provider: str, sub: str, email: str | None) -> User | None:
+    """
+    Resolve a provider identity to a local User.
+    Returns None for unknown identity, email mismatch, and inactive users —
+    callers show the same generic error for all three.
+    """
+    identity = (
+        await OAuthIdentity.filter(provider=provider, sub=sub)
+        .select_related("user")
+        .first()
+    )
+    if identity is not None:
+        return identity.user if identity.user.active else None
+
+    if not email:
+        return None
+    user = await User.filter(email=email, active=True).first()
+    if user is None:
+        return None
+    await OAuthIdentity.create(user=user, provider=provider, sub=sub)
+    return user
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -124,7 +150,9 @@ async def _require_membership(
 async def connect_login_page(request: Request):
     if await _require_user(request) is not None:
         return RedirectResponse("/connect/projects", status_code=303)
-    return templates.TemplateResponse(request, "connect/entry.html", {})
+    return templates.TemplateResponse(
+        request, "connect/entry.html", {"providers": get_configured_providers()}
+    )
 
 
 @router.post("", response_class=HTMLResponse)
@@ -236,6 +264,69 @@ async def connect_revoke_token(
         "connect/partials/token_list.html",
         {"org": org, "project": project, "tokens": tokens},
     )
+
+
+@router.get("/auth/{provider}/start")
+async def oauth_start(request: Request, provider: str):
+    configured = dict(get_configured_providers())
+    if provider not in configured:
+        raise HTTPException(status_code=404)
+    redirect_uri = f"{settings.resolved_base_url}/connect/auth/{provider}/callback"
+    return await oauth.create_client(provider).authorize_redirect(request, redirect_uri)
+
+
+@router.get("/auth/{provider}/callback")
+async def oauth_callback(request: Request, provider: str):
+    configured = dict(get_configured_providers())
+    if provider not in configured:
+        raise HTTPException(status_code=404)
+
+    try:
+        token = await oauth.create_client(provider).authorize_access_token(request)
+    except OAuthError:
+        return templates.TemplateResponse(
+            request,
+            "connect/entry.html",
+            {"error": "Authentication failed. Please try again.", "providers": get_configured_providers()},
+            status_code=400,
+        )
+
+    # Extract sub and email per provider
+    if provider == "github":
+        client = oauth.create_client("github")
+        user_resp = await client.get("https://api.github.com/user", token=token)
+        sub = str(user_resp.json().get("id", ""))
+        emails_resp = await client.get("https://api.github.com/user/emails", token=token)
+        emails = emails_resp.json()
+        email = next(
+            (e["email"] for e in emails if e.get("primary") and e.get("verified")),
+            None,
+        )
+    else:  # oidc
+        userinfo = token.get("userinfo", {})
+        sub = userinfo.get("sub", "")
+        email = userinfo.get("email")
+
+    if not sub or not email:
+        return templates.TemplateResponse(
+            request,
+            "connect/entry.html",
+            {"error": "Provider did not return a verified email address.", "providers": get_configured_providers()},
+            status_code=400,
+        )
+
+    user = await _resolve_oauth_identity(provider, sub, email)
+    if user is None:
+        return templates.TemplateResponse(
+            request,
+            "connect/entry.html",
+            {"error": "No account found for this identity. Ask an admin to create one.", "providers": get_configured_providers()},
+            status_code=403,
+        )
+
+    response = RedirectResponse("/connect/projects", status_code=303)
+    _set_connect_cookie(response, user.id, remember=False)
+    return response
 
 
 @router.get("/logout")

@@ -193,3 +193,56 @@ async def test_connect_logout_clears_cookie(client, alice_and_project):
     assert resp.status_code == 303
     # Cookie should be cleared (max_age=0 or deleted)
     assert "mulchd_connect" not in client.cookies or client.cookies["mulchd_connect"] == ""
+
+
+# ── OAuth routes ─────────────────────────────────────────────────────────────
+
+
+async def test_oauth_start_unknown_provider_returns_404(client):
+    resp = await client.get("/connect/auth/unknown/start", follow_redirects=False)
+    assert resp.status_code == 404
+
+
+async def test_oauth_callback_unknown_provider_returns_404(client):
+    resp = await client.get("/connect/auth/unknown/callback?code=x&state=y")
+    assert resp.status_code == 404
+
+
+async def test_connect_entry_page_has_no_sso_buttons_without_config(client):
+    """With no OAuth env vars set in tests, entry page must not show SSO buttons."""
+    resp = await client.get("/connect")
+    assert resp.status_code == 200
+    assert "Sign in with" not in resp.text
+
+
+async def test_resolve_oauth_identity_creates_link_on_email_match(db):
+    """First SSO login: if email matches a user, link is created."""
+    from mulchd.auth import create_user
+    from mulchd.connect import _resolve_oauth_identity
+    from mulchd.models import OAuthIdentity
+
+    user, _ = await create_user("ssouser", "SSO User", email="sso@example.com")
+    result = await _resolve_oauth_identity("github", "gh-123", "sso@example.com")
+    assert result is not None
+    assert result.id == user.id
+    # Identity should now be linked
+    assert await OAuthIdentity.filter(provider="github", sub="gh-123").exists()
+
+
+async def test_resolve_oauth_identity_returns_none_for_unknown_email(db):
+    from mulchd.connect import _resolve_oauth_identity
+    result = await _resolve_oauth_identity("github", "gh-999", "nobody@example.com")
+    assert result is None
+
+
+async def test_resolve_oauth_identity_uses_existing_link(db):
+    """Second SSO login: existing OAuthIdentity is found directly."""
+    from mulchd.auth import create_user
+    from mulchd.connect import _resolve_oauth_identity
+    from mulchd.models import OAuthIdentity
+
+    user, _ = await create_user("linked", "Linked User")
+    await OAuthIdentity.create(user=user, provider="github", sub="gh-456")
+    result = await _resolve_oauth_identity("github", "gh-456", "any@email.com")
+    assert result is not None
+    assert result.id == user.id
