@@ -123,7 +123,6 @@ make dev-inspector  # start the MCP Inspector on :6274 alongside mulchd
 - **Automated alerting** — webhook or email notifications when structural audit events fire (cross-owner edits, foundational-record supersessions)
 - **Live notifications** — server-side resource subscriptions are implemented and spec-compliant; waiting on client support (`resources/subscribe` is not yet implemented in Claude Code or Codex)
 - **Claude Desktop snippets** — `/connect` already generates them; document the flow end-to-end
-- **OAuth / SSO** — replace global-token login with a standard provider
 
 ## Contributing
 
