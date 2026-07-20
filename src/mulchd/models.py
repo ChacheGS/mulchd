@@ -38,7 +38,7 @@ class User(models.Model):
     id = fields.IntField(primary_key=True)
     username = fields.CharField(max_length=64, unique=True)
     display_name = fields.CharField(max_length=128)
-    email = fields.CharField(max_length=255, null=True, default=None)
+    email = fields.CharField(max_length=255, null=True, unique=True, default=None)
     token_hash = fields.CharField(max_length=64)  # sha256 hex of bearer token
     active = fields.BooleanField(default=True)
     created_at = fields.DatetimeField(auto_now_add=True)
