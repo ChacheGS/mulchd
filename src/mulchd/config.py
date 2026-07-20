@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     base_url: str | None = None  # MULCHD_BASE_URL — derived from host+port if unset
     log_level: str = "info"  # MULCHD_LOG_LEVEL — uvicorn + mcp logger level
 
+    # OAuth — GitHub
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
+
+    # OAuth — Generic OIDC
+    oidc_discovery_url: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = None
+    oidc_display_name: str = "SSO"
+
     model_config = {"env_file": ".env", "env_prefix": "MULCHD_"}
 
     @property
