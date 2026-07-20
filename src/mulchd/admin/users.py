@@ -4,7 +4,7 @@ from tortoise.exceptions import IntegrityError
 
 from ..auth import create_user
 from ..config import settings
-from ..models import User
+from ..models import OAuthIdentity, User
 from ._shared import is_admin, redirect_login, templates
 
 router = APIRouter()
@@ -27,11 +27,16 @@ async def create_user_route(
     request: Request,
     username: str = Form(...),
     display_name: str = Form(...),
+    email: str = Form(default=""),
 ) -> Response:
     if not is_admin(request):
         return redirect_login()
     try:
-        user, token = await create_user(username.strip(), display_name.strip())
+        user, token = await create_user(
+            username.strip(),
+            display_name.strip(),
+            email=email.strip() or None,
+        )
     except IntegrityError:
         users = await User.all().order_by("username")
         return templates.TemplateResponse(
@@ -86,3 +91,26 @@ async def activate_user(request: Request, user_id: int) -> RedirectResponse:
         return redirect_login()
     await User.filter(id=user_id).update(active=True)
     return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.get("/users/{user_id}")
+async def user_detail(request: Request, user_id: int) -> Response:
+    if not is_admin(request):
+        return redirect_login()
+    user = await User.filter(id=user_id).first()
+    if user is None:
+        return Response(status_code=404)
+    identities = await OAuthIdentity.filter(user=user).order_by("created_at").all()
+    return templates.TemplateResponse(
+        request,
+        "user_detail.html",
+        {"active": "users", "user": user, "identities": identities},
+    )
+
+
+@router.post("/users/{user_id}/identities/{identity_id}/unlink")
+async def unlink_identity(request: Request, user_id: int, identity_id: int) -> Response:
+    if not is_admin(request):
+        return redirect_login()
+    await OAuthIdentity.filter(id=identity_id, user_id=user_id).delete()
+    return RedirectResponse(f"/admin/users/{user_id}", status_code=303)

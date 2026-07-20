@@ -6,15 +6,16 @@
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
 <div class="card">
-  <div class="table-header" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
+  <div class="table-header" style="grid-template-columns: 1fr 1.5fr 80px 80px 80px 60px">
     <span>Username</span>
     <span>Display name</span>
     <span>Status</span>
     <span>Created</span>
     <span></span>
+    <span></span>
   </div>
   {% for user in users %}
-  <div class="table-row" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
+  <div class="table-row" style="grid-template-columns: 1fr 1.5fr 80px 80px 80px 60px">
     <span class="monospace">{{ user.username }}</span>
     <span>{{ user.display_name }}</span>
     <span>
@@ -25,6 +26,9 @@
       {% endif %}
     </span>
     <span class="text-muted">{{ user.created_at.strftime('%Y-%m-%d') }}</span>
+    <span>
+      <a href="/admin/users/{{ user.id }}" class="btn-link" style="margin-right:8px">View</a>
+    </span>
     <span>
       {% if user.active %}
       <form method="post" action="/admin/users/{{ user.id }}/deactivate" style="display:inline">
@@ -52,6 +56,10 @@
         <div class="form-group">
           <label for="display_name">Display name</label>
           <input type="text" id="display_name" name="display_name" required placeholder="e.g. Jorge M." style="width:200px">
+        </div>
+        <div class="form-group">
+          <label for="email">Email (for SSO)</label>
+          <input type="email" id="email" name="email" placeholder="jorge@example.com" style="width:220px">
         </div>
         <button type="submit" class="btn btn-primary">Create</button>
       </div>

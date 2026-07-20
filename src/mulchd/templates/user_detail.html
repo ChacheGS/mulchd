@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — {{ user.username }}{% endblock %}
+{% block content %}
+<div class="page-title">
+  <a href="/admin/users" class="btn-link">← Users</a>
+  &nbsp;{{ user.display_name }}
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="table-header" style="grid-template-columns:120px 1fr">
+    <span>Field</span><span>Value</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Username</span>
+    <span class="monospace">{{ user.username }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Display name</span>
+    <span>{{ user.display_name }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Email</span>
+    <span>{{ user.email or "—" }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Status</span>
+    <span>
+      {% if user.active %}
+        <span class="badge badge-active">active</span>
+      {% else %}
+        <span class="badge badge-inactive">inactive</span>
+      {% endif %}
+    </span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Created</span>
+    <span>{{ user.created_at.strftime('%Y-%m-%d') }}</span>
+  </div>
+</div>
+
+<div class="page-title" style="font-size:14px;margin-top:24px;">Linked identities</div>
+<div class="card">
+  {% if identities %}
+  <div class="table-header" style="grid-template-columns:100px 1fr 80px 80px">
+    <span>Provider</span><span>Subject ID</span><span>Linked</span><span></span>
+  </div>
+  {% for identity in identities %}
+  <div class="table-row" style="grid-template-columns:100px 1fr 80px 80px">
+    <span class="badge badge-reader">{{ identity.provider }}</span>
+    <span class="monospace text-muted">{{ identity.sub }}</span>
+    <span class="text-muted">{{ identity.created_at.strftime('%Y-%m-%d') }}</span>
+    <span>
+      <form method="post" action="/admin/users/{{ user.id }}/identities/{{ identity.id }}/unlink">
+        <button type="submit" class="btn-link-danger">Unlink</button>
+      </form>
+    </span>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">No linked identities. User will be linked on first SSO login.</div>
+  {% endif %}
+</div>
+{% endblock %}

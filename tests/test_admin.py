@@ -172,3 +172,38 @@ async def test_audit_page_redirects_when_not_logged_in(client):
     resp = await client.get("/admin/audit", follow_redirects=False)
     assert resp.status_code == 303
     assert "/admin/login" in resp.headers["location"]
+
+
+async def test_admin_create_user_with_email(admin_client):
+    resp = await admin_client.post(
+        "/admin/users",
+        data={"username": "withmail", "display_name": "With Mail", "email": "wm@example.com"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    from mulchd.models import User
+    user = await User.filter(username="withmail").first()
+    assert user is not None
+    assert user.email == "wm@example.com"
+
+
+async def test_admin_user_detail_page(admin_client):
+    from mulchd.auth import create_user
+    user, _ = await create_user("detailuser", "Detail User", email="d@example.com")
+    resp = await admin_client.get(f"/admin/users/{user.id}")
+    assert resp.status_code == 200
+    assert "detailuser" in resp.text
+    assert "Linked identities" in resp.text
+
+
+async def test_admin_unlink_identity(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import OAuthIdentity
+    user, _ = await create_user("unlinkme", "Unlink Me")
+    identity = await OAuthIdentity.create(user=user, provider="github", sub="777")
+    resp = await admin_client.post(
+        f"/admin/users/{user.id}/identities/{identity.id}/unlink",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert not await OAuthIdentity.filter(id=identity.id).exists()
