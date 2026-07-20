@@ -166,7 +166,7 @@ async def connect_login(
         return templates.TemplateResponse(
             request,
             "connect/entry.html",
-            {"error": "Invalid token."},
+            {"error": "Invalid token.", "providers": get_configured_providers()},
             status_code=401,
         )
 
