@@ -71,6 +71,10 @@ Migrations run automatically on each deploy. The admin UI will be at `https://mu
 
 Log in to `/admin` and create an account for each team member. Each user gets a global token on creation — shown once, used to log in to `/connect`.
 
+**5. Configure SSO (optional)**
+
+To enable GitHub or OIDC sign-in on the `/connect` portal, uncomment and fill in the relevant OAuth vars in `deploy/mulchd.env` (see `mulchd.env.example`). Users must have their email set in the admin before their first SSO login — the server matches the provider's verified email to `User.email` to link the identity automatically.
+
 ## Connecting a client
 
 mulchd works with any MCP-compatible client. The `/connect` portal generates ready-to-paste config snippets for Claude Code and Claude Desktop — use those rather than hand-editing.
