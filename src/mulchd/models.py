@@ -38,12 +38,27 @@ class User(models.Model):
     id = fields.IntField(primary_key=True)
     username = fields.CharField(max_length=64, unique=True)
     display_name = fields.CharField(max_length=128)
+    email = fields.CharField(max_length=255, null=True, default=None)
     token_hash = fields.CharField(max_length=64)  # sha256 hex of bearer token
     active = fields.BooleanField(default=True)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
         table = "users"
+
+
+class OAuthIdentity(models.Model):
+    id = fields.IntField(primary_key=True)
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="oauth_identities"
+    )
+    provider = fields.CharField(max_length=32)   # "github" | "oidc"
+    sub = fields.CharField(max_length=255)        # provider's immutable user ID
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "oauth_identities"
+        unique_together = (("provider", "sub"),)
 
 
 class UserMembership(models.Model):

@@ -53,11 +53,12 @@ async def authenticate_global_token(token: str) -> User | None:
     return await User.filter(token_hash=_hash_token(token), active=True).first()
 
 
-async def create_user(username: str, display_name: str) -> tuple[User, str]:
+async def create_user(username: str, display_name: str, email: str | None = None) -> tuple[User, str]:
     token = generate_token()
     user = await User.create(
         username=username,
         display_name=display_name,
+        email=email,
         token_hash=_hash_token(token),
     )
     return user, token

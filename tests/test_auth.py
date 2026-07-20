@@ -189,3 +189,38 @@ async def test_revoking_one_token_leaves_others_active(user_and_token, project):
 
     assert await authenticate_project_token(token_a) is None
     assert await authenticate_project_token(token_b) is not None
+
+
+# ---------------------------------------------------------------------------
+# User.email and OAuthIdentity
+# ---------------------------------------------------------------------------
+
+
+async def test_user_has_email_field(db):
+    user, _ = await create_user("jorge", "Jorge M.", email="jorge@example.com")
+    await user.refresh_from_db()
+    assert user.email == "jorge@example.com"
+
+
+async def test_user_email_nullable(db):
+    user, _ = await create_user("noemail", "No Email")
+    assert user.email is None
+
+
+async def test_oauth_identity_links_to_user(db):
+    from mulchd.models import OAuthIdentity
+    user, _ = await create_user("alice", "Alice")
+    identity = await OAuthIdentity.create(user=user, provider="github", sub="12345")
+    fetched = await OAuthIdentity.filter(provider="github", sub="12345").select_related("user").first()
+    assert fetched is not None
+    assert fetched.user.id == user.id
+
+
+async def test_oauth_identity_provider_sub_unique(db):
+    import pytest
+    from mulchd.models import OAuthIdentity
+    from tortoise.exceptions import IntegrityError
+    user, _ = await create_user("alice2", "Alice2")
+    await OAuthIdentity.create(user=user, provider="github", sub="99999")
+    with pytest.raises(IntegrityError):
+        await OAuthIdentity.create(user=user, provider="github", sub="99999")
