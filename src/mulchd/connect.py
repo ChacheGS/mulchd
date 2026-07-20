@@ -295,8 +295,28 @@ async def oauth_callback(request: Request, provider: str):
     if provider == "github":
         client = oauth.create_client("github")
         user_resp = await client.get("https://api.github.com/user", token=token)
+        if user_resp.status_code != 200:
+            return templates.TemplateResponse(
+                request,
+                "connect/entry.html",
+                {
+                    "error": "Could not fetch GitHub profile. Please try again.",
+                    "providers": get_configured_providers(),
+                },
+                status_code=400,
+            )
         sub = str(user_resp.json().get("id", ""))
         emails_resp = await client.get("https://api.github.com/user/emails", token=token)
+        if emails_resp.status_code != 200:
+            return templates.TemplateResponse(
+                request,
+                "connect/entry.html",
+                {
+                    "error": "Could not fetch GitHub email addresses. Please try again.",
+                    "providers": get_configured_providers(),
+                },
+                status_code=400,
+            )
         emails = emails_resp.json()
         email = next(
             (e["email"] for e in emails if e.get("primary") and e.get("verified")),
