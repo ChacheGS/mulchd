@@ -13,6 +13,7 @@ from .api import router as api_router
 from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
 from .connect import router as connect_router
+from .invite import router as invite_router
 from .mcp import tier_managers, tier_servers
 from .mcp.context import _ctx
 
@@ -71,6 +72,7 @@ app.add_middleware(
 app.include_router(admin_router)
 app.include_router(api_router)
 app.include_router(connect_router)
+app.include_router(invite_router)
 
 
 class _SseNoop(Response):
