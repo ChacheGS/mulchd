@@ -19,7 +19,7 @@ async def create_invite(
     expires_in: str = Form(""),
     allowed_email_domains: str = Form(""),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     project = await Project.get_or_none(id=project_id)
     if project is None:
@@ -48,7 +48,7 @@ async def create_invite(
 
 @router.post("/invites/{invite_id}/revoke")
 async def revoke_invite(request: Request, invite_id: int) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     invite = await InviteLink.get_or_none(id=invite_id)
     if invite is None:

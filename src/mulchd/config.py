@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = False
     secret_key: str  # required — set MULCHD_SECRET_KEY
-    admin_password: str  # required — set MULCHD_ADMIN_PASSWORD
+    bootstrap_admin_email: str | None = (
+        None  # MULCHD_BOOTSTRAP_ADMIN_EMAIL — grants SUPERADMIN to this email on
+        # first OAuth login, only while zero admin grants exist anywhere
+    )
     admin_contact: str | None = (
         None  # MULCHD_ADMIN_CONTACT — shown in /connect portal and tier1 setup instructions
     )

@@ -19,7 +19,7 @@ _PERIODS = {
 
 @router.get("/api/usage/{org}/{project}")
 async def usage_data(request: Request, org: str, project: str, period: str = "week"):
-    if not is_admin(request):
+    if not await is_admin(request):
         raise HTTPException(status_code=403)
     if period not in _PERIODS:
         raise HTTPException(status_code=400, detail="period must be day, week, or month")

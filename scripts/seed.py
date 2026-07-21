@@ -25,12 +25,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 os.environ.setdefault("MULCHD_SECRET_KEY", "seed-secret-key-not-for-production")
-os.environ.setdefault("MULCHD_ADMIN_PASSWORD", "admin")
 os.environ.setdefault("MULCHD_DB_URL", "sqlite://demo.db")
 os.environ.setdefault("MULCHD_DATA_PATH", ".mulch-demo")
 
 from tortoise import Tortoise, connections  # noqa: E402
 
+from mulchd.admin_grants import grant_superadmin  # noqa: E402
 from mulchd.auth import create_project_token, create_user  # noqa: E402
 from mulchd.config import TORTOISE_ORM  # noqa: E402
 from mulchd.domains import mulch_dir  # noqa: E402
@@ -121,6 +121,7 @@ async def main() -> None:
 
     # ── Users ──────────────────────────────────────────────────────────────
     alice, alice_global = await create_user("alice", "Alice Chen")
+    await grant_superadmin(alice, granted_by=alice)
     bob, bob_global = await create_user("bob", "Bob Ramos")
     claude, claude_global = await create_user("claude", "Claude")
 

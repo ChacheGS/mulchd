@@ -5,7 +5,6 @@ import pytest
 def _reload(monkeypatch, env: dict):
     """Set env vars and reload config + oauth modules."""
     monkeypatch.setenv("MULCHD_SECRET_KEY", "test")
-    monkeypatch.setenv("MULCHD_ADMIN_PASSWORD", "test")
     for k, v in env.items():
         monkeypatch.setenv(k, v)
     import mulchd.config as cfg_mod

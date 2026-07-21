@@ -26,7 +26,7 @@ migrate-up:
 	$(COMPOSE_DEV) up -d postgres
 
 migrate:
-	MULCHD_SECRET_KEY=dev MULCHD_ADMIN_PASSWORD=dev \
+	MULCHD_SECRET_KEY=dev \
 	MULCHD_DB_URL="asyncpg://mulchd:devpassword@localhost:5433/mulchd" \
 	uv run aerich migrate
 

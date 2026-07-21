@@ -13,7 +13,6 @@ cd "$DEMO_DIR"
 
 
 export MULCHD_SECRET_KEY="${MULCHD_SECRET_KEY:-seed-secret-key-not-for-production}"
-export MULCHD_ADMIN_PASSWORD="${MULCHD_ADMIN_PASSWORD:-admin}"
 export MULCHD_DB_URL="${MULCHD_DB_URL:-sqlite://demo.db}"
 export MULCHD_DATA_PATH="${MULCHD_DATA_PATH:-.mulch-demo}"
 export MULCHD_PORT="${MULCHD_PORT:-8000}"

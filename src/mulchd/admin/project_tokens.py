@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/project-tokens")
 async def project_tokens_page(request: Request) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     tokens = (
         await ProjectToken.all()
@@ -25,7 +25,7 @@ async def project_tokens_page(request: Request) -> Response:
 
 @router.post("/project-tokens/{token_id}/revoke")
 async def revoke_token(request: Request, token_id: int) -> RedirectResponse:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     await ProjectToken.filter(id=token_id).update(active=False)
     return RedirectResponse("/admin/project-tokens", status_code=303)

@@ -107,9 +107,7 @@
     <a href="/admin/records" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
     <a href="/admin/audit" class="nav-link {% if active == 'audit' %}active{% endif %}">Audit</a>
     <div class="sidebar-spacer"></div>
-    <form method="post" action="/admin/logout">
-      <button type="submit" class="sidebar-logout">Logout</button>
-    </form>
+    <a href="/connect/logout" class="sidebar-logout" style="text-decoration:none;">Logout</a>
     <div class="sidebar-version">v{{ mulchd_version }}</div>
   </nav>
   <main class="main">

@@ -55,7 +55,7 @@ async def audit_page(
     action: str = "",
     domain: str = "",
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
 
     projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")
@@ -239,7 +239,7 @@ async def restore_record_action(
     project: str = Form(...),
     record_id: str = Form(...),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     if "/" in project:
         org_slug, project_slug = project.split("/", 1)

@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/records/count")
 async def records_count(request: Request, project: str = "") -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     count = 0
     if project and "/" in project:
@@ -31,7 +31,7 @@ async def delete_record_action(
     domain: str = Form(...),
     record_id: str = Form(...),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     if "/" in project:
         org_slug, project_slug = project.split("/", 1)
@@ -49,7 +49,7 @@ async def edit_record_action(
     field: str = Form(...),
     value: str = Form(""),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     if "/" in project:
         org_slug, project_slug = project.split("/", 1)
@@ -60,7 +60,7 @@ async def edit_record_action(
 
 @router.get("/records")
 async def records_page(request: Request, project: str = "") -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
 
     projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")

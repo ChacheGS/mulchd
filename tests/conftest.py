@@ -5,7 +5,6 @@ from httpx import ASGITransport, AsyncClient
 from tortoise import Tortoise
 
 os.environ.setdefault("MULCHD_SECRET_KEY", "test-secret-key")
-os.environ.setdefault("MULCHD_ADMIN_PASSWORD", "testpass")
 os.environ.setdefault("MULCHD_DB_URL", "sqlite://:memory:")
 
 from mulchd.main import app  # noqa: E402 — env must be set before import
@@ -42,7 +41,13 @@ async def client(db):
 
 @pytest.fixture
 async def admin_client(client):
-    """AsyncClient with an active admin session cookie."""
-    resp = await client.post("/admin/login", data={"password": "testpass"})
-    assert resp.status_code in (200, 303)
+    """AsyncClient authenticated as a real User holding an active SUPERADMIN grant."""
+    from mulchd.admin_grants import grant_superadmin
+    from mulchd.auth import create_user
+    from mulchd.connect import _signer
+
+    user, _ = await create_user("admin", "Admin")
+    await grant_superadmin(user, granted_by=user)
+    signed = _signer().dumps(user.id)
+    client.cookies.set("mulchd_connect", signed)
     return client

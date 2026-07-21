@@ -34,7 +34,7 @@ uv sync
 ./scripts/demo.sh
 ```
 
-Open `http://localhost:8000/admin` — log in as `admin` / `admin`. The demo creates three users (alice, bob, claude) and a `backend-api` project with records across four domains.
+The seed script grants `alice` admin access directly. Open `http://localhost:8000/connect`, log in with alice's printed token, then visit `http://localhost:8000/admin`. The demo creates three users (alice, bob, claude) and a `backend-api` project with records across four domains.
 
 To connect a client to the demo server, use the project tokens printed by the seed script and point it at `http://localhost:8000/mcp`.
 
@@ -56,7 +56,6 @@ Fill in all values. Key variables:
 | File | Variable | Description |
 |---|---|---|
 | `mulchd.env` | `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `mulchd.env` | `MULCHD_ADMIN_PASSWORD` | Initial admin password — change after first login |
 | `.env` | `MULCHD_HOSTNAME` | Public hostname, e.g. `mulchd.your-domain.com` |
 
 **2. Deploy**

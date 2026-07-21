@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/projects")
 async def projects_page(request: Request, error: str = "") -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     projects = await Project.all().order_by("slug").prefetch_related("org")
     orgs = await Organization.all().order_by("slug")
@@ -23,7 +23,7 @@ async def projects_page(request: Request, error: str = "") -> Response:
 
 @router.get("/projects/{project_id}")
 async def project_detail_page(request: Request, project_id: int) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
@@ -64,7 +64,7 @@ async def create_project(
     display_name: str = Form(...),
     knowledge_language: str = Form(""),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     org = await Organization.get_or_none(id=org_id)
     if org is None:
@@ -99,7 +99,7 @@ async def set_project_language(
     project_id: int,
     knowledge_language: str = Form(""),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     project = await Project.get_or_none(id=project_id)
     if project is None:

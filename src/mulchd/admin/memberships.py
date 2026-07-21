@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/memberships")
 async def memberships_page(request: Request, user: str = "", error: str = "") -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")
     users = await User.filter(active=True).order_by("username")
@@ -37,7 +37,7 @@ async def add_membership(
     project_id: int = Form(...),
     role: str = Form(...),
 ) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     user = await User.get_or_none(id=user_id)
     project = await Project.get_or_none(id=project_id)
@@ -68,7 +68,7 @@ async def add_membership(
 
 @router.post("/memberships/{membership_id}/remove")
 async def remove_membership(request: Request, membership_id: int) -> RedirectResponse:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
     await UserMembership.filter(id=membership_id).delete()
     return RedirectResponse("/admin/memberships", status_code=303)

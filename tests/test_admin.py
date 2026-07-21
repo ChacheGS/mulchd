@@ -1,28 +1,23 @@
 import pytest
 
 
-async def test_login_page_renders(client):
-    resp = await client.get("/admin/login")
-    assert resp.status_code == 200
-    assert "mulchd" in resp.text
-
-
-async def test_login_wrong_password(client):
-    resp = await client.post("/admin/login", data={"password": "wrong"}, follow_redirects=False)
-    assert resp.status_code == 401
-    assert "Incorrect password" in resp.text
-
-
-async def test_login_correct_password_redirects(client):
-    resp = await client.post("/admin/login", data={"password": "testpass"}, follow_redirects=False)
-    assert resp.status_code == 303
-    assert resp.headers["location"] == "/admin/"
-
-
 async def test_dashboard_requires_auth(client):
     resp = await client.get("/admin/", follow_redirects=False)
     assert resp.status_code == 303
-    assert "/admin/login" in resp.headers["location"]
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_dashboard_rejects_non_admin_user(client):
+    from mulchd.auth import create_user
+    from mulchd.connect import _signer
+
+    user, _ = await create_user("regular", "Regular User")
+    signed = _signer().dumps(user.id)
+    resp = await client.get(
+        "/admin/", cookies={"mulchd_connect": signed}, follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
 
 
 async def test_dashboard_renders(admin_client):
@@ -135,7 +130,7 @@ async def test_records_count_requires_auth(client, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "data_path", tmp_path)
     resp = await client.get("/admin/records/count?project=acme/demo", follow_redirects=False)
     assert resp.status_code == 303
-    assert "/admin/login" in resp.headers["location"]
+    assert "/connect" in resp.headers["location"]
 
 
 async def test_records_count_no_project(admin_client, tmp_path, monkeypatch):
@@ -171,7 +166,7 @@ async def test_audit_page_renders(admin_client):
 async def test_audit_page_redirects_when_not_logged_in(client):
     resp = await client.get("/admin/audit", follow_redirects=False)
     assert resp.status_code == 303
-    assert "/admin/login" in resp.headers["location"]
+    assert "/connect" in resp.headers["location"]
 
 
 async def test_admin_create_user_with_email(admin_client):

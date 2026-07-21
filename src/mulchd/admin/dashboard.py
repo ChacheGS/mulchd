@@ -15,7 +15,7 @@ _WINDOW_DAYS = 30
 
 @router.get("/")
 async def dashboard(request: Request) -> Response:
-    if not is_admin(request):
+    if not await is_admin(request):
         return redirect_login()
 
     since = datetime.now(timezone.utc) - timedelta(days=_WINDOW_DAYS)

@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from .audit import router as audit_router
-from .auth import router as auth_router
 from .dashboard import router as dashboard_router
 from .invites import router as invites_router
 from .memberships import router as memberships_router
@@ -13,7 +12,6 @@ from .usage_api import router as usage_router
 from .users import router as users_router
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-router.include_router(auth_router)
 router.include_router(dashboard_router)
 router.include_router(usage_router)
 router.include_router(users_router)
