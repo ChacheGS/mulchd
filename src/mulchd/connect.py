@@ -149,15 +149,23 @@ async def _resolve_oauth_identity(provider: str, sub: str, email: str | None) ->
     return user
 
 
-async def _claim_pending_invite(request: Request, user: User) -> None:
-    """Claim the session's pending invite for user, if one is stashed and still valid."""
+async def _claim_pending_invite(request: Request, user: User) -> str | None:
+    """
+    Claim the session's pending invite for user, if one is stashed.
+    Returns None if there was no pending invite. Otherwise returns one of:
+    "claimed", "invalid" (invite no longer valid or claim lost a concurrency race),
+    "domain_denied" (email doesn't match the invite's allowed domains).
+    """
     pending_invite_token = request.session.pop(_INVITE_SESSION_KEY, None)
     if not pending_invite_token:
-        return
+        return None
     invite = await _validate_invite(pending_invite_token)
-    if invite is not None:
-        if not invite.allowed_email_domains or matches_allowed_domains(user.email or "", invite.allowed_email_domains):
-            await _claim_invite(invite, user)
+    if invite is None:
+        return "invalid"
+    if invite.allowed_email_domains and not matches_allowed_domains(user.email or "", invite.allowed_email_domains):
+        return "domain_denied"
+    claimed = await _claim_invite(invite, user)
+    return "claimed" if claimed else "invalid"
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -189,15 +197,18 @@ async def connect_login(
 
     remember = remember_me == "on"
 
-    await _claim_pending_invite(request, user)
+    invite_outcome = await _claim_pending_invite(request, user)
+    redirect_url = "/connect/projects"
+    if invite_outcome in ("invalid", "domain_denied"):
+        redirect_url = f"/connect/projects?invite_error={invite_outcome}"
 
     if request.headers.get("HX-Request"):
         response = Response(status_code=200)
-        response.headers["HX-Redirect"] = "/connect/projects"
+        response.headers["HX-Redirect"] = redirect_url
         _set_connect_cookie(response, user.id, remember)
         return response
 
-    response = RedirectResponse("/connect/projects", status_code=303)
+    response = RedirectResponse(redirect_url, status_code=303)
     _set_connect_cookie(response, user.id, remember)
     return response
 
@@ -394,9 +405,12 @@ async def oauth_callback(request: Request, provider: str):
             )
 
     # Claim pending invite if present (covers both new and existing users)
-    await _claim_pending_invite(request, user)
+    invite_outcome = await _claim_pending_invite(request, user)
+    redirect_url = "/connect/projects"
+    if invite_outcome in ("invalid", "domain_denied"):
+        redirect_url = f"/connect/projects?invite_error={invite_outcome}"
 
-    response = RedirectResponse("/connect/projects", status_code=303)
+    response = RedirectResponse(redirect_url, status_code=303)
     _set_connect_cookie(response, user.id, remember=False)
     return response
 

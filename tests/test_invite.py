@@ -208,3 +208,61 @@ async def test_expired_link_returns_opaque_error(client, db):
     )
     resp = await client.get(f"/invite/{invite.token}")
     assert "not valid" in resp.text
+
+
+async def test_token_login_with_domain_restricted_invite_denies_silently_but_flags_it(client, db):
+    """A pending invite with a domain restriction the user's email doesn't satisfy
+    should not be claimed, and the login redirect should carry an invite_error hint."""
+    from mulchd.auth import create_user
+    from mulchd.models import InviteLink, Organization, Project, UserMembership
+    org = await Organization.create(slug="domtok", display_name="DomTok")
+    project = await Project.create(slug="dt", display_name="DT", org=org)
+    invite = await InviteLink.create(
+        token="domtoktoken123",
+        project=project,
+        role="writer",
+        allowed_email_domains=["company.com"],
+    )
+    user, token = await create_user("domtokuser", "Dom Tok", email="user@other.net")
+
+    resp = await client.get(f"/invite/{invite.token}")
+    assert resp.status_code == 200
+
+    resp = await client.post(
+        "/connect",
+        data={"token": token, "remember_me": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "invite_error=domain_denied" in resp.headers["location"]
+    assert not await UserMembership.filter(user=user, project=project).exists()
+
+
+async def test_token_login_with_invalidated_pending_invite_flags_it(client, db):
+    """If the pending invite gets revoked between visiting it and finishing login,
+    the login redirect should carry an invite_error hint instead of silently succeeding."""
+    from mulchd.auth import create_user
+    from mulchd.models import InviteLink, Organization, Project, UserMembership
+    org = await Organization.create(slug="revtok", display_name="RevTok")
+    project = await Project.create(slug="rt", display_name="RT", org=org)
+    invite = await InviteLink.create(
+        token="revtoktoken123",
+        project=project,
+        role="writer",
+    )
+    user, token = await create_user("revtokuser", "Rev Tok", email="revtok@company.com")
+
+    resp = await client.get(f"/invite/{invite.token}")
+    assert resp.status_code == 200
+
+    invite.revoked = True
+    await invite.save()
+
+    resp = await client.post(
+        "/connect",
+        data={"token": token, "remember_me": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "invite_error=invalid" in resp.headers["location"]
+    assert not await UserMembership.filter(user=user, project=project).exists()
