@@ -308,6 +308,23 @@ async def test_revoke_admin_blocked_as_last_admin(admin_client):
     assert await is_superadmin(admin_user) is True
 
 
+async def test_admin_can_revoke_own_access_when_others_exist(admin_client):
+    from mulchd.admin_grants import grant_superadmin, is_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import User
+
+    admin_user = await User.filter(username="admin").first()
+    other, _ = await create_user("otheradmin", "Other Admin")
+    await grant_superadmin(other, granted_by=admin_user)
+
+    resp = await admin_client.post(
+        f"/admin/users/{admin_user.id}/revoke-admin", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{admin_user.id}"
+    assert await is_superadmin(admin_user) is False
+
+
 async def test_revoke_invite_link(admin_client):
     from mulchd.models import InviteLink, Organization, Project
     org = await Organization.create(slug="acme", display_name="Acme Corp")
