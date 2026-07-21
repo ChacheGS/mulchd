@@ -9,7 +9,7 @@ BACKUP_DIR ?= backups
 # ---------------------------------------------------------------------------
 
 dev:
-	$(COMPOSE_DEV) up --build mulchd postgres
+	$(COMPOSE_DEV) up --build mulchd 
 
 dev-inspector:
 	$(COMPOSE_DEV) --profile tools up inspector
