@@ -127,6 +127,32 @@ class UserMembership(models.Model):
         unique_together = (("user", "project"),)
 
 
+class AdminRole(StrEnum):
+    SUPERADMIN = "superadmin"
+
+
+class AdminGrant(models.Model):
+    id = fields.IntField(primary_key=True)
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="admin_grants"
+    )
+    role = fields.CharEnumField(AdminRole, max_length=16, default=AdminRole.SUPERADMIN)
+    org: fields.ForeignKeyRelation[Organization] | None = fields.ForeignKeyField(
+        "models.Organization", related_name="admin_grants", null=True, default=None
+    )
+    granted_by: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="granted_admin_grants"
+    )
+    granted_at = fields.DatetimeField(auto_now_add=True)
+    revoked_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
+        "models.User", related_name="revoked_admin_grants", null=True, default=None
+    )
+    revoked_at = fields.DatetimeField(null=True, default=None)
+
+    class Meta:
+        table = "admin_grants"
+
+
 class ProjectToken(models.Model):
     id = fields.IntField(primary_key=True)
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
