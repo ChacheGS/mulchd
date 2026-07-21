@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from dataclasses import dataclass
 
-from .models import Organization, Project, ProjectToken, Role, User, UserMembership
+from .models import OAuthIdentity, Organization, Project, ProjectToken, Role, User, UserMembership
 
 
 @dataclass
@@ -62,6 +62,36 @@ async def create_user(username: str, display_name: str, email: str | None = None
         token_hash=_hash_token(token),
     )
     return user, token
+
+
+async def create_user_from_oauth(
+    provider: str,
+    sub: str,
+    email: str,
+    username: str,
+    display_name: str,
+) -> User:
+    """
+    Create a new User from OAuth provider data and link their OAuthIdentity.
+    Handles username collisions by appending _2, _3, etc.
+    """
+    base = username
+    attempt = username
+    suffix = 2
+    while await User.filter(username=attempt).exists():
+        attempt = f"{base}_{suffix}"
+        suffix += 1
+
+    token = generate_token()
+    user = await User.create(
+        username=attempt,
+        display_name=display_name or attempt,
+        email=email,
+        token_hash=_hash_token(token),
+        active=True,
+    )
+    await OAuthIdentity.create(user=user, provider=provider, sub=sub)
+    return user
 
 
 async def create_project_token(

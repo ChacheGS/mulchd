@@ -116,6 +116,29 @@ async def test_already_member_skips_without_incrementing(client, invite_fixture,
     assert invite.use_count == 0  # not incremented
 
 
+async def test_token_login_with_pending_invite_claims(client, invite_fixture, db):
+    """Token login while pending_invite in session claims the invite after auth."""
+    invite, project = invite_fixture
+    from mulchd.auth import create_user
+    user, token = await create_user("tokeninvite", "Token Invite", email="ti@company.com")
+
+    # Simulate session with pending invite (use client session cookie)
+    # First hit the invite page to stash pending_invite
+    resp = await client.get(f"/invite/{invite.token}")
+    assert resp.status_code == 200
+
+    # Now POST to /connect with the token — session cookie carries pending_invite
+    resp = await client.post(
+        "/connect",
+        data={"token": token, "remember_me": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert await UserMembership.filter(user=user, project=project).exists()
+    await invite.refresh_from_db()
+    assert invite.use_count == 1
+
+
 async def test_claim_invite_returns_false_when_exhausted(invite_fixture, db):
     from mulchd.auth import create_user
     from mulchd.invite import _claim_invite

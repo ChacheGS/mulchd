@@ -7,8 +7,14 @@ from itsdangerous import BadSignature, URLSafeSerializer
 
 from authlib.integrations.base_client import OAuthError
 
-from .auth import authenticate_global_token, create_project_token
+from .auth import authenticate_global_token, create_project_token, create_user_from_oauth
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
+from .invite import (
+    _SESSION_KEY as _INVITE_SESSION_KEY,
+    _claim_invite,
+    _validate_invite,
+    matches_allowed_domains,
+)
 from .models import OAuthIdentity, Organization, Project, ProjectToken, User, UserMembership
 from .oauth import get_configured_providers, oauth
 
@@ -171,6 +177,13 @@ async def connect_login(
         )
 
     remember = remember_me == "on"
+
+    pending_invite_token = request.session.pop(_INVITE_SESSION_KEY, None)
+    if pending_invite_token:
+        invite = await _validate_invite(pending_invite_token)
+        if invite is not None:
+            if not invite.allowed_email_domains or matches_allowed_domains(user.email or "", invite.allowed_email_domains):
+                await _claim_invite(invite, user)
 
     if request.headers.get("HX-Request"):
         response = Response(status_code=200)
@@ -335,14 +348,52 @@ async def oauth_callback(request: Request, provider: str):
             status_code=400,
         )
 
+    pending_invite_token = request.session.get(_INVITE_SESSION_KEY)
     user = await _resolve_oauth_identity(provider, sub, email)
+
     if user is None:
-        return templates.TemplateResponse(
-            request,
-            "connect/entry.html",
-            {"error": "No account found for this identity. Ask an admin to create one.", "providers": get_configured_providers()},
-            status_code=403,
-        )
+        if pending_invite_token:
+            # New user arriving via invite — create account from OAuth data
+            invite = await _validate_invite(pending_invite_token)
+            if invite is None:
+                request.session.pop(_INVITE_SESSION_KEY, None)
+                return templates.TemplateResponse(
+                    request,
+                    "connect/entry.html",
+                    {"error": "The invite link is no longer valid.", "providers": get_configured_providers()},
+                    status_code=403,
+                )
+            if invite.allowed_email_domains and not matches_allowed_domains(email or "", invite.allowed_email_domains):
+                request.session.pop(_INVITE_SESSION_KEY, None)
+                return templates.TemplateResponse(
+                    request,
+                    "connect/entry.html",
+                    {"error": "Your email is not authorized for this invite.", "providers": get_configured_providers()},
+                    status_code=403,
+                )
+            # Derive username and display_name from provider
+            if provider == "github":
+                username = user_resp.json().get("login", "")
+                display_name = user_resp.json().get("name") or username
+            else:
+                username = userinfo.get("preferred_username") or email.split("@")[0]
+                display_name = userinfo.get("name") or username
+            user = await create_user_from_oauth(provider, sub, email, username, display_name)
+        else:
+            return templates.TemplateResponse(
+                request,
+                "connect/entry.html",
+                {"error": "No account found for this identity. Ask an admin to create one.", "providers": get_configured_providers()},
+                status_code=403,
+            )
+
+    # Claim pending invite if present (covers both new and existing users)
+    if pending_invite_token:
+        invite = await _validate_invite(pending_invite_token)
+        if invite is not None:
+            if not invite.allowed_email_domains or matches_allowed_domains(user.email or "", invite.allowed_email_domains):
+                await _claim_invite(invite, user)
+        request.session.pop(_INVITE_SESSION_KEY, None)
 
     response = RedirectResponse("/connect/projects", status_code=303)
     _set_connect_cookie(response, user.id, remember=False)
