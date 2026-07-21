@@ -154,3 +154,57 @@ async def test_claim_invite_returns_false_when_exhausted(invite_fixture, db):
     assert await _claim_invite(invite, second) is False
     await invite.refresh_from_db()
     assert invite.use_count == 1
+
+
+async def test_exhausted_link_returns_opaque_error(client, db):
+    from mulchd.models import InviteLink, Organization, Project
+    org = await Organization.create(slug="exhaustorg", display_name="E")
+    project = await Project.create(slug="ep", display_name="EP", org=org)
+    invite = await InviteLink.create(
+        token="exhausted123",
+        project=project,
+        role="writer",
+        max_uses=1,
+        use_count=1,
+    )
+    resp = await client.get(f"/invite/{invite.token}")
+    assert resp.status_code == 200
+    assert "not valid" in resp.text
+
+
+async def test_domain_restriction_blocks_wrong_email(client, db):
+    from mulchd.auth import create_user
+    from mulchd.connect import _signer
+    from mulchd.models import InviteLink, Organization, Project
+    org = await Organization.create(slug="domainorg", display_name="D")
+    project = await Project.create(slug="dp", display_name="DP", org=org)
+    invite = await InviteLink.create(
+        token="domaintest123",
+        project=project,
+        role="writer",
+        allowed_email_domains=["company.com"],
+    )
+    user, _ = await create_user("wrongdomain", "Wrong", email="user@other.net")
+    signed = _signer().dumps(user.id)
+    resp = await client.get(
+        f"/invite/{invite.token}",
+        cookies={"mulchd_connect": signed},
+    )
+    assert "not authorized" in resp.text
+    assert not await UserMembership.filter(user=user, project=project).exists()
+
+
+async def test_expired_link_returns_opaque_error(client, db):
+    from datetime import UTC, datetime, timedelta
+    from mulchd.models import InviteLink, Organization, Project
+    org = await Organization.create(slug="expiredorg", display_name="EX")
+    project = await Project.create(slug="exp", display_name="Exp", org=org)
+    past = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1)
+    invite = await InviteLink.create(
+        token="expiredtoken123",
+        project=project,
+        role="writer",
+        expires_at=past,
+    )
+    resp = await client.get(f"/invite/{invite.token}")
+    assert "not valid" in resp.text
