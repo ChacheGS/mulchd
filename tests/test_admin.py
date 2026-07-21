@@ -205,6 +205,40 @@ async def test_project_detail_page_renders(admin_client):
     assert project.display_name in resp.text
 
 
+async def test_project_detail_renders_invite_rows(admin_client):
+    from datetime import UTC, datetime, timedelta
+
+    from mulchd.models import (
+        InviteLink,
+        InviteUse,
+        Organization,
+        Project,
+        Role,
+        User,
+    )
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+    user = await User.create(username="bob", display_name="Bob", token_hash="x")
+    active = await InviteLink.create(token="t1", project=project, role=Role.ADMIN, max_uses=3, use_count=1)
+    await InviteLink.create(
+        token="t2", project=project, role=Role.READER,
+        expires_at=datetime.now(UTC) - timedelta(days=1),
+    )
+    await InviteLink.create(token="t3", project=project, role=Role.WRITER, max_uses=2, use_count=2)
+    await InviteLink.create(token="t4", project=project, role=Role.READER, revoked=True)
+    await InviteUse.create(invite=active, user=user)
+
+    resp = await admin_client.get(f"/admin/projects/{project.id}")
+    assert resp.status_code == 200
+    assert "badge-admin" in resp.text
+    assert "badge-writer" in resp.text
+    assert "expired" in resp.text
+    assert "exhausted" in resp.text
+    assert "revoked" in resp.text
+    assert "bob" in resp.text
+
+
 async def test_admin_unlink_identity(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import OAuthIdentity

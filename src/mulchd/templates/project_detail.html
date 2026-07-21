@@ -75,19 +75,16 @@
     <span>Created</span><span>Role</span><span>Uses</span><span>Expires</span><span>Domains</span><span>Status</span><span></span>
   </div>
   {% for invite in invites %}
-  {% set now = now_utc() %}
-  {% set expired = invite.expires_at and invite.expires_at < now %}
-  {% set exhausted = invite.max_uses is not none and invite.use_count >= invite.max_uses %}
-  {% set status = "revoked" if invite.revoked else ("expired" if expired else ("exhausted" if exhausted else "active")) %}
+  {% set status = invite.status %}
   <div class="table-row" style="grid-template-columns:80px 70px 80px 120px 1fr 60px 70px">
     <span class="text-muted">{{ invite.created_at.strftime('%Y-%m-%d') }}</span>
-    <span><span class="badge badge-reader">{{ invite.role }}</span></span>
+    <span><span class="badge badge-{{ invite.role }}">{{ invite.role }}</span></span>
     <span>{{ invite.use_count }}{% if invite.max_uses is not none %} / {{ invite.max_uses }}{% else %} / ∞{% endif %}</span>
     <span class="text-muted">{{ invite.expires_at.strftime('%Y-%m-%d %H:%M') if invite.expires_at else "never" }}</span>
     <span class="text-muted monospace" style="font-size:11px;">{{ (invite.allowed_email_domains | join(", ")) if invite.allowed_email_domains else "any" }}</span>
     <span><span class="badge {% if status == 'active' %}badge-active{% else %}badge-inactive{% endif %}">{{ status }}</span></span>
     <span>
-      {% if not invite.revoked and not expired and not exhausted %}
+      {% if status == "active" %}
       <form method="post" action="/admin/invites/{{ invite.id }}/revoke">
         <button type="submit" class="btn-link-danger">Revoke</button>
       </form>

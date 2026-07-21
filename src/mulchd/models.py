@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from tortoise import fields, models
@@ -77,6 +78,20 @@ class InviteLink(models.Model):
         "models.User", related_name="created_invites", null=True, default=None
     )
     created_at = fields.DatetimeField(auto_now_add=True)
+
+    @property
+    def status(self) -> str:
+        if self.revoked:
+            return "revoked"
+        if self.expires_at is not None:
+            expires = self.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires < datetime.now(UTC):
+                return "expired"
+        if self.max_uses is not None and self.use_count >= self.max_uses:
+            return "exhausted"
+        return "active"
 
     class Meta:
         table = "invite_links"

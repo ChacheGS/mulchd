@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
-from ..models import Organization, Project, Role
+from ..models import InviteLink, InviteUse, Organization, Project, Role
 from ._shared import is_admin, redirect_login, templates
 
 router = APIRouter()
@@ -28,17 +28,15 @@ async def project_detail_page(request: Request, project_id: int) -> Response:
     project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
         return Response(status_code=404)
-    from ..models import InviteLink, InviteUse
     invites = (
         await InviteLink.filter(project=project)
-        .select_related("created_by")
         .order_by("-created_at")
         .all()
     )
     uses_by_invite: dict[int, list] = {inv.id: [] for inv in invites}
     if invites:
         uses = (
-            await InviteUse.filter(invite__in=invites)
+            await InviteUse.filter(invite_id__in=[inv.id for inv in invites])
             .select_related("user")
             .order_by("used_at")
             .all()
