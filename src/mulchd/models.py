@@ -73,8 +73,8 @@ class InviteLink(models.Model):
     expires_at = fields.DatetimeField(null=True, default=None)
     allowed_email_domains = fields.JSONField(null=True, default=None)
     revoked = fields.BooleanField(default=False)
-    created_by: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User", related_name="created_invites"
+    created_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
+        "models.User", related_name="created_invites", null=True, default=None
     )
     created_at = fields.DatetimeField(auto_now_add=True)
 
