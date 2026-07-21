@@ -259,10 +259,11 @@ async def test_create_invite_link(admin_client):
     resp = await admin_client.post(
         f"/admin/projects/{project.id}/invites",
         data={"role": "writer", "max_uses": "5", "expires_in": "3600", "allowed_email_domains": ""},
+        follow_redirects=False,
     )
-    assert resp.status_code in (200, 303)
-    assert await InviteLink.filter(project=project).count() == 1
-    invite = await InviteLink.filter(project=project).first()
+    assert resp.status_code == 303
+    invite = await InviteLink.get(project=project)
+    assert resp.headers["location"] == f"/admin/projects/{project.id}?new_token={invite.token}"
     assert invite.role == "writer"
     assert invite.max_uses == 5
     assert invite.expires_at is not None
@@ -277,7 +278,8 @@ async def test_revoke_invite_link(admin_client):
         project=project,
         role="writer",
     )
-    resp = await admin_client.post(f"/admin/invites/{invite.id}/revoke")
-    assert resp.status_code in (200, 303)
+    resp = await admin_client.post(f"/admin/invites/{invite.id}/revoke", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/projects/{project.id}"
     await invite.refresh_from_db()
     assert invite.revoked is True
