@@ -2,7 +2,12 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
-from ..admin_grants import grant_superadmin, is_superadmin, revoke_superadmin
+from ..admin_grants import (
+    grant_superadmin,
+    is_last_active_superadmin,
+    is_superadmin,
+    revoke_superadmin,
+)
 from ..auth import _hash_token, create_user, generate_token
 from ..config import settings
 from ..models import AdminGrant, AdminRole, OAuthIdentity, User
@@ -79,9 +84,14 @@ async def user_created_page(request: Request) -> Response:
 
 
 @router.post("/users/{user_id}/deactivate")
-async def deactivate_user(request: Request, user_id: int) -> RedirectResponse:
+async def deactivate_user(request: Request, user_id: int) -> Response:
     if not await is_admin(request):
         return redirect_login()
+    user = await User.filter(id=user_id).first()
+    if user is None:
+        return Response(status_code=404)
+    if await is_last_active_superadmin(user):
+        return RedirectResponse(f"/admin/users/{user_id}?error=last_admin", status_code=303)
     await User.filter(id=user_id).update(active=False)
     return RedirectResponse("/admin/users", status_code=303)
 

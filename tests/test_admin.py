@@ -118,6 +118,38 @@ async def test_deactivate_user(admin_client):
     assert not user.active
 
 
+async def test_deactivate_blocked_for_last_admin(admin_client):
+    from mulchd.models import User
+
+    admin_user = await User.filter(username="admin").first()
+
+    resp = await admin_client.post(
+        f"/admin/users/{admin_user.id}/deactivate", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{admin_user.id}?error=last_admin"
+    await admin_user.refresh_from_db()
+    assert admin_user.active is True
+
+
+async def test_deactivate_allowed_when_other_admin_exists(admin_client):
+    from mulchd.admin_grants import grant_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import User
+
+    admin_user = await User.filter(username="admin").first()
+    other, _ = await create_user("secondadmin", "Second Admin")
+    await grant_superadmin(other, granted_by=admin_user)
+
+    resp = await admin_client.post(
+        f"/admin/users/{admin_user.id}/deactivate", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/admin/users"
+    await admin_user.refresh_from_db()
+    assert admin_user.active is False
+
+
 async def test_users_page_renders(admin_client):
     resp = await admin_client.get("/admin/users")
     assert resp.status_code == 200
