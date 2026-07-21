@@ -61,6 +61,41 @@ class OAuthIdentity(models.Model):
         unique_together = (("provider", "sub"),)
 
 
+class InviteLink(models.Model):
+    id = fields.IntField(primary_key=True)
+    token = fields.CharField(max_length=64, unique=True)
+    project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
+        "models.Project", related_name="invite_links"
+    )
+    role = fields.CharEnumField(Role, max_length=16, default=Role.WRITER)
+    max_uses = fields.IntField(null=True, default=None)
+    use_count = fields.IntField(default=0)
+    expires_at = fields.DatetimeField(null=True, default=None)
+    allowed_email_domains = fields.JSONField(null=True, default=None)
+    revoked = fields.BooleanField(default=False)
+    created_by: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="created_invites"
+    )
+    created_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "invite_links"
+
+
+class InviteUse(models.Model):
+    id = fields.IntField(primary_key=True)
+    invite: fields.ForeignKeyRelation[InviteLink] = fields.ForeignKeyField(
+        "models.InviteLink", related_name="uses"
+    )
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="invite_uses"
+    )
+    used_at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "invite_uses"
+
+
 class UserMembership(models.Model):
     id = fields.IntField(primary_key=True)
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
