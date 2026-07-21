@@ -264,6 +264,50 @@ async def test_create_invite_link(admin_client):
     assert invite.expires_at is not None
 
 
+async def test_grant_admin_access(admin_client):
+    from mulchd.admin_grants import is_superadmin
+    from mulchd.auth import create_user
+
+    target, _ = await create_user("newadmin", "New Admin")
+    resp = await admin_client.post(
+        f"/admin/users/{target.id}/grant-admin", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{target.id}"
+    assert await is_superadmin(target) is True
+
+
+async def test_revoke_admin_access(admin_client):
+    from mulchd.admin_grants import grant_superadmin, is_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import User
+
+    target, _ = await create_user("removable", "Removable Admin")
+    admin_user = await User.filter(username="admin").first()
+    await grant_superadmin(target, granted_by=admin_user)
+
+    resp = await admin_client.post(
+        f"/admin/users/{target.id}/revoke-admin", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{target.id}"
+    assert await is_superadmin(target) is False
+
+
+async def test_revoke_admin_blocked_as_last_admin(admin_client):
+    from mulchd.admin_grants import is_superadmin
+    from mulchd.models import User
+
+    admin_user = await User.filter(username="admin").first()
+
+    resp = await admin_client.post(
+        f"/admin/users/{admin_user.id}/revoke-admin", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{admin_user.id}?error=last_admin"
+    assert await is_superadmin(admin_user) is True
+
+
 async def test_revoke_invite_link(admin_client):
     from mulchd.models import InviteLink, Organization, Project
     org = await Organization.create(slug="acme", display_name="Acme Corp")

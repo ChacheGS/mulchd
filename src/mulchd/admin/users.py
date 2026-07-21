@@ -2,10 +2,11 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
+from ..admin_grants import grant_superadmin, is_superadmin, revoke_superadmin
 from ..auth import _hash_token, create_user, generate_token
 from ..config import settings
-from ..models import OAuthIdentity, User
-from ._shared import is_admin, redirect_login, templates
+from ..models import AdminGrant, AdminRole, OAuthIdentity, User
+from ._shared import get_admin_user, is_admin, redirect_login, templates
 
 router = APIRouter()
 
@@ -104,8 +105,45 @@ async def user_detail(request: Request, user_id: int) -> Response:
     return templates.TemplateResponse(
         request,
         "user_detail.html",
-        {"active": "users", "user": user, "identities": identities},
+        {
+            "active": "users",
+            "user": user,
+            "identities": identities,
+            "is_superadmin_user": await is_superadmin(user),
+            "error": request.query_params.get("error", ""),
+        },
     )
+
+
+@router.post("/users/{user_id}/grant-admin")
+async def grant_admin_route(request: Request, user_id: int) -> Response:
+    granter = await get_admin_user(request)
+    if granter is None:
+        return redirect_login()
+    user = await User.filter(id=user_id).first()
+    if user is None:
+        return Response(status_code=404)
+    if not await is_superadmin(user):
+        await grant_superadmin(user, granted_by=granter)
+    return RedirectResponse(f"/admin/users/{user_id}", status_code=303)
+
+
+@router.post("/users/{user_id}/revoke-admin")
+async def revoke_admin_route(request: Request, user_id: int) -> Response:
+    revoker = await get_admin_user(request)
+    if revoker is None:
+        return redirect_login()
+    grant = await AdminGrant.filter(
+        user_id=user_id, role=AdminRole.SUPERADMIN, revoked_at=None
+    ).first()
+    if grant is None:
+        return Response(status_code=404)
+    ok = await revoke_superadmin(grant, revoked_by=revoker)
+    if not ok:
+        return RedirectResponse(
+            f"/admin/users/{user_id}?error=last_admin", status_code=303
+        )
+    return RedirectResponse(f"/admin/users/{user_id}", status_code=303)
 
 
 @router.post("/users/{user_id}/reset-token")

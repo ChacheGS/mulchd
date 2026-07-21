@@ -45,6 +45,25 @@
   </form>
 </div>
 
+{% if error == "last_admin" %}
+<div class="alert alert-error" style="margin-bottom:16px;">
+  Cannot remove admin access — {{ user.username }} is the last remaining admin.
+</div>
+{% endif %}
+
+<div style="margin-bottom:24px;">
+  {% if is_superadmin_user %}
+  <form method="post" action="/admin/users/{{ user.id }}/revoke-admin"
+        onsubmit="return confirm('Remove admin access from {{ user.username }}?')">
+    <button type="submit" class="btn-link-danger">Revoke admin access</button>
+  </form>
+  {% else %}
+  <form method="post" action="/admin/users/{{ user.id }}/grant-admin">
+    <button type="submit" class="btn-link">Grant admin access</button>
+  </form>
+  {% endif %}
+</div>
+
 <div class="page-title" style="font-size:14px;margin-top:24px;">Linked identities</div>
 <div class="card">
   {% if identities %}
