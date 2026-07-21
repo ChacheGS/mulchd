@@ -196,6 +196,15 @@ async def test_admin_user_detail_page(admin_client):
     assert "Linked identities" in resp.text
 
 
+async def test_project_detail_page_renders(admin_client):
+    from mulchd.models import Organization, Project
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+    resp = await admin_client.get(f"/admin/projects/{project.id}")
+    assert resp.status_code == 200
+    assert project.display_name in resp.text
+
+
 async def test_admin_unlink_identity(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import OAuthIdentity

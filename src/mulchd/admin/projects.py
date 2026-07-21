@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
-from ..models import Organization, Project
+from ..models import Organization, Project, Role
 from ._shared import is_admin, redirect_login, templates
 
 router = APIRouter()
@@ -18,6 +18,43 @@ async def projects_page(request: Request, error: str = "") -> Response:
         request,
         "projects.html",
         {"active": "projects", "projects": projects, "orgs": orgs, "error": error},
+    )
+
+
+@router.get("/projects/{project_id}")
+async def project_detail_page(request: Request, project_id: int) -> Response:
+    if not is_admin(request):
+        return redirect_login()
+    project = await Project.filter(id=project_id).select_related("org").first()
+    if project is None:
+        return Response(status_code=404)
+    from ..models import InviteLink, InviteUse
+    invites = (
+        await InviteLink.filter(project=project)
+        .select_related("created_by")
+        .order_by("-created_at")
+        .all()
+    )
+    uses_by_invite: dict[int, list] = {inv.id: [] for inv in invites}
+    if invites:
+        uses = (
+            await InviteUse.filter(invite__in=invites)
+            .select_related("user")
+            .order_by("used_at")
+            .all()
+        )
+        for use in uses:
+            uses_by_invite[use.invite_id].append(use)
+    return templates.TemplateResponse(
+        request,
+        "project_detail.html",
+        {
+            "active": "projects",
+            "project": project,
+            "invites": invites,
+            "uses_by_invite": uses_by_invite,
+            "roles": list(Role),
+        },
     )
 
 

@@ -6,15 +6,16 @@
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
 <div class="card">
-  <div class="table-header" style="grid-template-columns: 1fr 1fr 2fr 100px 120px">
+  <div class="table-header" style="grid-template-columns: 1fr 1fr 2fr 100px 120px 100px">
     <span>Org</span>
     <span>Slug</span>
     <span>Display name</span>
     <span>Language</span>
     <span>Created</span>
+    <span>Manage</span>
   </div>
   {% for project in projects %}
-  <div class="table-row" style="grid-template-columns: 1fr 1fr 2fr 100px 120px; align-items: center">
+  <div class="table-row" style="grid-template-columns: 1fr 1fr 2fr 100px 120px 100px; align-items: center">
     <span class="monospace text-muted">{{ project.org.slug }}</span>
     <span class="monospace">{{ project.slug }}</span>
     <span>{{ project.display_name }}</span>
@@ -27,6 +28,7 @@
       </form>
     </span>
     <span class="text-muted">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
+    <span><a href="/admin/projects/{{ project.id }}" class="btn-link">Manage</a></span>
   </div>
   {% else %}
   <div class="empty-state">No projects yet. Create an org first.</div>

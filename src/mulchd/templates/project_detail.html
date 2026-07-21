@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — {{ project.display_name }}{% endblock %}
+{% block content %}
+<div class="page-title">
+  <a href="/admin/projects" class="btn-link">← Projects</a>
+  &nbsp;{{ project.display_name }}
+</div>
+
+<div class="card" style="margin-bottom:24px;">
+  <div class="table-header" style="grid-template-columns:120px 1fr">
+    <span>Field</span><span>Value</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Org</span>
+    <span class="monospace">{{ project.org.slug }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Slug</span>
+    <span class="monospace">{{ project.slug }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Language</span>
+    <span>{{ project.knowledge_language or "—" }}</span>
+  </div>
+</div>
+
+<div class="page-title" style="font-size:14px;margin-top:24px;">Create invite link</div>
+<div class="card" style="margin-bottom:24px;padding:20px;">
+  <form method="post" action="/admin/projects/{{ project.id }}/invites" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+    <div>
+      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Role</label>
+      <select name="role" class="form-input" style="width:120px;">
+        {% for role in roles %}
+        <option value="{{ role }}" {% if role == "writer" %}selected{% endif %}>{{ role }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Max uses</label>
+      <input type="number" name="max_uses" min="1" placeholder="unlimited" class="form-input" style="width:110px;">
+    </div>
+    <div>
+      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Expires</label>
+      <select name="expires_in" class="form-input" style="width:140px;">
+        <option value="">no expiry</option>
+        <option value="900">15 minutes</option>
+        <option value="3600">1 hour</option>
+        <option value="86400">24 hours</option>
+        <option value="259200">3 days</option>
+        <option value="604800">7 days</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Email domains (one per line, blank = any)</label>
+      <textarea name="allowed_email_domains" rows="2" placeholder="company.com&#10;*.company.com" class="form-input" style="width:100%;resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+    </div>
+    <div>
+      <button type="submit" class="btn btn-primary">Generate link</button>
+    </div>
+  </form>
+</div>
+
+{% if request.query_params.get("new_token") %}
+<div class="alert alert-success" style="margin-bottom:16px;">
+  <strong>Invite link:</strong>
+  <code style="word-break:break-all;">{{ request.base_url }}invite/{{ request.query_params.get("new_token") }}</code>
+  — copy it now, it won't be highlighted again.
+</div>
+{% endif %}
+
+<div class="page-title" style="font-size:14px;margin-top:8px;">Invite links</div>
+<div class="card">
+  {% if invites %}
+  <div class="table-header" style="grid-template-columns:80px 70px 80px 120px 1fr 60px 70px">
+    <span>Created</span><span>Role</span><span>Uses</span><span>Expires</span><span>Domains</span><span>Status</span><span></span>
+  </div>
+  {% for invite in invites %}
+  {% set now = now_utc() %}
+  {% set expired = invite.expires_at and invite.expires_at < now %}
+  {% set exhausted = invite.max_uses is not none and invite.use_count >= invite.max_uses %}
+  {% set status = "revoked" if invite.revoked else ("expired" if expired else ("exhausted" if exhausted else "active")) %}
+  <div class="table-row" style="grid-template-columns:80px 70px 80px 120px 1fr 60px 70px">
+    <span class="text-muted">{{ invite.created_at.strftime('%Y-%m-%d') }}</span>
+    <span><span class="badge badge-reader">{{ invite.role }}</span></span>
+    <span>{{ invite.use_count }}{% if invite.max_uses is not none %} / {{ invite.max_uses }}{% else %} / ∞{% endif %}</span>
+    <span class="text-muted">{{ invite.expires_at.strftime('%Y-%m-%d %H:%M') if invite.expires_at else "never" }}</span>
+    <span class="text-muted monospace" style="font-size:11px;">{{ (invite.allowed_email_domains | join(", ")) if invite.allowed_email_domains else "any" }}</span>
+    <span><span class="badge {% if status == 'active' %}badge-active{% else %}badge-inactive{% endif %}">{{ status }}</span></span>
+    <span>
+      {% if not invite.revoked and not expired and not exhausted %}
+      <form method="post" action="/admin/invites/{{ invite.id }}/revoke">
+        <button type="submit" class="btn-link-danger">Revoke</button>
+      </form>
+      {% endif %}
+    </span>
+  </div>
+  {% if uses_by_invite[invite.id] %}
+  <div style="padding:8px 16px 8px 32px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+    <div style="font-size:11px;color:#6b7280;margin-bottom:4px;">Used by:</div>
+    {% for use in uses_by_invite[invite.id] %}
+    <div style="font-size:12px;color:#374151;padding:2px 0;">
+      <span class="monospace">{{ use.user.username }}</span>
+      <span class="text-muted"> — {{ use.user.display_name }} — {{ use.used_at.strftime('%Y-%m-%d %H:%M') }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">No invite links yet.</div>
+  {% endif %}
+</div>
+{% endblock %}

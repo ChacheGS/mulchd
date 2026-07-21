@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 # Templates live at src/mulchd/templates/, one level above this package.
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
 templates.env.globals["mulchd_version"] = _pkg_version("mulchd")
+templates.env.globals["now_utc"] = lambda: datetime.now(UTC).replace(tzinfo=None)
 
 
 def is_admin(request: Request) -> bool:
