@@ -145,3 +145,17 @@ async def test_revoke_superadmin_noop_if_already_revoked(db):
     ok_again = await revoke_superadmin(bob_grant, revoked_by=alice)
 
     assert ok_again is False
+
+
+async def test_grant_superadmin_idempotent(db):
+    from mulchd.admin_grants import active_superadmin_count, grant_superadmin
+    from mulchd.auth import create_user
+
+    alice, _ = await create_user("alice8", "Alice")
+    bob, _ = await create_user("bob8", "Bob")
+
+    first = await grant_superadmin(bob, granted_by=alice)
+    second = await grant_superadmin(bob, granted_by=alice)
+
+    assert first.id == second.id
+    assert await active_superadmin_count() == 1

@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
 
+from tortoise import transactions
+
 from .models import AdminGrant, AdminRole, User
 
 
@@ -29,6 +31,11 @@ async def is_last_active_superadmin(user: User) -> bool:
 
 
 async def grant_superadmin(user: User, granted_by: User) -> AdminGrant:
+    existing = await AdminGrant.filter(
+        user=user, role=AdminRole.SUPERADMIN, org=None, revoked_at=None
+    ).first()
+    if existing is not None:
+        return existing
     return await AdminGrant.create(
         user=user, role=AdminRole.SUPERADMIN, granted_by=granted_by
     )
@@ -38,13 +45,19 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
     """
     Soft-revoke an active grant. Returns False (no-op) if already revoked,
     or if it's the last active SUPERADMIN grant — never leave zero admins.
+
+    Re-fetches the grant under a row lock (like invite._claim_invite) so two
+    concurrent revokes of the last two admins can't both read "not last" and
+    both proceed, which would leave the instance with zero admins.
     """
-    if grant.revoked_at is not None:
-        return False
-    await grant.fetch_related("user")
-    if await is_last_active_superadmin(grant.user):
-        return False
-    grant.revoked_by = revoked_by
-    grant.revoked_at = datetime.now(UTC).replace(tzinfo=None)
-    await grant.save()
+    async with transactions.in_transaction():
+        fresh = await AdminGrant.select_for_update().get(id=grant.id)
+        if fresh.revoked_at is not None:
+            return False
+        await fresh.fetch_related("user")
+        if await is_last_active_superadmin(fresh.user):
+            return False
+        fresh.revoked_by = revoked_by
+        fresh.revoked_at = datetime.now(UTC).replace(tzinfo=None)
+        await fresh.save()
     return True
