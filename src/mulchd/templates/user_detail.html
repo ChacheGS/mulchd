@@ -53,7 +53,7 @@
   </div>
   {% for identity in identities %}
   <div class="table-row" style="grid-template-columns:100px 1fr 80px 80px">
-    <span class="badge badge-reader">{{ identity.provider }}</span>
+    <span><span class="badge badge-reader">{{ identity.provider }}</span></span>
     <span class="monospace text-muted">{{ identity.sub }}</span>
     <span class="text-muted">{{ identity.created_at.strftime('%Y-%m-%d') }}</span>
     <span>

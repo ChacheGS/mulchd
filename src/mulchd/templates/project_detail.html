@@ -26,22 +26,22 @@
 
 <div class="page-title" style="font-size:14px;margin-top:24px;">Create invite link</div>
 <div class="card" style="margin-bottom:24px;padding:20px;">
-  <form method="post" action="/admin/projects/{{ project.id }}/invites" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-    <div>
-      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Role</label>
-      <select name="role" class="form-input" style="width:120px;">
+  <form method="post" action="/admin/projects/{{ project.id }}/invites" class="form-row">
+    <div class="form-group">
+      <label for="invite-role">Role</label>
+      <select id="invite-role" name="role" style="width:120px;">
         {% for role in roles %}
         <option value="{{ role }}" {% if role == "writer" %}selected{% endif %}>{{ role }}</option>
         {% endfor %}
       </select>
     </div>
-    <div>
-      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Max uses</label>
-      <input type="number" name="max_uses" min="1" placeholder="unlimited" class="form-input" style="width:110px;">
+    <div class="form-group">
+      <label for="invite-max-uses">Max uses</label>
+      <input type="number" id="invite-max-uses" name="max_uses" min="1" placeholder="unlimited" style="width:110px;">
     </div>
-    <div>
-      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Expires</label>
-      <select name="expires_in" class="form-input" style="width:140px;">
+    <div class="form-group">
+      <label for="invite-expires-in">Expires</label>
+      <select id="invite-expires-in" name="expires_in" style="width:140px;">
         <option value="">no expiry</option>
         <option value="900">15 minutes</option>
         <option value="3600">1 hour</option>
@@ -50,11 +50,12 @@
         <option value="604800">7 days</option>
       </select>
     </div>
-    <div style="flex:1;min-width:200px;">
-      <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Email domains (one per line, blank = any)</label>
-      <textarea name="allowed_email_domains" rows="2" placeholder="company.com&#10;*.company.com" class="form-input" style="width:100%;resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+    <div class="form-group" style="flex:1;min-width:220px;">
+      <label for="invite-domains">Email domains (one per line, blank = any)</label>
+      <textarea id="invite-domains" name="allowed_email_domains" rows="2" placeholder="company.com&#10;*.company.com" style="width:100%;resize:vertical;font-family:monospace;font-size:12px;"></textarea>
     </div>
-    <div>
+    <div class="form-group">
+      <label>&nbsp;</label>
       <button type="submit" class="btn btn-primary">Generate link</button>
     </div>
   </form>
