@@ -149,6 +149,17 @@ async def _resolve_oauth_identity(provider: str, sub: str, email: str | None) ->
     return user
 
 
+async def _claim_pending_invite(request: Request, user: User) -> None:
+    """Claim the session's pending invite for user, if one is stashed and still valid."""
+    pending_invite_token = request.session.pop(_INVITE_SESSION_KEY, None)
+    if not pending_invite_token:
+        return
+    invite = await _validate_invite(pending_invite_token)
+    if invite is not None:
+        if not invite.allowed_email_domains or matches_allowed_domains(user.email or "", invite.allowed_email_domains):
+            await _claim_invite(invite, user)
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -178,12 +189,7 @@ async def connect_login(
 
     remember = remember_me == "on"
 
-    pending_invite_token = request.session.pop(_INVITE_SESSION_KEY, None)
-    if pending_invite_token:
-        invite = await _validate_invite(pending_invite_token)
-        if invite is not None:
-            if not invite.allowed_email_domains or matches_allowed_domains(user.email or "", invite.allowed_email_domains):
-                await _claim_invite(invite, user)
+    await _claim_pending_invite(request, user)
 
     if request.headers.get("HX-Request"):
         response = Response(status_code=200)
@@ -388,12 +394,7 @@ async def oauth_callback(request: Request, provider: str):
             )
 
     # Claim pending invite if present (covers both new and existing users)
-    if pending_invite_token:
-        invite = await _validate_invite(pending_invite_token)
-        if invite is not None:
-            if not invite.allowed_email_domains or matches_allowed_domains(user.email or "", invite.allowed_email_domains):
-                await _claim_invite(invite, user)
-        request.session.pop(_INVITE_SESSION_KEY, None)
+    await _claim_pending_invite(request, user)
 
     response = RedirectResponse("/connect/projects", status_code=303)
     _set_connect_cookie(response, user.id, remember=False)

@@ -224,3 +224,20 @@ async def test_oauth_identity_provider_sub_unique(db):
     await OAuthIdentity.create(user=user, provider="github", sub="99999")
     with pytest.raises(IntegrityError):
         await OAuthIdentity.create(user=user, provider="github", sub="99999")
+
+
+async def test_create_user_from_oauth_creates_user_and_identity(db):
+    from mulchd.auth import create_user_from_oauth
+    from mulchd.models import OAuthIdentity
+    user = await create_user_from_oauth("github", "12345", "new@company.com", "newuser", "New User")
+    assert user.username == "newuser"
+    assert user.email == "new@company.com"
+    assert user.active is True
+    assert await OAuthIdentity.filter(user=user, provider="github", sub="12345").exists()
+
+
+async def test_create_user_from_oauth_suffixes_on_username_collision(db):
+    from mulchd.auth import create_user_from_oauth
+    await create_user("taken", "Existing User")
+    user = await create_user_from_oauth("github", "999", "another@company.com", "taken", "Another User")
+    assert user.username == "taken_2"
