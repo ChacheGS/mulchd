@@ -2,7 +2,7 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
-from ..auth import create_user
+from ..auth import _hash_token, create_user, generate_token
 from ..config import settings
 from ..models import OAuthIdentity, User
 from ._shared import is_admin, redirect_login, templates
@@ -106,6 +106,23 @@ async def user_detail(request: Request, user_id: int) -> Response:
         "user_detail.html",
         {"active": "users", "user": user, "identities": identities},
     )
+
+
+@router.post("/users/{user_id}/reset-token")
+async def reset_user_token(request: Request, user_id: int) -> Response:
+    if not is_admin(request):
+        return redirect_login()
+    user = await User.filter(id=user_id).first()
+    if user is None:
+        return Response(status_code=404)
+    token = generate_token()
+    await User.filter(id=user_id).update(token_hash=_hash_token(token))
+    request.session["pending_token"] = {
+        "username": user.username,
+        "display_name": user.display_name,
+        "token": token,
+    }
+    return RedirectResponse("/admin/users/created", status_code=303)
 
 
 @router.post("/users/{user_id}/identities/{identity_id}/unlink")

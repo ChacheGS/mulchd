@@ -38,6 +38,13 @@
   </div>
 </div>
 
+<div style="margin-bottom:24px;">
+  <form method="post" action="/admin/users/{{ user.id }}/reset-token"
+        onsubmit="return confirm('Generate a new global token for {{ user.username }}? The old token will stop working immediately.')">
+    <button type="submit" class="btn-link-danger">Reset global token</button>
+  </form>
+</div>
+
 <div class="page-title" style="font-size:14px;margin-top:24px;">Linked identities</div>
 <div class="card">
   {% if identities %}
