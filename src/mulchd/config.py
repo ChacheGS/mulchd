@@ -38,6 +38,9 @@ class Settings(BaseSettings):
 
 settings = Settings()  # type: ignore[call-arg]
 
+CONNECT_COOKIE_NAME = "mulchd_connect"
+CONNECT_COOKIE_SALT = "connect"
+
 TORTOISE_ORM = {
     "connections": {"default": settings.db_url},
     "apps": {

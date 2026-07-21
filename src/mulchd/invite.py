@@ -8,8 +8,9 @@ from itsdangerous import BadSignature, URLSafeSerializer
 from starlette.requests import Request
 from tortoise import transactions
 
-from .config import settings
+from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
 from .models import InviteLink, InviteUse, User, UserMembership
+from .oauth import get_configured_providers
 
 router = APIRouter(prefix="/invite")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -43,11 +44,11 @@ def matches_allowed_domains(email: str, patterns: list[str] | None) -> bool:
 
 def _get_invite_user_id(request: Request) -> int | None:
     """Read the connect cookie without importing from connect.py (avoids circular import)."""
-    raw = request.cookies.get("mulchd_connect", "")
+    raw = request.cookies.get(CONNECT_COOKIE_NAME, "")
     if not raw:
         return None
     try:
-        return URLSafeSerializer(settings.secret_key, salt="connect").loads(raw)
+        return URLSafeSerializer(settings.secret_key, salt=CONNECT_COOKIE_SALT).loads(raw)
     except BadSignature:
         return None
 
@@ -94,8 +95,6 @@ async def _claim_invite(invite: InviteLink, user: User) -> bool:
 
 @router.get("/{token}")
 async def invite_landing(request: Request, token: str) -> Response:
-    from .oauth import get_configured_providers
-
     invite = await _validate_invite(token)
     if invite is None:
         return templates.TemplateResponse(
@@ -108,15 +107,28 @@ async def invite_landing(request: Request, token: str) -> Response:
     if user_id is not None:
         user = await User.filter(id=user_id, active=True).first()
         if user is not None:
-            if invite.allowed_email_domains and not matches_allowed_domains(
-                user.email or "", invite.allowed_email_domains
+            already_member = await UserMembership.filter(
+                user=user, project=invite.project
+            ).exists()
+            if (
+                not already_member
+                and invite.allowed_email_domains
+                and not matches_allowed_domains(
+                    user.email or "", invite.allowed_email_domains
+                )
             ):
                 return templates.TemplateResponse(
                     request,
                     "invite.html",
                     {"error": "Your email is not authorized for this invite.", "invite": None},
                 )
-            await _claim_invite(invite, user)
+            claimed = await _claim_invite(invite, user)
+            if not claimed:
+                return templates.TemplateResponse(
+                    request,
+                    "invite.html",
+                    {"error": "This invite link is not valid.", "invite": None},
+                )
             return RedirectResponse(
                 f"/connect/projects/{invite.project.org.slug}/{invite.project.slug}",
                 status_code=303,

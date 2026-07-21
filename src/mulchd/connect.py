@@ -8,19 +8,19 @@ from itsdangerous import BadSignature, URLSafeSerializer
 from authlib.integrations.base_client import OAuthError
 
 from .auth import authenticate_global_token, create_project_token
-from .config import settings
+from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
 from .models import OAuthIdentity, Organization, Project, ProjectToken, User, UserMembership
 from .oauth import get_configured_providers, oauth
 
 router = APIRouter(prefix="/connect")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-_CONNECT_COOKIE = "mulchd_connect"
+_CONNECT_COOKIE = CONNECT_COOKIE_NAME
 _REMEMBER_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
 
 
 def _signer() -> URLSafeSerializer:
-    return URLSafeSerializer(settings.secret_key, salt="connect")
+    return URLSafeSerializer(settings.secret_key, salt=CONNECT_COOKIE_SALT)
 
 
 def _slug_to_env(s: str) -> str:

@@ -114,3 +114,20 @@ async def test_already_member_skips_without_incrementing(client, invite_fixture,
     assert resp.status_code == 303
     await invite.refresh_from_db()
     assert invite.use_count == 0  # not incremented
+
+
+async def test_claim_invite_returns_false_when_exhausted(invite_fixture, db):
+    from mulchd.auth import create_user
+    from mulchd.invite import _claim_invite
+
+    invite, project = invite_fixture
+    invite.max_uses = 1
+    await invite.save()
+
+    first, _ = await create_user("first", "First", email="first@company.com")
+    assert await _claim_invite(invite, first) is True
+
+    second, _ = await create_user("second", "Second", email="second@company.com")
+    assert await _claim_invite(invite, second) is False
+    await invite.refresh_from_db()
+    assert invite.use_count == 1
