@@ -250,3 +250,34 @@ async def test_admin_unlink_identity(admin_client):
     )
     assert resp.status_code == 303
     assert not await OAuthIdentity.filter(id=identity.id).exists()
+
+
+async def test_create_invite_link(admin_client):
+    from mulchd.models import InviteLink, Organization, Project
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+    resp = await admin_client.post(
+        f"/admin/projects/{project.id}/invites",
+        data={"role": "writer", "max_uses": "5", "expires_in": "3600", "allowed_email_domains": ""},
+    )
+    assert resp.status_code in (200, 303)
+    assert await InviteLink.filter(project=project).count() == 1
+    invite = await InviteLink.filter(project=project).first()
+    assert invite.role == "writer"
+    assert invite.max_uses == 5
+    assert invite.expires_at is not None
+
+
+async def test_revoke_invite_link(admin_client):
+    from mulchd.models import InviteLink, Organization, Project
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+    invite = await InviteLink.create(
+        token="revoketest123",
+        project=project,
+        role="writer",
+    )
+    resp = await admin_client.post(f"/admin/invites/{invite.id}/revoke")
+    assert resp.status_code in (200, 303)
+    await invite.refresh_from_db()
+    assert invite.revoked is True

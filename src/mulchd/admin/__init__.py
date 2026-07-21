@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from .audit import router as audit_router
 from .auth import router as auth_router
 from .dashboard import router as dashboard_router
+from .invites import router as invites_router
 from .memberships import router as memberships_router
 from .orgs import router as orgs_router
 from .project_tokens import router as project_tokens_router
@@ -18,6 +19,7 @@ router.include_router(usage_router)
 router.include_router(users_router)
 router.include_router(orgs_router)
 router.include_router(projects_router)
+router.include_router(invites_router)
 router.include_router(memberships_router)
 router.include_router(project_tokens_router)
 router.include_router(records_router)
