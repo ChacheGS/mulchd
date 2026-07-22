@@ -3,7 +3,8 @@ from datetime import UTC, datetime
 from tortoise import transactions
 
 from .config import settings
-from .models import AdminGrant, AdminRole, User
+from .instance_events import log_event
+from .models import AdminGrant, AdminRole, InstanceEventCategory, User
 
 
 async def is_superadmin(user: User) -> bool:
@@ -37,9 +38,13 @@ async def grant_superadmin(user: User, granted_by: User) -> AdminGrant:
     ).first()
     if existing is not None:
         return existing
-    return await AdminGrant.create(
+    grant = await AdminGrant.create(
         user=user, role=AdminRole.SUPERADMIN, granted_by=granted_by
     )
+    await log_event(
+        InstanceEventCategory.ADMIN_GRANTED, actor=granted_by, subject_user=user
+    )
+    return grant
 
 
 async def maybe_bootstrap_admin(user: User) -> bool:
@@ -79,4 +84,7 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
         fresh.revoked_by = revoked_by
         fresh.revoked_at = datetime.now(UTC).replace(tzinfo=None)
         await fresh.save()
+    await log_event(
+        InstanceEventCategory.ADMIN_REVOKED, actor=revoked_by, subject_user=fresh.user
+    )
     return True

@@ -214,3 +214,50 @@ async def test_maybe_bootstrap_admin_noop_when_unset(db):
 
     assert granted is False
     assert await is_superadmin(user) is False
+
+
+async def test_grant_superadmin_logs_event(db):
+    from mulchd.admin_grants import grant_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    alice, _ = await create_user("logalice", "Alice")
+    bob, _ = await create_user("logbob", "Bob")
+
+    await grant_superadmin(bob, granted_by=alice)
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.ADMIN_GRANTED)
+    assert event.actor_id == alice.id
+    assert event.subject_user_id == bob.id
+
+
+async def test_grant_superadmin_idempotent_does_not_double_log(db):
+    from mulchd.admin_grants import grant_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    alice, _ = await create_user("logalice2", "Alice")
+    bob, _ = await create_user("logbob2", "Bob")
+
+    await grant_superadmin(bob, granted_by=alice)
+    await grant_superadmin(bob, granted_by=alice)
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.ADMIN_GRANTED).count()
+    assert count == 1
+
+
+async def test_revoke_superadmin_logs_event(db):
+    from mulchd.admin_grants import grant_superadmin, revoke_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    alice, _ = await create_user("logalice3", "Alice")
+    bob, _ = await create_user("logbob3", "Bob")
+    await grant_superadmin(alice, granted_by=alice)
+    bob_grant = await grant_superadmin(bob, granted_by=alice)
+
+    await revoke_superadmin(bob_grant, revoked_by=alice)
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.ADMIN_REVOKED)
+    assert event.actor_id == alice.id
+    assert event.subject_user_id == bob.id
