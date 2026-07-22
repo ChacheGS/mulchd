@@ -6,13 +6,18 @@ mulchd is a self-hosted MCP server that stores and serves structured team knowle
 
 ## How it works
 
-mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes eight MCP tools over the standard Streamable HTTP and legacy SSE transports:
+mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes MCP tools over the standard Streamable HTTP and legacy SSE transports:
 
 | Tool | Description |
 |---|---|
 | `list_domains` | List all knowledge domains and the current server timestamp |
 | `read_records` | Load records from one or more domains |
-| `write_record` | Record a new decision, convention, pattern, failure, or guide |
+| `write_decision` | Record a decision that's been made or confirmed |
+| `write_convention` | Record a convention that's been established or corrected |
+| `write_failure` | Record something that broke and how it got fixed |
+| `write_pattern` | Record a reusable solution or code shape |
+| `write_reference` | Record a pointer to external info worth remembering |
+| `write_guide` | Record a how-to guide |
 | `edit_record` | Update an existing record in place |
 | `delete_record` | Soft-delete a record (recoverable from `/admin`) |
 | `search_records` | BM25 full-text search across domains |

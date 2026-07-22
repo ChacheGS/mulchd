@@ -79,13 +79,18 @@ async def test_tier1_get_setup_instructions_includes_contact(monkeypatch):
 
 
 @pytest.mark.no_db
-def test_tier2_tool_list_has_eight_knowledge_tools():
+def test_tier2_tool_list_has_thirteen_knowledge_tools():
     from mulchd.mcp.tier2 import TIER2_TOOLS
 
     names = {t.name for t in TIER2_TOOLS}
     assert names == {
         "read_records",
-        "write_record",
+        "write_convention",
+        "write_decision",
+        "write_failure",
+        "write_pattern",
+        "write_reference",
+        "write_guide",
         "search_records",
         "list_domains",
         "get_recent",
@@ -136,15 +141,43 @@ def test_no_tool_description_says_expertise_record():
 
 
 @pytest.mark.no_db
-def test_write_record_schema_exposes_date_for_decisions():
+def test_write_decision_schema_exposes_date():
     """get_record_schema advertises decision.date as an optional field, but
-    write_record must also expose it so clients can actually set it."""
+    write_decision must also expose it so clients can actually set it."""
     from mulchd.mcp.tier2 import TIER2_TOOLS
 
-    write_tool = next(t for t in TIER2_TOOLS if t.name == "write_record")
+    write_tool = next(t for t in TIER2_TOOLS if t.name == "write_decision")
     assert (
         "date" in write_tool.inputSchema["properties"]
-    ), "write_record must include 'date' to match what get_record_schema advertises"
+    ), "write_decision must include 'date' to match what get_record_schema advertises"
+
+
+@pytest.mark.no_db
+def test_write_tools_declare_type_specific_required_fields_in_schema():
+    """Each write_* tool's JSON schema 'required' array must list its own
+    type-specific content fields (not just domain/classification), so a
+    tool-calling model gets a hard schema signal instead of only a prose hint —
+    the whole point of splitting write_record into per-type tools."""
+    from mulchd.mcp.tier2 import TIER2_TOOLS
+
+    expected_content_fields = {
+        "write_convention": {"content"},
+        "write_decision": {"title", "rationale"},
+        "write_failure": {"description", "resolution"},
+        "write_pattern": {"name", "description"},
+        "write_reference": {"name", "description"},
+        "write_guide": {"name", "description"},
+    }
+    tools_by_name = {t.name for t in TIER2_TOOLS}
+    assert set(expected_content_fields) <= tools_by_name
+
+    for tool_name, fields in expected_content_fields.items():
+        tool = next(t for t in TIER2_TOOLS if t.name == tool_name)
+        required = set(tool.inputSchema["required"])
+        assert fields <= required, (
+            f"{tool_name} must declare {fields} as required in its JSON schema, got {required}"
+        )
+        assert {"domain", "classification"} <= required
 
 
 @pytest.mark.no_db

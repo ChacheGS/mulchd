@@ -25,11 +25,13 @@ import pytest
 
 from mulchd.auth import AuthContext
 from mulchd.domains import list_available_domains
+from mulchd.mcp.context import _ctx
 from mulchd.mcp.tier2 import (
     _get_recent,
     _list_domains,
     _read_expertise,
     _record_expertise,
+    call_tool,
 )
 from mulchd.models import (
     Organization,
@@ -352,6 +354,50 @@ async def test_writer_record_returns_confirmation(team, data_path, fake_write_re
     assert len(result) == 1
     assert "convention" in result[0].text
     assert "infra" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# write_* dispatch — per-type tools route to the right record type
+# ---------------------------------------------------------------------------
+
+
+async def test_write_decision_dispatch_creates_decision_record(team, data_path, fake_write_record):
+    """The write_decision tool call must inject type='decision' before reaching
+    _record_expertise, without the caller having to pass type explicitly."""
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        result = await call_tool(
+            "write_decision",
+            {
+                "domain": "infra",
+                "classification": "tactical",
+                "title": "Use IMDSv2",
+                "rationale": "Blocks SSRF-based credential theft",
+            },
+        )
+    finally:
+        _ctx.reset(token)
+    assert "decision" in result[0].text
+
+    text_content, _ = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert "IMDSv2" in text_content[0].text
+
+
+async def test_write_convention_dispatch_rejects_missing_content(team, data_path, fake_write_record):
+    """write_convention must still enforce its required field via the shared
+    validation in _record_expertise even though the schema itself has no
+    'type' property for the caller to get wrong."""
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        with pytest.raises(ValueError, match="requires: content"):
+            await call_tool(
+                "write_convention",
+                {"domain": "infra", "classification": "tactical"},
+            )
+    finally:
+        _ctx.reset(token)
 
 
 # ---------------------------------------------------------------------------

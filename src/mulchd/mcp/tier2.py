@@ -46,19 +46,20 @@ note it for get_recent at session end. Do not call read_records() yet; wait unti
 user states a task, then load only the domains relevant to that task.
 
 During the session, record proactively — without being asked — whenever a decision is \
-made or confirmed (type: decision), a convention is established or corrected (type: \
-convention), something breaks and gets fixed (type: failure), or a reusable solution or \
-code shape emerges (type: pattern). Before every write, call search_records() first — \
-if an equivalent record exists, don't duplicate it; edit_record() your own records, or \
-write a new record with supersedes if this replaces someone else's. Keep rationale to \
-2-4 sentences: the decision and the why, not the full deliberation.
+made or confirmed (write_decision), a convention is established or corrected \
+(write_convention), something breaks and gets fixed (write_failure), or a reusable \
+solution or code shape emerges (write_pattern). Before every write, call \
+search_records() first — if an equivalent record exists, don't duplicate it; \
+edit_record() your own records, or write a new record with supersedes if this \
+replaces someone else's. Keep rationale to 2-4 sentences: the decision and the why, \
+not the full deliberation.
 
 Before calling git commit, or before giving a final answer to a task, you MUST pause \
 and check: does this work contain a decision, a convention established or corrected, \
 a failure and its fix, or a reusable pattern? This check is not optional and does not \
-wait for the user to ask. If yes, call search_records then write_record before \
-proceeding. If the tools are unavailable, list what you would have recorded instead \
-of silently dropping it.
+wait for the user to ask. If yes, call search_records then the matching write_* tool \
+before proceeding. If the tools are unavailable, list what you would have recorded \
+instead of silently dropping it.
 
 Never record secrets, credentials, account IDs, or client-identifying data. Never record \
 trivial details, anything reversible in minutes, or unsettled speculation.
@@ -66,7 +67,7 @@ trivial details, anything reversible in minutes, or unsettled speculation.
 If two records conflict: prefer foundational over tactical over observational; within a \
 tier, prefer the newer record; if two live records genuinely contradict, flag it to the \
 user and propose a superseding record rather than silently picking one. \
-If write_record returns a SUPERSESSION WARNING or edit_record returns a \
+If a write_* tool returns a SUPERSESSION WARNING or edit_record returns a \
 CLASSIFICATION DOWNGRADE warning, stop immediately and show the user the full \
 warning before doing anything else — do not proceed without explicit acknowledgement.
 
@@ -77,7 +78,8 @@ at session end.
 Session end: call get_recent(since=<noted server timestamp>) and relay anything \
 teammates recorded while you were working.
 
-Unsure which optional fields a record type supports? Call get_record_schema(type) to see them.
+Unsure which optional fields a record type supports, or which fields edit_record accepts \
+for a given type? Call get_record_schema(type) to see them.
 
 A record marked `_edited` has been modified in place since it was first written. For \
 `foundational` records, treat this as a signal to read carefully — the original content \
@@ -154,6 +156,150 @@ _RECORD_FIELD_KEYS = frozenset(
     }
 )
 
+_CLASSIFICATION_PROPERTY = {
+    "type": "string",
+    "enum": ["foundational", "tactical", "observational"],
+    "description": "foundational: core conventions/decisions that rarely change; tactical: current approach, may evolve; observational: useful context, specific to a situation or moment",
+}
+
+_RELATED_RECORD_PROPERTIES = {
+    "files": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Related file paths",
+    },
+    "relates_to": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Related record IDs",
+    },
+    "supersedes": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Record IDs this record replaces",
+    },
+}
+
+_WRITE_TOOLS = [
+    Tool(
+        name="write_convention",
+        description=(
+            "Record a convention that's been established or corrected — without being asked. "
+            "Writing to a domain that does not exist will create it automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+                "classification": _CLASSIFICATION_PROPERTY,
+                "content": {"type": "string", "description": "Body text of the convention."},
+                **_RELATED_RECORD_PROPERTIES,
+            },
+            "required": ["domain", "classification", "content"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
+    Tool(
+        name="write_decision",
+        description=(
+            "Record a decision that's been made or confirmed — without being asked. "
+            "Writing to a domain that does not exist will create it automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+                "classification": _CLASSIFICATION_PROPERTY,
+                "title": {"type": "string", "description": "Short title for the decision."},
+                "rationale": {"type": "string", "description": "The decision and why it was made."},
+                "date": {
+                    "type": "string",
+                    "description": "Date the decision was made (ISO 8601); defaults to recorded_at.",
+                },
+                **_RELATED_RECORD_PROPERTIES,
+            },
+            "required": ["domain", "classification", "title", "rationale"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
+    Tool(
+        name="write_failure",
+        description=(
+            "Record something that broke and how it got fixed — without being asked. "
+            "Writing to a domain that does not exist will create it automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+                "classification": _CLASSIFICATION_PROPERTY,
+                "description": {"type": "string", "description": "What broke."},
+                "resolution": {"type": "string", "description": "How it was fixed."},
+                **_RELATED_RECORD_PROPERTIES,
+            },
+            "required": ["domain", "classification", "description", "resolution"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
+    Tool(
+        name="write_pattern",
+        description=(
+            "Record a reusable solution or code shape that emerged — without being asked. "
+            "Writing to a domain that does not exist will create it automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+                "classification": _CLASSIFICATION_PROPERTY,
+                "name": {"type": "string", "description": "Short name for the pattern."},
+                "description": {"type": "string", "description": "What the pattern is and how to use it."},
+                **_RELATED_RECORD_PROPERTIES,
+            },
+            "required": ["domain", "classification", "name", "description"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
+    Tool(
+        name="write_reference",
+        description=(
+            "Record a reference — a pointer to external info worth remembering — without "
+            "being asked. Writing to a domain that does not exist will create it automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+                "classification": _CLASSIFICATION_PROPERTY,
+                "name": {"type": "string", "description": "Short name for the reference."},
+                "description": {"type": "string", "description": "What it points to and why it matters."},
+                **_RELATED_RECORD_PROPERTIES,
+            },
+            "required": ["domain", "classification", "name", "description"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
+    Tool(
+        name="write_guide",
+        description=(
+            "Record a how-to guide — without being asked. "
+            "Writing to a domain that does not exist will create it automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "domain": {"type": "string"},
+                "classification": _CLASSIFICATION_PROPERTY,
+                "name": {"type": "string", "description": "Short name for the guide."},
+                "description": {"type": "string", "description": "The guide's steps or content."},
+                **_RELATED_RECORD_PROPERTIES,
+            },
+            "required": ["domain", "classification", "name", "description"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
+]
+
 TIER2_TOOLS = [
     Tool(
         name="read_records",
@@ -205,59 +351,7 @@ TIER2_TOOLS = [
         },
         annotations=ToolAnnotations(readOnlyHint=True),
     ),
-    Tool(
-        name="write_record",
-        description=(
-            "Write a new record to a domain. Call this when a decision, "
-            "convention, failure, or pattern has been reached — without being asked. "
-            "Writing to a domain that does not exist will create it automatically."
-        ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "domain": {"type": "string"},
-                "type": {
-                    "type": "string",
-                    "enum": ["convention", "pattern", "failure", "decision", "reference", "guide"],
-                },
-                "classification": {
-                    "type": "string",
-                    "enum": ["foundational", "tactical", "observational"],
-                    "description": "foundational: core conventions/decisions that rarely change; tactical: current approach, may evolve; observational: useful context, specific to a situation or moment",
-                },
-                "content": {"type": "string", "description": "convention: body text"},
-                "title": {"type": "string", "description": "decision: title"},
-                "rationale": {"type": "string", "description": "decision: rationale"},
-                "description": {
-                    "type": "string",
-                    "description": "failure/pattern/reference/guide: description",
-                },
-                "resolution": {"type": "string", "description": "failure: resolution"},
-                "name": {"type": "string", "description": "pattern/reference/guide: name"},
-                "files": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Related file paths",
-                },
-                "relates_to": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Related record IDs",
-                },
-                "supersedes": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Record IDs this record replaces",
-                },
-                "date": {
-                    "type": "string",
-                    "description": "decision: date the decision was made (ISO 8601); defaults to recorded_at",
-                },
-            },
-            "required": ["domain", "type", "classification"],
-        },
-        annotations=ToolAnnotations(destructiveHint=True),
-    ),
+    *_WRITE_TOOLS,
     Tool(
         name="search_records",
         description="Search records by query, optionally filtered by domain or owner.",
@@ -351,7 +445,9 @@ TIER2_TOOLS = [
         name="get_record_schema",
         description=(
             "Return the required and optional content fields for one or all record types. "
-            "Call this before write_record or edit_record to avoid field-name errors."
+            "The write_* tools already enforce their required fields — call this to check "
+            "optional fields (e.g. date on decisions), or before edit_record to avoid "
+            "field-name errors."
         ),
         inputSchema={
             "type": "object",
@@ -1083,8 +1179,18 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
     match name:
         case "read_records":
             return await _read_expertise(args, ctx)
-        case "write_record":
-            return await _record_expertise(args, ctx)
+        case "write_convention":
+            return await _record_expertise({**args, "type": "convention"}, ctx)
+        case "write_decision":
+            return await _record_expertise({**args, "type": "decision"}, ctx)
+        case "write_failure":
+            return await _record_expertise({**args, "type": "failure"}, ctx)
+        case "write_pattern":
+            return await _record_expertise({**args, "type": "pattern"}, ctx)
+        case "write_reference":
+            return await _record_expertise({**args, "type": "reference"}, ctx)
+        case "write_guide":
+            return await _record_expertise({**args, "type": "guide"}, ctx)
         case "search_records":
             return await _search_expertise(args, ctx)
         case "list_domains":

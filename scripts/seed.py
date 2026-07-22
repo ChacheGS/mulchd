@@ -474,7 +474,10 @@ async def main() -> None:
     tool_pool = (
         ["list_domains"] * 14
         + ["read_records"] * 24
-        + ["write_record"] * 20
+        + ["write_decision"] * 8
+        + ["write_convention"] * 6
+        + ["write_failure"] * 3
+        + ["write_pattern"] * 3
         + ["search_records"] * 22
         + ["get_recent"] * 12
         + ["edit_record"] * 4
