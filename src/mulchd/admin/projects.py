@@ -30,6 +30,7 @@ async def project_detail_page(request: Request, project_id: int) -> Response:
         return Response(status_code=404)
     invites = (
         await InviteLink.filter(project=project)
+        .select_related("created_by")
         .order_by("-created_at")
         .all()
     )

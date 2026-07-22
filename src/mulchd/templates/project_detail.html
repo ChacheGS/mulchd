@@ -78,7 +78,7 @@
   {% for invite in invites %}
   {% set status = invite.status %}
   <div class="table-row" style="grid-template-columns:80px 70px 80px 120px 1fr 60px 70px">
-    <span class="text-muted">{{ invite.created_at.strftime('%Y-%m-%d') }}</span>
+    <span class="text-muted" title="{{ 'Created by ' + invite.created_by.username if invite.created_by else '' }}">{{ invite.created_at.strftime('%Y-%m-%d') }}{% if invite.created_by %} <span style="color:#94a3b8;">by {{ invite.created_by.username }}</span>{% endif %}</span>
     <span><span class="badge badge-{{ invite.role }}">{{ invite.role }}</span></span>
     <span>{{ invite.use_count }}{% if invite.max_uses is not none %} / {{ invite.max_uses }}{% else %} / ∞{% endif %}</span>
     <span class="text-muted">{{ invite.expires_at.strftime('%Y-%m-%d %H:%M') if invite.expires_at else "never" }}</span>

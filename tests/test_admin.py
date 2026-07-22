@@ -266,6 +266,21 @@ async def test_project_detail_renders_invite_rows(admin_client):
     assert "bob" in resp.text
 
 
+async def test_project_detail_shows_invite_creator(admin_client):
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+    await admin_client.post(
+        f"/admin/projects/{project.id}/invites",
+        data={"role": "writer", "max_uses": "", "expires_in": "", "allowed_email_domains": ""},
+    )
+
+    resp = await admin_client.get(f"/admin/projects/{project.id}")
+    assert resp.status_code == 200
+    assert "by admin" in resp.text
+
+
 async def test_admin_unlink_identity(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import OAuthIdentity
