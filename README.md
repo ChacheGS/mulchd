@@ -56,6 +56,7 @@ Fill in all values. Key variables:
 | File | Variable | Description |
 |---|---|---|
 | `mulchd.env` | `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `mulchd.env` | `MULCHD_BOOTSTRAP_ADMIN_EMAIL` | Email of the first admin — grants access on first SSO login, then goes inert |
 | `.env` | `MULCHD_HOSTNAME` | Public hostname, e.g. `mulchd.your-domain.com` |
 
 **2. Deploy**
@@ -73,6 +74,8 @@ Log in to `/admin` and create an account for each team member. Each user gets a 
 **5. Configure SSO (optional)**
 
 To enable GitHub or OIDC sign-in on the `/connect` portal, uncomment and fill in the relevant OAuth vars in `deploy/mulchd.env` (see `mulchd.env.example`). Users must have their email set in the admin before their first SSO login — the server matches the provider's verified email to `User.email` to link the identity automatically.
+
+To hand admin rights to the first person on a fresh instance, set `MULCHD_BOOTSTRAP_ADMIN_EMAIL` to the email of whoever already has a `User` account and should administer the instance, then have them log in via `/connect` as usual — they receive a SUPERADMIN grant on that login. This only fires while no admin exists yet; once any admin grant exists it goes permanently inert, even if the var stays set.
 
 ## Connecting a client
 

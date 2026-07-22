@@ -159,3 +159,58 @@ async def test_grant_superadmin_idempotent(db):
 
     assert first.id == second.id
     assert await active_superadmin_count() == 1
+
+
+async def test_maybe_bootstrap_admin_grants_when_email_matches(db, monkeypatch):
+    from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
+    from mulchd.auth import create_user
+    import mulchd.config as config_mod
+
+    monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "boot@company.com")
+    user, _ = await create_user("bootuser", "Boot User", email="boot@company.com")
+
+    granted = await maybe_bootstrap_admin(user)
+
+    assert granted is True
+    assert await is_superadmin(user) is True
+
+
+async def test_maybe_bootstrap_admin_noop_when_email_does_not_match(db, monkeypatch):
+    from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
+    from mulchd.auth import create_user
+    import mulchd.config as config_mod
+
+    monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "boot@company.com")
+    user, _ = await create_user("wronguser", "Wrong User", email="other@company.com")
+
+    granted = await maybe_bootstrap_admin(user)
+
+    assert granted is False
+    assert await is_superadmin(user) is False
+
+
+async def test_maybe_bootstrap_admin_noop_when_grants_already_exist(db, monkeypatch):
+    from mulchd.admin_grants import grant_superadmin, maybe_bootstrap_admin
+    from mulchd.auth import create_user
+    import mulchd.config as config_mod
+
+    monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "boot@company.com")
+    existing, _ = await create_user("existingadmin", "Existing")
+    await grant_superadmin(existing, granted_by=existing)
+    user, _ = await create_user("bootuser2", "Boot User 2", email="boot@company.com")
+
+    granted = await maybe_bootstrap_admin(user)
+
+    assert granted is False
+
+
+async def test_maybe_bootstrap_admin_noop_when_unset(db):
+    from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
+    from mulchd.auth import create_user
+
+    user, _ = await create_user("nobootstrap", "No Bootstrap", email="whatever@company.com")
+
+    granted = await maybe_bootstrap_admin(user)
+
+    assert granted is False
+    assert await is_superadmin(user) is False

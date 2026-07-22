@@ -7,6 +7,7 @@ from itsdangerous import BadSignature, URLSafeSerializer
 
 from authlib.integrations.base_client import OAuthError
 
+from .admin_grants import maybe_bootstrap_admin
 from .auth import authenticate_global_token, create_project_token, create_user_from_oauth
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
 from .invite import (
@@ -403,6 +404,8 @@ async def oauth_callback(request: Request, provider: str):
                 {"error": "No account found for this identity. Ask an admin to create one.", "providers": get_configured_providers()},
                 status_code=403,
             )
+
+    await maybe_bootstrap_admin(user)
 
     # Claim pending invite if present (covers both new and existing users)
     invite_outcome = await _claim_pending_invite(request, user)

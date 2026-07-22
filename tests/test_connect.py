@@ -246,3 +246,16 @@ async def test_resolve_oauth_identity_uses_existing_link(db):
     result = await _resolve_oauth_identity("github", "gh-456", "any@email.com")
     assert result is not None
     assert result.id == user.id
+
+
+async def test_oauth_login_bootstraps_matching_admin_email(db, monkeypatch):
+    from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
+    from mulchd.auth import create_user
+    import mulchd.config as config_mod
+
+    monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "founder@acme.com")
+    user, _ = await create_user("founder", "Founder", email="founder@acme.com")
+
+    await maybe_bootstrap_admin(user)
+
+    assert await is_superadmin(user) is True

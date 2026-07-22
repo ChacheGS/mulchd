@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from tortoise import transactions
 
+from .config import settings
 from .models import AdminGrant, AdminRole, User
 
 
@@ -39,6 +40,24 @@ async def grant_superadmin(user: User, granted_by: User) -> AdminGrant:
     return await AdminGrant.create(
         user=user, role=AdminRole.SUPERADMIN, granted_by=granted_by
     )
+
+
+async def maybe_bootstrap_admin(user: User) -> bool:
+    """
+    If MULCHD_BOOTSTRAP_ADMIN_EMAIL is set, matches user's email, and zero
+    active SUPERADMIN grants exist anywhere, grant user SUPERADMIN
+    (self-referential granted_by). Returns True if a grant was created.
+    Once any grant exists, this becomes permanently inert regardless of
+    whether the setting is still present in config.
+    """
+    if not settings.bootstrap_admin_email:
+        return False
+    if not user.email or user.email.lower() != settings.bootstrap_admin_email.lower():
+        return False
+    if await active_superadmin_count() > 0:
+        return False
+    await grant_superadmin(user, granted_by=user)
+    return True
 
 
 async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
