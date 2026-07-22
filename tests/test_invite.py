@@ -85,9 +85,9 @@ async def test_logged_in_user_claims_invite(client, invite_fixture, db):
 
     user, _ = await create_user("claimuser", "Claim User", email="claim@company.com")
     signed = _signer().dumps(user.id)
+    client.cookies.set("mulchd_connect", signed)
     resp = await client.get(
         f"/invite/{invite.token}",
-        cookies={"mulchd_connect": signed},
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -106,9 +106,9 @@ async def test_already_member_skips_without_incrementing(client, invite_fixture,
     user, _ = await create_user("existingmember", "Existing", email="existing@company.com")
     await UserMembership.create(user=user, project=project, role=Role.READER)
     signed = _signer().dumps(user.id)
+    client.cookies.set("mulchd_connect", signed)
     resp = await client.get(
         f"/invite/{invite.token}",
-        cookies={"mulchd_connect": signed},
         follow_redirects=False,
     )
     assert resp.status_code == 303
@@ -186,10 +186,8 @@ async def test_domain_restriction_blocks_wrong_email(client, db):
     )
     user, _ = await create_user("wrongdomain", "Wrong", email="user@other.net")
     signed = _signer().dumps(user.id)
-    resp = await client.get(
-        f"/invite/{invite.token}",
-        cookies={"mulchd_connect": signed},
-    )
+    client.cookies.set("mulchd_connect", signed)
+    resp = await client.get(f"/invite/{invite.token}")
     assert "not authorized" in resp.text
     assert not await UserMembership.filter(user=user, project=project).exists()
 

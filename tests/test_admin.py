@@ -13,9 +13,8 @@ async def test_dashboard_rejects_non_admin_user(client):
 
     user, _ = await create_user("regular", "Regular User")
     signed = _signer().dumps(user.id)
-    resp = await client.get(
-        "/admin/", cookies={"mulchd_connect": signed}, follow_redirects=False
-    )
+    client.cookies.set("mulchd_connect", signed)
+    resp = await client.get("/admin/", follow_redirects=False)
     assert resp.status_code == 303
     assert "/connect" in resp.headers["location"]
 
