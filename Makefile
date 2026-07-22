@@ -1,4 +1,4 @@
-.PHONY: format test coverage dev dev-inspector dev-down dev-logs migrate-up migrate backup restore
+.PHONY: format test coverage dev dev-inspector dev-down dev-logs migrate-up migrate backup restore bootstrap-admin
 
 COMPOSE     = docker compose -f deploy/docker-compose.yml
 COMPOSE_DEV = $(COMPOSE) -f deploy/docker-compose.local.yml
@@ -86,3 +86,14 @@ restore:
 	rm -rf "$$tmp"; \
 	$(COMPOSE) start mulchd; \
 	echo "==> Restore complete."
+
+# Bootstrap the first admin against the live deployed container. Refuses if
+# an admin already exists — see src/mulchd/cli.py.
+# Usage: make bootstrap-admin USERNAME=carlos DISPLAY_NAME="Carlos G" EMAIL=carlos@example.com
+bootstrap-admin:
+	@if [ -z "$(USERNAME)" ] || [ -z "$(DISPLAY_NAME)" ] || [ -z "$(EMAIL)" ]; then \
+	  echo "Usage: make bootstrap-admin USERNAME=<username> DISPLAY_NAME=\"<display name>\" EMAIL=<email>"; \
+	  exit 1; \
+	fi
+	$(COMPOSE) exec mulchd .venv/bin/mulchd-bootstrap-admin \
+	  --username "$(USERNAME)" --display-name "$(DISPLAY_NAME)" --email "$(EMAIL)"

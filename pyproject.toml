@@ -32,6 +32,7 @@ dev = [
 
 [project.scripts]
 mulchd = "mulchd.main:run"
+mulchd-bootstrap-admin = "mulchd.cli:bootstrap_admin"
 
 [build-system]
 requires = ["hatchling"]
