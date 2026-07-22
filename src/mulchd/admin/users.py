@@ -10,7 +10,14 @@ from ..admin_grants import (
 )
 from ..auth import _hash_token, create_user, generate_token
 from ..config import settings
-from ..models import AdminGrant, AdminRole, OAuthIdentity, User
+from ..instance_events import log_event
+from ..models import (
+    AdminGrant,
+    AdminRole,
+    InstanceEventCategory,
+    OAuthIdentity,
+    User,
+)
 from ._shared import get_admin_user, is_admin, redirect_login, templates
 
 router = APIRouter()
@@ -35,7 +42,8 @@ async def create_user_route(
     display_name: str = Form(...),
     email: str = Form(default=""),
 ) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
     try:
         user, token = await create_user(
@@ -55,6 +63,7 @@ async def create_user_route(
             },
             status_code=409,
         )
+    await log_event(InstanceEventCategory.USER_CREATED, actor=admin, subject_user=user)
     request.session["pending_token"] = {
         "username": user.username,
         "display_name": user.display_name,
@@ -85,7 +94,8 @@ async def user_created_page(request: Request) -> Response:
 
 @router.post("/users/{user_id}/deactivate")
 async def deactivate_user(request: Request, user_id: int) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
     user = await User.filter(id=user_id).first()
     if user is None:
@@ -93,6 +103,7 @@ async def deactivate_user(request: Request, user_id: int) -> Response:
     if await is_last_active_superadmin(user):
         return RedirectResponse(f"/admin/users/{user_id}?error=last_admin", status_code=303)
     await User.filter(id=user_id).update(active=False)
+    await log_event(InstanceEventCategory.USER_DEACTIVATED, actor=admin, subject_user=user)
     return RedirectResponse("/admin/users", status_code=303)
 
 
@@ -157,13 +168,15 @@ async def revoke_admin_route(request: Request, user_id: int) -> Response:
 
 @router.post("/users/{user_id}/reset-token")
 async def reset_user_token(request: Request, user_id: int) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
     user = await User.filter(id=user_id).first()
     if user is None:
         return Response(status_code=404)
     token = generate_token()
     await User.filter(id=user_id).update(token_hash=_hash_token(token))
+    await log_event(InstanceEventCategory.TOKEN_RESET, actor=admin, subject_user=user)
     request.session["pending_token"] = {
         "username": user.username,
         "display_name": user.display_name,

@@ -490,3 +490,48 @@ async def test_remove_nonexistent_membership_does_not_log(admin_client):
 
     count = await InstanceEvent.filter(category=InstanceEventCategory.MEMBERSHIP_REMOVED).count()
     assert count == 0
+
+
+async def test_create_user_logs_event(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory, User
+
+    resp = await admin_client.post(
+        "/admin/users",
+        data={"username": "loguser", "display_name": "Log User"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    new_user = await User.get(username="loguser")
+    event = await InstanceEvent.get(category=InstanceEventCategory.USER_CREATED)
+    assert event.subject_user_id == new_user.id
+
+
+async def test_deactivate_user_logs_event(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    target, _ = await create_user("logdeactivate", "Log Deactivate")
+
+    resp = await admin_client.post(
+        f"/admin/users/{target.id}/deactivate", follow_redirects=False
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.USER_DEACTIVATED)
+    assert event.subject_user_id == target.id
+
+
+async def test_reset_token_logs_event(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    target, _ = await create_user("logreset", "Log Reset")
+
+    resp = await admin_client.post(
+        f"/admin/users/{target.id}/reset-token", follow_redirects=False
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.TOKEN_RESET)
+    assert event.subject_user_id == target.id
