@@ -410,3 +410,50 @@ async def test_revoked_admin_loses_access_on_next_request(admin_client):
     resp2 = await admin_client.get("/admin/", follow_redirects=False)
     assert resp2.status_code == 303
     assert "/connect" in resp2.headers["location"]
+
+
+async def test_add_membership_logs_event(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+
+    target, _ = await create_user("memberadd", "Member Add")
+    org = await Organization.create(slug="acme", display_name="Acme")
+    project = await Project.create(slug="infra", display_name="Infra", org=org)
+
+    resp = await admin_client.post(
+        "/admin/memberships",
+        data={"user_id": target.id, "project_id": project.id, "role": "writer"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.MEMBERSHIP_ADDED)
+    assert event.subject_user_id == target.id
+    assert event.project_id == project.id
+    assert event.detail == {"role": "writer"}
+
+
+async def test_remove_membership_logs_event(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+        Role,
+        UserMembership,
+    )
+
+    target, _ = await create_user("memberremove", "Member Remove")
+    org = await Organization.create(slug="acme2", display_name="Acme2")
+    project = await Project.create(slug="infra2", display_name="Infra2", org=org)
+    membership = await UserMembership.create(user=target, project=project, role=Role.WRITER)
+
+    resp = await admin_client.post(
+        f"/admin/memberships/{membership.id}/remove", follow_redirects=False
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.MEMBERSHIP_REMOVED)
+    assert event.subject_user_id == target.id
+    assert event.project_id == project.id

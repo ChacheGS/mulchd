@@ -2,8 +2,9 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
-from ..models import Project, Role, User, UserMembership
-from ._shared import is_admin, redirect_login, templates
+from ..instance_events import log_event
+from ..models import InstanceEventCategory, Project, Role, User, UserMembership
+from ._shared import get_admin_user, is_admin, redirect_login, templates
 
 router = APIRouter()
 
@@ -37,7 +38,8 @@ async def add_membership(
     project_id: int = Form(...),
     role: str = Form(...),
 ) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
     user = await User.get_or_none(id=user_id)
     project = await Project.get_or_none(id=project_id)
@@ -63,12 +65,30 @@ async def add_membership(
             },
             status_code=409,
         )
+    await log_event(
+        InstanceEventCategory.MEMBERSHIP_ADDED,
+        actor=admin,
+        subject_user=user,
+        project=project,
+        detail={"role": role},
+    )
     return RedirectResponse("/admin/memberships", status_code=303)
 
 
 @router.post("/memberships/{membership_id}/remove")
-async def remove_membership(request: Request, membership_id: int) -> RedirectResponse:
-    if not await is_admin(request):
+async def remove_membership(request: Request, membership_id: int) -> Response:
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
-    await UserMembership.filter(id=membership_id).delete()
+    membership = (
+        await UserMembership.filter(id=membership_id).select_related("user", "project").first()
+    )
+    if membership is not None:
+        await UserMembership.filter(id=membership_id).delete()
+        await log_event(
+            InstanceEventCategory.MEMBERSHIP_REMOVED,
+            actor=admin,
+            subject_user=membership.user,
+            project=membership.project,
+        )
     return RedirectResponse("/admin/memberships", status_code=303)
