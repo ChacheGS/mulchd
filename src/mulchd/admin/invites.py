@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse, Response
 
 from ..invite import generate_invite_token
 from ..models import InviteLink, Project, Role
-from ._shared import is_admin, redirect_login
+from ._shared import get_admin_user, is_admin, redirect_login
 
 router = APIRouter()
 
@@ -19,7 +19,8 @@ async def create_invite(
     expires_in: str = Form(""),
     allowed_email_domains: str = Form(""),
 ) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
     project = await Project.get_or_none(id=project_id)
     if project is None:
@@ -42,6 +43,7 @@ async def create_invite(
         max_uses=parsed_max_uses,
         expires_at=expires_at,
         allowed_email_domains=domains,
+        created_by=admin,
     )
     return RedirectResponse(f"/admin/projects/{project_id}?new_token={token}", status_code=303)
 

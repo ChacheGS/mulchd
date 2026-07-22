@@ -280,7 +280,7 @@ async def test_admin_unlink_identity(admin_client):
 
 
 async def test_create_invite_link(admin_client):
-    from mulchd.models import InviteLink, Organization, Project
+    from mulchd.models import InviteLink, Organization, Project, User
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
     resp = await admin_client.post(
@@ -294,6 +294,8 @@ async def test_create_invite_link(admin_client):
     assert invite.role == "writer"
     assert invite.max_uses == 5
     assert invite.expires_at is not None
+    admin_user = await User.filter(username="admin").first()
+    assert invite.created_by_id == admin_user.id
 
 
 async def test_grant_admin_access(admin_client):
