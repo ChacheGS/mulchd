@@ -196,7 +196,7 @@ class InstanceEvent(models.Model):
         on_delete=fields.RESTRICT,
     )
     project: fields.ForeignKeyRelation[Project] | None = fields.ForeignKeyField(
-        "models.Project", related_name="instance_events", null=True, default=None
+        "models.Project", related_name="instance_events", null=True, default=None, on_delete=fields.RESTRICT
     )
     detail = fields.JSONField(null=True, default=None)
     at = fields.DatetimeField(auto_now_add=True)
