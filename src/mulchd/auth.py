@@ -1,8 +1,19 @@
 import hashlib
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from .models import OAuthIdentity, Organization, Project, ProjectToken, Role, User, UserMembership
+from .instance_events import log_event
+from .models import (
+    InstanceEventCategory,
+    OAuthIdentity,
+    Organization,
+    Project,
+    ProjectToken,
+    Role,
+    User,
+    UserMembership,
+)
 
 
 @dataclass
@@ -89,8 +100,12 @@ async def create_user_from_oauth(
         email=email,
         token_hash=_hash_token(token),
         active=True,
+        first_login_at=datetime.now(UTC).replace(tzinfo=None),
     )
     await OAuthIdentity.create(user=user, provider=provider, sub=sub)
+    await log_event(
+        InstanceEventCategory.FIRST_LOGIN, actor=user, subject_user=user, detail={"provider": provider}
+    )
     return user
 
 

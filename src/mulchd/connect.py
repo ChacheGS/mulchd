@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -10,13 +11,22 @@ from authlib.integrations.base_client import OAuthError
 from .admin_grants import maybe_bootstrap_admin
 from .auth import authenticate_global_token, create_project_token, create_user_from_oauth
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
+from .instance_events import log_event
 from .invite import (
     _SESSION_KEY as _INVITE_SESSION_KEY,
     _claim_invite,
     _validate_invite,
     matches_allowed_domains,
 )
-from .models import OAuthIdentity, Organization, Project, ProjectToken, User, UserMembership
+from .models import (
+    InstanceEventCategory,
+    OAuthIdentity,
+    Organization,
+    Project,
+    ProjectToken,
+    User,
+    UserMembership,
+)
 from .oauth import get_configured_providers, oauth
 
 router = APIRouter(prefix="/connect")
@@ -147,7 +157,26 @@ async def _resolve_oauth_identity(provider: str, sub: str, email: str | None) ->
     if user is None:
         return None
     await OAuthIdentity.create(user=user, provider=provider, sub=sub)
+    await log_event(
+        InstanceEventCategory.OAUTH_LINKED, actor=user, subject_user=user, detail={"provider": provider}
+    )
     return user
+
+
+async def _maybe_log_first_login(user: User, provider: str) -> None:
+    """
+    If user has never logged in before, record it. No-ops for accounts that
+    already have first_login_at set — including brand-new OAuth-created
+    accounts, which set it directly in create_user_from_oauth (this call is
+    then a harmless no-op for them, not a duplicate log entry).
+    """
+    if user.first_login_at is not None:
+        return
+    user.first_login_at = datetime.now(UTC).replace(tzinfo=None)
+    await user.save(update_fields=["first_login_at"])
+    await log_event(
+        InstanceEventCategory.FIRST_LOGIN, actor=user, subject_user=user, detail={"provider": provider}
+    )
 
 
 async def _claim_pending_invite(request: Request, user: User) -> str | None:
@@ -195,6 +224,8 @@ async def connect_login(
             {"error": "Invalid token.", "providers": get_configured_providers()},
             status_code=401,
         )
+
+    await _maybe_log_first_login(user, "token")
 
     remember = remember_me == "on"
 
@@ -406,6 +437,7 @@ async def oauth_callback(request: Request, provider: str):
             )
 
     await maybe_bootstrap_admin(user)
+    await _maybe_log_first_login(user, provider)
 
     # Claim pending invite if present (covers both new and existing users)
     invite_outcome = await _claim_pending_invite(request, user)

@@ -248,6 +248,80 @@ async def test_resolve_oauth_identity_uses_existing_link(db):
     assert result.id == user.id
 
 
+async def test_create_user_from_oauth_sets_first_login_and_logs_event(db):
+    from mulchd.auth import create_user_from_oauth
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    user = await create_user_from_oauth("github", "gh-1", "new@company.com", "newperson", "New Person")
+
+    assert user.first_login_at is not None
+    event = await InstanceEvent.get(category=InstanceEventCategory.FIRST_LOGIN)
+    assert event.actor_id == user.id
+    assert event.subject_user_id == user.id
+    assert event.detail == {"provider": "github"}
+
+
+async def test_resolve_oauth_identity_creates_link_on_email_match_logs_oauth_linked(db):
+    from mulchd.auth import create_user
+    from mulchd.connect import _resolve_oauth_identity
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    user, _ = await create_user("ssouser", "SSO User", email="sso2@example.com")
+
+    result = await _resolve_oauth_identity("github", "gh-777", "sso2@example.com")
+
+    assert result is not None
+    event = await InstanceEvent.get(category=InstanceEventCategory.OAUTH_LINKED)
+    assert event.subject_user_id == user.id
+    assert event.detail == {"provider": "github"}
+
+
+async def test_resolve_oauth_identity_existing_link_does_not_relog(db):
+    from mulchd.auth import create_user
+    from mulchd.connect import _resolve_oauth_identity
+    from mulchd.models import InstanceEvent, InstanceEventCategory, OAuthIdentity
+
+    user, _ = await create_user("ssouser2", "SSO User 2")
+    await OAuthIdentity.create(user=user, provider="github", sub="gh-888")
+
+    await _resolve_oauth_identity("github", "gh-888", "any@email.com")
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.OAUTH_LINKED).count()
+    assert count == 0
+
+
+async def test_token_login_first_time_sets_first_login_and_logs_event(client, db):
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory, User
+
+    user, token = await create_user("tokenfirstlogin", "Token First Login")
+    assert user.first_login_at is None
+
+    resp = await client.post(
+        "/connect", data={"token": token, "remember_me": ""}, follow_redirects=False
+    )
+    assert resp.status_code == 303
+
+    await user.refresh_from_db()
+    assert user.first_login_at is not None
+    event = await InstanceEvent.get(category=InstanceEventCategory.FIRST_LOGIN)
+    assert event.subject_user_id == user.id
+    assert event.detail == {"provider": "token"}
+
+
+async def test_token_login_second_time_does_not_relog(client, db):
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    user, token = await create_user("tokensecondlogin", "Token Second Login")
+    await client.post("/connect", data={"token": token, "remember_me": ""})
+
+    await client.post("/connect", data={"token": token, "remember_me": ""})
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.FIRST_LOGIN).count()
+    assert count == 1
+
+
 async def test_oauth_login_bootstraps_matching_admin_email(db, monkeypatch):
     from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
     from mulchd.auth import create_user
