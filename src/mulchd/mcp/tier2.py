@@ -53,11 +53,12 @@ if an equivalent record exists, don't duplicate it; edit_record() your own recor
 write a new record with supersedes if this replaces someone else's. Keep rationale to \
 2-4 sentences: the decision and the why, not the full deliberation.
 
-Before producing any artifact — a git commit, a written summary, a document, or a \
-final answer to a task — check whether any decisions, conventions, patterns, or \
-failures from the current work should be recorded. If the tools are available, record \
-first, then produce the artifact. If the tools are unavailable, list what you would \
-have recorded at the end of your response so nothing is silently lost.
+Before calling git commit, or before giving a final answer to a task, you MUST pause \
+and check: does this work contain a decision, a convention established or corrected, \
+a failure and its fix, or a reusable pattern? This check is not optional and does not \
+wait for the user to ask. If yes, call search_records then write_record before \
+proceeding. If the tools are unavailable, list what you would have recorded instead \
+of silently dropping it.
 
 Never record secrets, credentials, account IDs, or client-identifying data. Never record \
 trivial details, anything reversible in minutes, or unsettled speculation.
