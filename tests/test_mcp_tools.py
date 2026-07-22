@@ -703,6 +703,26 @@ async def test_list_domains_structured_includes_get_recent_hint(team, data_path)
     ), "structured output must include the get_recent timestamp hint"
 
 
+async def test_list_domains_structured_includes_domain_uri(team, data_path, fake_write_record):
+    """Each domain entry should carry its resource URI so agents don't have to
+    hand-construct mulchd://domain/<name> or make a separate list_resources call."""
+    t = team
+    await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Use IMDSv2 on all EC2 instances",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    _, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
+    assert structured["domains"], "expected at least one domain after writing a record"
+    for d in structured["domains"]:
+        assert d["uri"] == f"mulchd://domain/{d['name']}"
+
+
 async def test_list_domains_structured_includes_language(team, data_path):
     """list_domains structured output should expose knowledge_language when set,
     so clients using structured content still receive the translation directive."""

@@ -97,7 +97,15 @@ domain is one you have been actively reading or writing in this session — call
 get_recent(domains=[<domain>], since=<session_start_timestamp>) and tell the user what \
 changed and whether it may conflict with the current work. For observational records, \
 deletions in unfamiliar domains, or domains you have not touched this session, note the \
-activity silently or skip it.\
+activity silently or skip it.
+
+Notifications are not guaranteed to reach you — some harnesses don't relay \
+notifications/resources/updated into your active context. If you haven't seen one in a \
+while and are about to commit a significant change (a git commit, a merge, a decision \
+that depends on shared state), call get_recent(domains=[<domain>], \
+since=<session_start_timestamp>) once for the domains you're relying on before proceeding, \
+rather than assuming silence means nothing changed. Don't poll on every turn — only before \
+actions that would be costly to get wrong.\
 """
 
 tier2_server = Server("mulchd", instructions=SESSION_WORKFLOW)
@@ -303,6 +311,10 @@ TIER2_TOOLS = [
                             "description": {"type": "string"},
                             "record_count": {"type": "integer"},
                             "last_updated": {"type": ["string", "null"]},
+                            "uri": {
+                                "type": "string",
+                                "description": "Resource URI for read_records / subscribe.",
+                            },
                         },
                     },
                 },
@@ -876,7 +888,7 @@ async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
     for d in domains:
         updated = d["last_updated"] or "never"
         lines.append(f"**{d['name']}** — {d['description']}")
-        lines.append(f"  {d['record_count']} records, last updated: {updated}\n")
+        lines.append(f"  {d['record_count']} records, last updated: {updated}, uri: {d['uri']}\n")
     structured: dict = {
         "server_time": now,
         "get_recent_hint": f"Call get_recent(since='{now}') at session end to surface teammate activity.",
@@ -1096,7 +1108,7 @@ async def list_resources() -> list[Resource]:
     domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     return [
         Resource(
-            uri=f"mulchd://domain/{d['name']}",
+            uri=d["uri"],
             name=d["name"],
             description=d.get("description", ""),
             mimeType="text/plain",
