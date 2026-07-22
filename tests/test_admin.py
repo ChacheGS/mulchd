@@ -565,3 +565,99 @@ async def test_reset_token_logs_event(admin_client):
 
     event = await InstanceEvent.get(category=InstanceEventCategory.TOKEN_RESET)
     assert event.subject_user_id == target.id
+
+
+async def test_create_org_logs_event(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    resp = await admin_client.post(
+        "/admin/orgs",
+        data={"slug": "logorg", "display_name": "Log Org"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.ORG_CREATED)
+    assert event.detail == {"org_slug": "logorg"}
+
+
+async def test_create_project_logs_event(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization
+
+    org = await Organization.create(slug="logprojorg", display_name="Log Proj Org")
+    resp = await admin_client.post(
+        "/admin/projects",
+        data={"org_id": org.id, "slug": "logproj", "display_name": "Log Proj"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.PROJECT_CREATED)
+    assert event.project_id is not None
+
+
+async def test_create_invite_logs_event(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+
+    org = await Organization.create(slug="loginviteorg", display_name="Log Invite Org")
+    project = await Project.create(slug="loginviteproj", display_name="Log Invite Proj", org=org)
+    resp = await admin_client.post(
+        f"/admin/projects/{project.id}/invites",
+        data={"role": "writer", "max_uses": "", "expires_in": "", "allowed_email_domains": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.INVITE_CREATED)
+    assert event.project_id == project.id
+    assert event.detail == {"role": "writer"}
+
+
+async def test_revoke_invite_logs_event(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory, InviteLink, Organization, Project
+
+    org = await Organization.create(slug="logrevokeorg", display_name="Log Revoke Org")
+    project = await Project.create(slug="logrevokeproj", display_name="Log Revoke Proj", org=org)
+    invite = await InviteLink.create(token="logrevoketoken", project=project, role="writer")
+
+    resp = await admin_client.post(
+        f"/admin/invites/{invite.id}/revoke", follow_redirects=False
+    )
+    assert resp.status_code == 303
+
+    event = await InstanceEvent.get(category=InstanceEventCategory.INVITE_REVOKED)
+    assert event.project_id == project.id
+
+
+async def test_create_org_duplicate_does_not_log(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    await admin_client.post("/admin/orgs", data={"slug": "duporg", "display_name": "Dup Org"})
+    resp = await admin_client.post(
+        "/admin/orgs",
+        data={"slug": "duporg", "display_name": "Dup Org 2"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 409
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.ORG_CREATED).count()
+    assert count == 1
+
+
+async def test_create_project_duplicate_does_not_log(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization
+
+    org = await Organization.create(slug="dupprojorg", display_name="Dup Proj Org")
+    await admin_client.post(
+        "/admin/projects",
+        data={"org_id": org.id, "slug": "dupproj", "display_name": "Dup Proj"},
+    )
+    resp = await admin_client.post(
+        "/admin/projects",
+        data={"org_id": org.id, "slug": "dupproj", "display_name": "Dup Proj 2"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 409
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.PROJECT_CREATED).count()
+    assert count == 1

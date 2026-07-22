@@ -2,8 +2,16 @@ from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
-from ..models import InviteLink, InviteUse, Organization, Project, Role
-from ._shared import is_admin, redirect_login, templates
+from ..instance_events import log_event
+from ..models import (
+    InstanceEventCategory,
+    InviteLink,
+    InviteUse,
+    Organization,
+    Project,
+    Role,
+)
+from ._shared import get_admin_user, is_admin, redirect_login, templates
 
 router = APIRouter()
 
@@ -65,13 +73,14 @@ async def create_project(
     display_name: str = Form(...),
     knowledge_language: str = Form(""),
 ) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
     org = await Organization.get_or_none(id=org_id)
     if org is None:
         return RedirectResponse("/admin/projects", status_code=303)
     try:
-        await Project.create(
+        project = await Project.create(
             slug=slug.strip(),
             display_name=display_name.strip(),
             knowledge_language=knowledge_language.strip() or None,
@@ -91,6 +100,7 @@ async def create_project(
             },
             status_code=409,
         )
+    await log_event(InstanceEventCategory.PROJECT_CREATED, actor=admin, project=project)
     return RedirectResponse("/admin/projects", status_code=303)
 
 

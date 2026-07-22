@@ -3,9 +3,10 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
+from ..instance_events import log_event
 from ..invite import generate_invite_token
-from ..models import InviteLink, Project, Role
-from ._shared import get_admin_user, is_admin, redirect_login
+from ..models import InstanceEventCategory, InviteLink, Project, Role
+from ._shared import get_admin_user, redirect_login
 
 router = APIRouter()
 
@@ -45,17 +46,21 @@ async def create_invite(
         allowed_email_domains=domains,
         created_by=admin,
     )
+    await log_event(
+        InstanceEventCategory.INVITE_CREATED, actor=admin, project=project, detail={"role": role}
+    )
     return RedirectResponse(f"/admin/projects/{project_id}?new_token={token}", status_code=303)
 
 
 @router.post("/invites/{invite_id}/revoke")
 async def revoke_invite(request: Request, invite_id: int) -> Response:
-    if not await is_admin(request):
+    admin = await get_admin_user(request)
+    if admin is None:
         return redirect_login()
-    invite = await InviteLink.get_or_none(id=invite_id)
+    invite = await InviteLink.filter(id=invite_id).select_related("project").first()
     if invite is None:
         return Response(status_code=404)
     invite.revoked = True
     await invite.save(update_fields=["revoked"])
-    project_id = invite.project_id
-    return RedirectResponse(f"/admin/projects/{project_id}", status_code=303)
+    await log_event(InstanceEventCategory.INVITE_REVOKED, actor=admin, project=invite.project)
+    return RedirectResponse(f"/admin/projects/{invite.project_id}", status_code=303)
