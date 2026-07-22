@@ -42,6 +42,7 @@ class User(models.Model):
     email = fields.CharField(max_length=255, null=True, unique=True, default=None)
     token_hash = fields.CharField(max_length=64)  # sha256 hex of bearer token
     active = fields.BooleanField(default=True)
+    first_login_at = fields.DatetimeField(null=True, default=None)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
@@ -159,6 +160,45 @@ class AdminGrant(models.Model):
 
     class Meta:
         table = "admin_grants"
+
+
+class InstanceEventCategory(StrEnum):
+    ADMIN_GRANTED = "admin_granted"
+    ADMIN_REVOKED = "admin_revoked"
+    MEMBERSHIP_ADDED = "membership_added"
+    MEMBERSHIP_REMOVED = "membership_removed"
+    FIRST_LOGIN = "first_login"
+    OAUTH_LINKED = "oauth_linked"
+    TOKEN_RESET = "token_reset"
+    ORG_CREATED = "org_created"
+    PROJECT_CREATED = "project_created"
+    USER_CREATED = "user_created"
+    USER_DEACTIVATED = "user_deactivated"
+    INVITE_CREATED = "invite_created"
+    INVITE_REVOKED = "invite_revoked"
+
+
+class InstanceEvent(models.Model):
+    id = fields.IntField(primary_key=True)
+    category = fields.CharEnumField(InstanceEventCategory, max_length=32)
+    actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User", related_name="instance_events_acted", on_delete=fields.RESTRICT
+    )
+    subject_user: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
+        "models.User",
+        related_name="instance_events_about",
+        null=True,
+        default=None,
+        on_delete=fields.RESTRICT,
+    )
+    project: fields.ForeignKeyRelation[Project] | None = fields.ForeignKeyField(
+        "models.Project", related_name="instance_events", null=True, default=None
+    )
+    detail = fields.JSONField(null=True, default=None)
+    at = fields.DatetimeField(auto_now_add=True)
+
+    class Meta:
+        table = "instance_events"
 
 
 class ProjectToken(models.Model):
