@@ -132,6 +132,10 @@ class AdminRole(StrEnum):
 
 
 class AdminGrant(models.Model):
+    # Note: aerich (0.9.2) does not diff on_delete changes — `aerich migrate`
+    # reports "No changes detected" even when this differs from what's in the
+    # DB. Any future on_delete change here needs a hand-written migration
+    # (ALTER TABLE ... DROP/ADD CONSTRAINT), not an auto-generated one.
     id = fields.IntField(primary_key=True)
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="admin_grants", on_delete=fields.RESTRICT
