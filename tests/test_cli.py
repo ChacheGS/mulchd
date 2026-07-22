@@ -1,3 +1,6 @@
+import pytest
+
+
 async def test_do_bootstrap_creates_admin(db):
     from mulchd.admin_grants import is_superadmin
     from mulchd.cli import _do_bootstrap
@@ -23,3 +26,14 @@ async def test_do_bootstrap_refuses_when_admin_exists(db):
     result = await _do_bootstrap("toolate", "Too Late", "toolate@company.com")
 
     assert result is None
+
+
+async def test_do_bootstrap_raises_integrity_error_on_username_collision(db):
+    from mulchd.auth import create_user
+    from mulchd.cli import _do_bootstrap
+    from tortoise.exceptions import IntegrityError
+
+    await create_user("taken", "Existing User")
+
+    with pytest.raises(IntegrityError):
+        await _do_bootstrap("taken", "Another User", "another@company.com")

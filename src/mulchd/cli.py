@@ -2,6 +2,7 @@ import argparse
 import asyncio
 
 from tortoise import Tortoise
+from tortoise.exceptions import IntegrityError
 
 from .admin_grants import active_superadmin_count, grant_superadmin
 from .auth import create_user
@@ -27,7 +28,11 @@ async def _do_bootstrap(
 async def _bootstrap_admin_main(username: str, display_name: str, email: str) -> None:
     await Tortoise.init(config=TORTOISE_ORM)
     try:
-        result = await _do_bootstrap(username, display_name, email)
+        try:
+            result = await _do_bootstrap(username, display_name, email)
+        except IntegrityError:
+            print(f"Refusing: username '{username}' or email '{email}' is already taken.")
+            return
         if result is None:
             print(
                 "Refusing: an active SUPERADMIN grant already exists. "
