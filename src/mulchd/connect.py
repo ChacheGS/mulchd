@@ -172,7 +172,7 @@ async def _maybe_log_first_login(user: User, provider: str) -> None:
     """
     if user.first_login_at is not None:
         return
-    user.first_login_at = datetime.now(UTC).replace(tzinfo=None)
+    user.first_login_at = datetime.now(UTC)
     await user.save(update_fields=["first_login_at"])
     await log_event(
         InstanceEventCategory.FIRST_LOGIN, actor=user, subject_user=user, detail={"provider": provider}

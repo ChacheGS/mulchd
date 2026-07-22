@@ -29,7 +29,7 @@ async def create_invite(
 
     expires_at = None
     if expires_in.strip():
-        expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=int(expires_in))
+        expires_at = datetime.now(UTC) + timedelta(seconds=int(expires_in))
 
     parsed_max_uses = int(max_uses.strip()) if max_uses.strip() else None
 

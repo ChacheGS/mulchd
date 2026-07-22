@@ -82,7 +82,7 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
         if await is_last_active_superadmin(fresh.user):
             return False
         fresh.revoked_by = revoked_by
-        fresh.revoked_at = datetime.now(UTC).replace(tzinfo=None)
+        fresh.revoked_at = datetime.now(UTC)
         await fresh.save()
     await log_event(
         InstanceEventCategory.ADMIN_REVOKED, actor=revoked_by, subject_user=fresh.user

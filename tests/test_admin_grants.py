@@ -52,7 +52,7 @@ async def test_is_superadmin_false_after_revoke(db):
     grant = await AdminGrant.create(user=user, granted_by=user)
     grant.revoked_by = user
     from datetime import UTC, datetime
-    grant.revoked_at = datetime.now(UTC).replace(tzinfo=None)
+    grant.revoked_at = datetime.now(UTC)
     await grant.save()
 
     assert await is_superadmin(user) is False

@@ -199,7 +199,7 @@ async def test_expired_link_returns_opaque_error(client, db):
     from mulchd.models import InviteLink, Organization, Project
     org = await Organization.create(slug="expiredorg", display_name="EX")
     project = await Project.create(slug="exp", display_name="Exp", org=org)
-    past = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=1)
+    past = datetime.now(UTC) - timedelta(hours=1)
     invite = await InviteLink.create(
         token="expiredtoken123",
         project=project,

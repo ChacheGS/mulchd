@@ -100,7 +100,7 @@ async def create_user_from_oauth(
         email=email,
         token_hash=_hash_token(token),
         active=True,
-        first_login_at=datetime.now(UTC).replace(tzinfo=None),
+        first_login_at=datetime.now(UTC),
     )
     await OAuthIdentity.create(user=user, provider=provider, sub=sub)
     await log_event(
