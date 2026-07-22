@@ -47,6 +47,21 @@ async def test_create_user_duplicate(admin_client):
     assert "already taken" in resp.text
 
 
+async def test_create_user_duplicate_does_not_log(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    await admin_client.post("/admin/users", data={"username": "jorge", "display_name": "Jorge"})
+    resp = await admin_client.post(
+        "/admin/users",
+        data={"username": "jorge", "display_name": "Jorge 2"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 409
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.USER_CREATED).count()
+    assert count == 1
+
+
 async def test_token_reveal_page(admin_client):
     await admin_client.post("/admin/users", data={"username": "jorge", "display_name": "Jorge M."})
     resp = await admin_client.get("/admin/users/created")
@@ -130,6 +145,21 @@ async def test_deactivate_blocked_for_last_admin(admin_client):
     assert resp.headers["location"] == f"/admin/users/{admin_user.id}?error=last_admin"
     await admin_user.refresh_from_db()
     assert admin_user.active is True
+
+
+async def test_deactivate_blocked_for_last_admin_does_not_log(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory, User
+
+    admin_user = await User.filter(username="admin").first()
+
+    resp = await admin_client.post(
+        f"/admin/users/{admin_user.id}/deactivate", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{admin_user.id}?error=last_admin"
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.USER_DEACTIVATED).count()
+    assert count == 0
 
 
 async def test_deactivate_allowed_when_other_admin_exists(admin_client):
