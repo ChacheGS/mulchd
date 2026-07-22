@@ -84,7 +84,7 @@ async def remove_membership(request: Request, membership_id: int) -> Response:
         await UserMembership.filter(id=membership_id).select_related("user", "project").first()
     )
     if membership is not None:
-        await UserMembership.filter(id=membership_id).delete()
+        await membership.delete()
         await log_event(
             InstanceEventCategory.MEMBERSHIP_REMOVED,
             actor=admin,

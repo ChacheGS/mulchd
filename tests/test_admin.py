@@ -457,3 +457,36 @@ async def test_remove_membership_logs_event(admin_client):
     event = await InstanceEvent.get(category=InstanceEventCategory.MEMBERSHIP_REMOVED)
     assert event.subject_user_id == target.id
     assert event.project_id == project.id
+
+
+async def test_duplicate_membership_does_not_log(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+
+    target, _ = await create_user("memberdup", "Member Dup")
+    org = await Organization.create(slug="acmedup", display_name="AcmeDup")
+    project = await Project.create(slug="infradup", display_name="InfraDup", org=org)
+
+    await admin_client.post(
+        "/admin/memberships",
+        data={"user_id": target.id, "project_id": project.id, "role": "writer"},
+    )
+    resp = await admin_client.post(
+        "/admin/memberships",
+        data={"user_id": target.id, "project_id": project.id, "role": "writer"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 409
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.MEMBERSHIP_ADDED).count()
+    assert count == 1
+
+
+async def test_remove_nonexistent_membership_does_not_log(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    resp = await admin_client.post("/admin/memberships/999999/remove", follow_redirects=False)
+    assert resp.status_code == 303
+
+    count = await InstanceEvent.filter(category=InstanceEventCategory.MEMBERSHIP_REMOVED).count()
+    assert count == 0
