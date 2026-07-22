@@ -238,6 +238,52 @@ async def test_token_login_with_domain_restricted_invite_denies_silently_but_fla
     assert not await UserMembership.filter(user=user, project=project).exists()
 
 
+async def test_claim_invite_logs_membership_added(db):
+    from mulchd.auth import create_user
+    from mulchd.invite import _claim_invite
+    from mulchd.models import InstanceEvent, InstanceEventCategory, InviteLink, Organization, Project
+
+    org = await Organization.create(slug="claimlogorg", display_name="Claim Log Org")
+    project = await Project.create(slug="claimlogproj", display_name="Claim Log Proj", org=org)
+    invite = await InviteLink.create(token="claimlogtoken", project=project, role="writer")
+    user, _ = await create_user("claimloguser", "Claim Log User")
+
+    result = await _claim_invite(invite, user)
+
+    assert result is True
+    event = await InstanceEvent.get(category=InstanceEventCategory.MEMBERSHIP_ADDED)
+    assert event.actor_id == user.id
+    assert event.subject_user_id == user.id
+    assert event.project_id == project.id
+    assert event.detail == {"role": "writer", "via": "invite"}
+
+
+async def test_claim_invite_already_member_does_not_relog(db):
+    from mulchd.auth import create_user
+    from mulchd.invite import _claim_invite
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        InviteLink,
+        Organization,
+        Project,
+        Role,
+        UserMembership,
+    )
+
+    org = await Organization.create(slug="claimlogorg2", display_name="Claim Log Org 2")
+    project = await Project.create(slug="claimlogproj2", display_name="Claim Log Proj 2", org=org)
+    invite = await InviteLink.create(token="claimlogtoken2", project=project, role="writer")
+    user, _ = await create_user("claimloguser2", "Claim Log User 2")
+    await UserMembership.create(user=user, project=project, role=Role.WRITER)
+
+    result = await _claim_invite(invite, user)
+
+    assert result is True
+    count = await InstanceEvent.filter(category=InstanceEventCategory.MEMBERSHIP_ADDED).count()
+    assert count == 0
+
+
 async def test_token_login_with_invalidated_pending_invite_flags_it(client, db):
     """If the pending invite gets revoked between visiting it and finishing login,
     the login redirect should carry an invite_error hint instead of silently succeeding."""

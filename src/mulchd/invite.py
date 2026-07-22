@@ -9,7 +9,8 @@ from starlette.requests import Request
 from tortoise import transactions
 
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
-from .models import InviteLink, InviteUse, User, UserMembership
+from .instance_events import log_event
+from .models import InstanceEventCategory, InviteLink, InviteUse, User, UserMembership
 from .oauth import get_configured_providers
 
 router = APIRouter(prefix="/invite")
@@ -90,6 +91,13 @@ async def _claim_invite(invite: InviteLink, user: User) -> bool:
         await fresh.save(update_fields=["use_count"])
         await UserMembership.create(user=user, project=invite.project, role=invite.role)
         await InviteUse.create(invite=invite, user=user)
+    await log_event(
+        InstanceEventCategory.MEMBERSHIP_ADDED,
+        actor=user,
+        subject_user=user,
+        project=invite.project,
+        detail={"role": invite.role, "via": "invite"},
+    )
     return True
 
 
