@@ -371,3 +371,25 @@ async def test_revoke_invite_link(admin_client):
     assert resp.headers["location"] == f"/admin/projects/{project.id}"
     await invite.refresh_from_db()
     assert invite.revoked is True
+
+
+async def test_revoked_admin_loses_access_on_next_request(admin_client):
+    from mulchd.admin_grants import grant_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import User
+
+    admin_user = await User.filter(username="admin").first()
+    other, _ = await create_user("otheradmin2", "Other Admin")
+    await grant_superadmin(other, granted_by=admin_user)
+
+    # admin_user revokes their own access (another admin still exists, so this succeeds)
+    resp = await admin_client.post(
+        f"/admin/users/{admin_user.id}/revoke-admin", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/users/{admin_user.id}"
+
+    # Same session cookie, next request — must now be locked out of /admin entirely
+    resp2 = await admin_client.get("/admin/", follow_redirects=False)
+    assert resp2.status_code == 303
+    assert "/connect" in resp2.headers["location"]
