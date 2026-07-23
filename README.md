@@ -6,27 +6,11 @@ mulchd is a self-hosted MCP server that stores and serves structured team knowle
 
 ## How it works
 
-mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk. mulchd wraps it with an HTTP server that exposes MCP tools over the standard Streamable HTTP and legacy SSE transports:
-
-| Tool | Description |
-|---|---|
-| `list_domains` | List all knowledge domains and the current server timestamp |
-| `read_records` | Load records from one or more domains |
-| `write_decision` | Record a decision that's been made or confirmed |
-| `write_convention` | Record a convention that's been established or corrected |
-| `write_failure` | Record something that broke and how it got fixed |
-| `write_pattern` | Record a reusable solution or code shape |
-| `write_reference` | Record a pointer to external info worth remembering |
-| `write_guide` | Record a how-to guide |
-| `edit_record` | Update an existing record in place |
-| `delete_record` | Soft-delete a record (recoverable from `/admin`) |
-| `search_records` | BM25 full-text search across domains |
-| `get_recent` | Surface teammate activity since a given timestamp |
-| `get_record_schema` | Get required and optional fields for a record type |
+mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk, and wraps it with an HTTP server exposing MCP tools (`write_decision`, `search_records`, `get_recent`, and more — see [docs/mcp-tools.md](docs/mcp-tools.md)) over Streamable HTTP and legacy SSE.
 
 Knowledge is organized into domains (e.g. `architecture`, `conventions`, `ops`). Records carry attribution, classification (`foundational` / `tactical` / `observational`), and optional supersession links so the team can track how thinking evolves.
 
-An admin UI at `/admin` covers user and project management, a live record browser, and a full audit log with soft-delete and restore. A self-service `/connect` portal lets team members mint their own project-scoped tokens without admin involvement.
+An admin UI at `/admin` covers user and project management, [invite links](docs/features/invite-links.md) for self-service onboarding, [admin access management and an instance-wide activity log](docs/features/admin-rbac.md), a live record browser, and a full per-project record audit log with soft-delete and restore. A self-service `/connect` portal lets team members mint their own project-scoped tokens without admin involvement.
 
 ## Try it locally
 
@@ -45,82 +29,11 @@ To connect a client to the demo server, use the project tokens printed by the se
 
 ## Production setup
 
-Requirements: a VPS with Docker, a domain, and a DNS provider supported by Traefik's ACME challenge (the included config uses DigitalOcean).
-
-**1. Configure environment files**
-
-```bash
-cp deploy/mulchd.env.example deploy/mulchd.env
-cp deploy/postgres.env.example deploy/postgres.env
-cp deploy/traefik.env.example deploy/traefik.env
-cp deploy/.env.example deploy/.env
-```
-
-Fill in all values. Key variables:
-
-| File | Variable | Description |
-|---|---|---|
-| `mulchd.env` | `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
-| `mulchd.env` | `MULCHD_BOOTSTRAP_ADMIN_EMAIL` | Email of the first admin — grants access on first SSO login, then goes inert |
-| `.env` | `MULCHD_HOSTNAME` | Public hostname, e.g. `mulchd.your-domain.com` |
-
-**2. Deploy**
-
-```bash
-docker compose -f deploy/docker-compose.yml up -d
-```
-
-Migrations run automatically on each deploy. The admin UI will be at `https://mulchd.your-domain.com/admin`.
-
-**3. Bootstrap the first admin**
-
-There's no default admin account — the first `SUPERADMIN` grant has to come from somewhere. If you're using SSO (see step 5 below), set `MULCHD_BOOTSTRAP_ADMIN_EMAIL` and log in via `/connect`; the grant happens automatically on that first login. If you're not using SSO, run this instead:
-
-```bash
-make bootstrap-admin USERNAME=yourname DISPLAY_NAME="Your Name" EMAIL=you@example.com
-```
-
-This creates the account and prints its global token once — save it, then log in to `/connect` with it. Either path refuses to run again once any admin exists, so it's safe to leave configured.
-
-**4. Create users**
-
-Log in to `/admin` and create an account for each team member. Each user gets a global token on creation — shown once, used to log in to `/connect`.
-
-**5. Configure SSO (optional)**
-
-To enable GitHub or OIDC sign-in on the `/connect` portal, uncomment and fill in the relevant OAuth vars in `deploy/mulchd.env` (see `mulchd.env.example`). Users must have their email set in the admin before their first SSO login — the server matches the provider's verified email to `User.email` to link the identity automatically.
+See [docs/deployment.md](docs/deployment.md) for the full walkthrough: environment configuration, deploying with Docker Compose, bootstrapping the first admin, creating users, and enabling SSO.
 
 ## Connecting a client
 
-mulchd works with any MCP-compatible client. The `/connect` portal generates ready-to-paste config snippets for Claude Code and Claude Desktop — use those rather than hand-editing.
-
-For Claude Code, the generated `.mcp.json` entry looks like:
-
-```json
-{
-  "mcpServers": {
-    "mulchd": {
-      "type": "http",
-      "url": "https://mulchd.your-domain.com/mcp",
-      "headers": {
-        "Authorization": "Bearer ${MULCHD_TOKEN_YOUR_PROJECT}"
-      }
-    }
-  }
-}
-```
-
-The token goes in `.claude/settings.local.json` (not committed):
-
-```json
-{
-  "env": {
-    "MULCHD_TOKEN_YOUR_PROJECT": "mlt_..."
-  }
-}
-```
-
-For clients that use the legacy SSE transport, the endpoint is `/sse` with the same `Authorization` header.
+mulchd works with any MCP-compatible client. The `/connect` portal generates ready-to-paste config snippets for Claude Code and Claude Desktop — see [docs/mcp-tools.md](docs/mcp-tools.md) for the tool list and example client config.
 
 ## Development
 
