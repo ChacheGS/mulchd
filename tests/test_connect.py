@@ -102,6 +102,26 @@ async def test_connect_login_htmx_returns_hx_redirect(client, alice_and_project)
     assert resp.headers.get("HX-Redirect") == "/connect/projects"
 
 
+async def test_login_redirects_to_return_to_after_token_login(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await client.get("/connect", params={"return_to": "/connect/oauth-consent?client_id=x"})
+    resp = await client.post(
+        "/connect", data={"token": token, "remember_me": ""}, follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/connect/oauth-consent?client_id=x"
+
+
+async def test_login_ignores_unsafe_return_to(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await client.get("/connect", params={"return_to": "https://evil.example/steal"})
+    resp = await client.post(
+        "/connect", data={"token": token, "remember_me": ""}, follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/connect/projects"
+
+
 # ── projects ────────────────────────────────────────────────────────────────
 
 

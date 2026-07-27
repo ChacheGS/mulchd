@@ -179,6 +179,13 @@ async def _maybe_log_first_login(user: User, provider: str) -> None:
     )
 
 
+def _safe_return_to(value: str | None) -> str | None:
+    """Only ever redirect to a same-origin /connect/* path — never an absolute URL."""
+    if value and value.startswith("/connect/") and "://" not in value:
+        return value
+    return None
+
+
 async def _claim_pending_invite(request: Request, user: User) -> str | None:
     """
     Claim the session's pending invite for user, if one is stashed.
@@ -202,9 +209,12 @@ async def _claim_pending_invite(request: Request, user: User) -> str | None:
 
 
 @router.get("", response_class=HTMLResponse)
-async def connect_login_page(request: Request):
+async def connect_login_page(request: Request, return_to: str | None = None):
+    safe_return_to = _safe_return_to(return_to)
+    if safe_return_to is not None:
+        request.session["return_to"] = safe_return_to
     if await _require_user(request) is not None:
-        return RedirectResponse("/connect/projects", status_code=303)
+        return RedirectResponse(request.session.pop("return_to", "/connect/projects"), status_code=303)
     return templates.TemplateResponse(
         request, "connect/entry.html", {"providers": get_configured_providers()}
     )
@@ -229,8 +239,8 @@ async def connect_login(
 
     remember = remember_me == "on"
 
+    redirect_url = request.session.pop("return_to", "/connect/projects")
     invite_outcome = await _claim_pending_invite(request, user)
-    redirect_url = "/connect/projects"
     if invite_outcome in ("invalid", "domain_denied"):
         redirect_url = f"/connect/projects?invite_error={invite_outcome}"
 
@@ -440,8 +450,8 @@ async def oauth_callback(request: Request, provider: str):
     await _maybe_log_first_login(user, provider)
 
     # Claim pending invite if present (covers both new and existing users)
+    redirect_url = request.session.pop("return_to", "/connect/projects")
     invite_outcome = await _claim_pending_invite(request, user)
-    redirect_url = "/connect/projects"
     if invite_outcome in ("invalid", "domain_denied"):
         redirect_url = f"/connect/projects?invite_error={invite_outcome}"
 
