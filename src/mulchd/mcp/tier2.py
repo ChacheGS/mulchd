@@ -650,6 +650,69 @@ def _validate_references(
         raise ValueError("\n".join(errors))
 
 
+def _find_cycles(project_records: list[dict]) -> dict[str, list[str]]:
+    """Tarjan's strongly-connected-components algorithm over the supersedes
+    graph. Returns {record_id: [other ids in its cycle]} for every record
+    whose component has more than one member (a genuine cycle) — records not
+    part of any cycle are absent from the result entirely.
+
+    Edges to an ID not present in project_records (e.g. an already-archived
+    target, or a dangling legacy reference) are dropped before running the
+    algorithm — a target that isn't a node in this graph can't complete a
+    cycle back to anything.
+    """
+    ids_present = {r["id"] for r in project_records if r.get("id")}
+    graph: dict[str, list[str]] = {}
+    for r in project_records:
+        rid = r.get("id")
+        if not rid:
+            continue
+        graph[rid] = [t for t in (r.get("supersedes") or []) if t in ids_present]
+
+    index_counter = 0
+    stack: list[str] = []
+    lowlink: dict[str, int] = {}
+    index: dict[str, int] = {}
+    on_stack: dict[str, bool] = {}
+    sccs: list[list[str]] = []
+
+    def strongconnect(v: str) -> None:
+        nonlocal index_counter
+        index[v] = index_counter
+        lowlink[v] = index_counter
+        index_counter += 1
+        stack.append(v)
+        on_stack[v] = True
+
+        for w in graph.get(v, []):
+            if w not in index:
+                strongconnect(w)
+                lowlink[v] = min(lowlink[v], lowlink[w])
+            elif on_stack.get(w):
+                lowlink[v] = min(lowlink[v], index[w])
+
+        if lowlink[v] == index[v]:
+            component: list[str] = []
+            while True:
+                w = stack.pop()
+                on_stack[w] = False
+                component.append(w)
+                if w == v:
+                    break
+            sccs.append(component)
+
+    for node in graph:
+        if node not in index:
+            strongconnect(node)
+
+    result: dict[str, list[str]] = {}
+    for component in sccs:
+        if len(component) > 1:
+            for rid in component:
+                result[rid] = [other for other in component if other != rid]
+    return result
+
+
 from enum import IntEnum
 
 

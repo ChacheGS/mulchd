@@ -1689,3 +1689,61 @@ async def test_cross_domain_hints_in_read_records(team, data_path):
     assert len(hints) == 1
     assert hints[0]["record_id"] == victim["id"]
     assert hints[0]["in_domain"] == "policies"
+
+
+def test_find_cycles_no_cycle_in_linear_chain():
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [
+        {"id": "mx-a", "supersedes": ["mx-b"]},
+        {"id": "mx-b", "supersedes": ["mx-c"]},
+        {"id": "mx-c", "supersedes": []},
+    ]
+    assert _find_cycles(records) == {}
+
+
+def test_find_cycles_detects_direct_mutual_cycle():
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [
+        {"id": "mx-a", "supersedes": ["mx-b"]},
+        {"id": "mx-b", "supersedes": ["mx-a"]},
+    ]
+    cycles = _find_cycles(records)
+    assert set(cycles.keys()) == {"mx-a", "mx-b"}
+    assert cycles["mx-a"] == ["mx-b"]
+    assert cycles["mx-b"] == ["mx-a"]
+
+
+def test_find_cycles_detects_transitive_three_node_cycle():
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [
+        {"id": "mx-a", "supersedes": ["mx-b"]},
+        {"id": "mx-b", "supersedes": ["mx-c"]},
+        {"id": "mx-c", "supersedes": ["mx-a"]},
+    ]
+    cycles = _find_cycles(records)
+    assert set(cycles.keys()) == {"mx-a", "mx-b", "mx-c"}
+    assert set(cycles["mx-a"]) == {"mx-b", "mx-c"}
+
+
+def test_find_cycles_ignores_dangling_supersedes_target():
+    """A supersedes reference to an ID not present among the given records
+    (e.g. an already-archived target) can't participate in a cycle."""
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [
+        {"id": "mx-a", "supersedes": ["mx-ghost"]},
+    ]
+    assert _find_cycles(records) == {}
+
+
+def test_find_cycles_unrelated_records_not_flagged():
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [
+        {"id": "mx-a", "supersedes": []},
+        {"id": "mx-b", "supersedes": []},
+    ]
+    assert _find_cycles(records) == {}
