@@ -831,7 +831,7 @@ async def test_read_records_marks_superseded(team, data_path):
         {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
     )
     new_record = next(r for r in structured["records"] if r.get("supersedes"))
-    assert "superseded" in text_content[0].text
+    assert "superseded" in text_content[0].text.lower()
     assert new_record["id"] in text_content[0].text  # superseded_by ID appears in text
     superseded_records = [r for r in structured["records"] if r.get("_superseded")]
     assert len(superseded_records) == 1
@@ -1535,6 +1535,74 @@ async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
 
     assert records[0].get("_superseded") is True
     assert records[1].get("_supersedes_foundational") == [original["id"]]
+
+
+async def test_mark_superseded_tags_foundational_victim(team, data_path):
+    """_mark_superseded sets _foundational_superseded on a foundational record
+    that has since been superseded — not on the superseder, and not on a
+    foundational record that hasn't been superseded."""
+    from mulchd.mcp.tier2 import _mark_superseded
+
+    t = team
+    original = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    superseder = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="Weakened rule", owner="jorge",
+        supersedes=[original["id"]],
+    )
+    untouched = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="foundational", content="Still standing", owner="carlos",
+    )
+    for r in (original, superseder, untouched):
+        r["_domain"] = "api"
+
+    records = [original, superseder, untouched]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert original.get("_foundational_superseded") is True
+    assert superseder.get("_foundational_superseded") is None
+    assert untouched.get("_foundational_superseded") is None
+
+
+async def test_format_records_renders_foundational_superseded_banner(team, data_path):
+    """_format_records renders the loud banner instead of the plain line when
+    _foundational_superseded is set, and keeps the plain line otherwise."""
+    from mulchd.mcp.tier2 import _format_records, _mark_superseded
+
+    t = team
+    original = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    superseder = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="Weakened rule", owner="jorge",
+        supersedes=[original["id"]],
+    )
+    tactical_old = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="Old tactical", owner="carlos",
+    )
+    tactical_new = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="New tactical", owner="carlos",
+        supersedes=[tactical_old["id"]],
+    )
+    for r in (original, superseder, tactical_old, tactical_new):
+        r["_domain"] = "api"
+
+    records = [original, tactical_old]
+    await _mark_superseded(records, "acme", "infra")
+    text = _format_records(records)
+
+    assert f"FOUNDATIONAL POLICY SUPERSEDED by {superseder['id']}" in text
+    assert f"get_record_history('{original['id']}')" in text
+    assert f"superseded by {tactical_new['id']}" in text
+    assert "FOUNDATIONAL POLICY SUPERSEDED" not in text.split(tactical_old["id"], 1)[1].split("\n")[0]
 
 
 async def test_mark_superseded_foundational_target_not_double_rendered(team, data_path):

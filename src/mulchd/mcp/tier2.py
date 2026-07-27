@@ -593,6 +593,8 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             r["_superseded_by"] = superseder_id
             if superseder_domain and superseder_domain != r.get("_domain", ""):
                 r["_superseder_domain"] = superseder_domain
+            if r.get("classification") == "foundational":
+                r["_foundational_superseded"] = True
 
         outgoing = r.get("supersedes") or []
         if outgoing:
@@ -857,14 +859,20 @@ def _format_single(r: dict) -> str:
         header += f" ⚠ CONTRADICTORY: cycle with {', '.join(r['_cycle_with'])}"
     else:
         if r.get("_superseded"):
-            tag = (
-                f" • superseded by {r['_superseded_by']}"
-                if r.get("_superseded_by")
-                else " • superseded"
-            )
-            if r.get("_superseder_domain"):
-                tag += f" (in {r['_superseder_domain']})"
-            header += tag
+            if r.get("_foundational_superseded"):
+                header += (
+                    f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']} — "
+                    f"see get_record_history('{r.get('id', '')}') for the original text"
+                )
+            else:
+                tag = (
+                    f" • superseded by {r['_superseded_by']}"
+                    if r.get("_superseded_by")
+                    else " • superseded"
+                )
+                if r.get("_superseder_domain"):
+                    tag += f" (in {r['_superseder_domain']})"
+                header += tag
         if r.get("_supersedes_display"):
             header += f" • supersedes {', '.join(r['_supersedes_display'])}"
         if r.get("_supersedes_foundational"):
@@ -899,14 +907,20 @@ def _format_records(records: list[dict]) -> str:
             header += f" ⚠ CONTRADICTORY: cycle with {', '.join(r['_cycle_with'])}"
         else:
             if r.get("_superseded"):
-                tag = (
-                    f" • superseded by {r['_superseded_by']}"
-                    if r.get("_superseded_by")
-                    else " • superseded"
-                )
-                if r.get("_superseder_domain"):
-                    tag += f" (in {r['_superseder_domain']})"
-                header += tag
+                if r.get("_foundational_superseded"):
+                    header += (
+                        f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']} — "
+                        f"see get_record_history('{r.get('id', '')}') for the original text"
+                    )
+                else:
+                    tag = (
+                        f" • superseded by {r['_superseded_by']}"
+                        if r.get("_superseded_by")
+                        else " • superseded"
+                    )
+                    if r.get("_superseder_domain"):
+                        tag += f" (in {r['_superseder_domain']})"
+                    header += tag
             if r.get("_supersedes_display"):
                 header += f" • supersedes {', '.join(r['_supersedes_display'])}"
             if r.get("_supersedes_foundational"):
