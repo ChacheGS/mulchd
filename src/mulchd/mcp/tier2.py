@@ -594,6 +594,37 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             r["_supersedes_foundational"] = displaced
 
 
+async def _load_project_records(m_dir: Path) -> list[dict]:
+    """Read every live record across all domains in the project, each tagged
+    with its _domain. Used for write-time existence validation and read-time
+    cycle detection — both need the whole project's supersede graph, not just
+    the current read scope."""
+    records: list[dict] = []
+    expertise_dir = m_dir / "expertise"
+    if not expertise_dir.exists():
+        return records
+    for jsonl_file in expertise_dir.glob("*.jsonl"):
+        domain = jsonl_file.stem
+        for r in await read_domain_records(jsonl_file):
+            r["_domain"] = domain
+            records.append(r)
+    return records
+
+
+async def _load_archived_ids(m_dir: Path) -> set[str]:
+    """IDs of soft-deleted (archived) records — stored under archive/, outside
+    the live expertise/ tree read_domain_records normally reads."""
+    archive_dir = m_dir / "archive"
+    if not archive_dir.exists():
+        return set()
+    ids: set[str] = set()
+    for jsonl_file in archive_dir.glob("*.jsonl"):
+        for r in await read_domain_records(jsonl_file):
+            if r.get("id"):
+                ids.add(r["id"])
+    return ids
+
+
 from enum import IntEnum
 
 
