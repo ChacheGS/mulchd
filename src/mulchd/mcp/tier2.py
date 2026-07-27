@@ -798,6 +798,25 @@ async def _supersede_alerts(
     return alerts
 
 
+def _format_supersession_alerts(alerts: dict[str, str], new_classification: str) -> str:
+    """Render the ⚠ SUPERSESSION WARNING block for a set of alerted supersede
+    targets, or "" if there are none. Shared by _record_expertise (write) and
+    _edit_record (adding a supersedes reference to an existing record)."""
+    if not alerts:
+        return ""
+    new_rank = Classification.of(new_classification)
+    lines: list[str] = []
+    for sid, old_cls in alerts.items():
+        if Classification.of(old_cls) > new_rank:
+            lines.append(f"  {sid}: {old_cls} → {new_classification} (classification downgrade)")
+        else:
+            lines.append(f"  {sid}: {old_cls} (foundational guardrail replaced)")
+    return (
+        "\n\n⚠ SUPERSESSION WARNING — stop and flag this to the user before continuing:\n"
+        + "\n".join(lines)
+    )
+
+
 async def _annotate_edits(records: list[dict], project_id: int) -> None:
     """Annotate records that have been edited in-place with _edited/_edit_count/_last_edited_by."""
     target_ids = [r.get("id") for r in records if r.get("id")]
@@ -1129,19 +1148,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     alerts = await _supersede_alerts(
         m_dir, list(args.get("supersedes") or []), args["classification"]
     )
-    if alerts:
-        new_cls = args["classification"]
-        new_rank = Classification.of(new_cls)
-        lines: list[str] = []
-        for sid, old_cls in alerts.items():
-            if Classification.of(old_cls) > new_rank:
-                lines.append(f"  {sid}: {old_cls} → {new_cls} (classification downgrade)")
-            else:
-                lines.append(f"  {sid}: {old_cls} (foundational guardrail replaced)")
-        msg += (
-            f"\n\n⚠ SUPERSESSION WARNING — stop and flag this to the user before continuing:\n"
-            + "\n".join(lines)
-        )
+    msg += _format_supersession_alerts(alerts, args["classification"])
     try:
         req_ctx = tier2_server.request_context
         _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "write", written))
@@ -1292,6 +1299,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         raise ValueError("no fields to update — pass at least one content field")
     before_snapshot = {k: record[k] for k in updates if k in record}
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
+    supersession_alert_text = ""
     if "supersedes" in updates or "relates_to" in updates:
         project_records = await _load_project_records(m_dir)
         live_ids = {r["id"] for r in project_records if r.get("id")}
@@ -1301,6 +1309,12 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             list(updates.get("relates_to") or []),
             self_id=record_id,
         )
+    if "supersedes" in updates:
+        added = [sid for sid in updates["supersedes"] if sid not in (record.get("supersedes") or [])]
+        if added:
+            effective_classification = updates.get("classification", record.get("classification", ""))
+            alerts = await _supersede_alerts(m_dir, added, effective_classification)
+            supersession_alert_text = _format_supersession_alerts(alerts, effective_classification)
     await edit_record(m_dir, domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordEvent.create(
@@ -1329,6 +1343,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             f"\n\n⚠ CLASSIFICATION DOWNGRADE: changed {record_id} from {old_cls} to {new_cls}. "
             f"Stop and flag this to the user before continuing."
         )
+    msg += supersession_alert_text
     try:
         req_ctx = tier2_server.request_context
         notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}

@@ -1811,6 +1811,129 @@ async def test_edit_record_classification_downgrade_warning(team, data_path, fak
     assert "tactical" in result[0].text
 
 
+async def test_edit_record_supersession_warning_on_new_foundational_target(
+    team, data_path, fake_write_record
+):
+    """Adding a supersedes reference to a foundational record via edit_record
+    fires the same SUPERSESSION WARNING a write would — today it fires nothing."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    foundational = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    await mcp_tier2._record_expertise(
+        {"domain": "api", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["api"]}, ctx(t.carlos, t.org, t.infra))
+    editable_id = [r["id"] for r in records[1]["records"] if r["id"] != foundational["id"]][0]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    result = await _edit_record(
+        {"record_id": editable_id, "domain": "api", "supersedes": [foundational["id"]]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    mcp_tier2.edit_record = orig_edit
+
+    text = result[0].text
+    assert "SUPERSESSION WARNING" in text
+    assert foundational["id"] in text
+    assert "foundational → tactical" in text
+
+
+async def test_edit_record_no_duplicate_warning_for_already_present_supersedes(
+    team, data_path, fake_write_record
+):
+    """Re-submitting a supersedes list that already contained the foundational
+    target (no new IDs added) must not warn again."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    foundational = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    await mcp_tier2._record_expertise(
+        {
+            "domain": "api",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "v1",
+            "supersedes": [foundational["id"]],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["api"]}, ctx(t.carlos, t.org, t.infra))
+    editable_id = [r["id"] for r in records[1]["records"] if r["id"] != foundational["id"]][0]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    result = await _edit_record(
+        {
+            "record_id": editable_id,
+            "domain": "api",
+            "supersedes": [foundational["id"]],
+            "content": "v2",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    mcp_tier2.edit_record = orig_edit
+
+    assert "SUPERSESSION WARNING" not in result[0].text
+
+
+async def test_edit_record_supersession_warning_uses_effective_classification(
+    team, data_path, fake_write_record
+):
+    """When an edit changes classification and supersedes in the same call, the
+    alert must compare against the NEW classification, not the record's stored one."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    foundational = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    await mcp_tier2._record_expertise(
+        {"domain": "api", "type": "convention", "classification": "foundational", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["api"]}, ctx(t.carlos, t.org, t.infra))
+    editable_id = [r["id"] for r in records[1]["records"] if r["id"] != foundational["id"]][0]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    result = await _edit_record(
+        {
+            "record_id": editable_id,
+            "domain": "api",
+            "classification": "observational",
+            "supersedes": [foundational["id"]],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    mcp_tier2.edit_record = orig_edit
+
+    text = result[0].text
+    assert "SUPERSESSION WARNING" in text
+    assert "foundational → observational" in text
+
+
 async def test_cross_domain_hints_in_read_records(team, data_path):
     """read_records includes cross_domain_hints when a record is superseded from another domain."""
     t = team
