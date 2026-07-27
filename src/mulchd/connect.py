@@ -592,6 +592,34 @@ async def oauth_consent_submit(
     return await _issue_oauth_code(grant, oauth_client.client_id, redirect_uri, code_challenge, scope, state)
 
 
+@router.get("/apps", response_class=HTMLResponse)
+async def connect_apps(request: Request):
+    user = await _require_user(request)
+    if user is None:
+        return RedirectResponse("/connect", status_code=303)
+
+    grants = await OAuthGrant.filter(user=user).select_related("client", "project__org").all()
+    return templates.TemplateResponse(
+        request,
+        "connect/apps.html",
+        {"user": user, "grants": grants},
+    )
+
+
+@router.post("/apps/{grant_id}/revoke")
+async def connect_apps_revoke(request: Request, grant_id: int):
+    user = await _require_user(request)
+    if user is None:
+        return RedirectResponse("/connect", status_code=303)
+
+    grant = await OAuthGrant.filter(id=grant_id, user=user).first()
+    if grant is None:
+        return Response(status_code=404)
+
+    await grant.delete()
+    return RedirectResponse("/connect/apps", status_code=303)
+
+
 @router.get("/logout")
 async def connect_logout():
     response = RedirectResponse("/connect", status_code=303)
