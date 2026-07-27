@@ -17,6 +17,7 @@ mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manage
 | `search_records` | BM25 full-text search across domains |
 | `get_recent` | Surface teammate activity since a given timestamp |
 | `get_record_schema` | Get required and optional fields for a record type |
+| `get_record_history` | Show the write/edit/delete timeline for a record, including who changed what |
 
 Knowledge is organized into domains (e.g. `architecture`, `conventions`, `ops`). Records carry attribution, classification (`foundational` / `tactical` / `observational`), and optional supersession links so the team can track how thinking evolves.
 
