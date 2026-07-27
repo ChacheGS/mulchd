@@ -28,13 +28,13 @@ class OAuthGrant(models.Model):
 
     id = fields.IntField(primary_key=True)
     client: fields.ForeignKeyRelation[OAuthClient] = fields.ForeignKeyField(
-        "models.OAuthClient", related_name="grants"
+        "models.OAuthClient", related_name="grants", on_delete=fields.CASCADE
     )
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User", related_name="oauth_grants"
+        "models.User", related_name="oauth_grants", on_delete=fields.CASCADE
     )
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
-        "models.Project", related_name="oauth_grants"
+        "models.Project", related_name="oauth_grants", on_delete=fields.CASCADE
     )
     created_at = fields.DatetimeField(auto_now_add=True)
 
@@ -50,7 +50,7 @@ class OAuthCode(models.Model):
     code_hash = fields.CharField(max_length=64, unique=True)
     client_id = fields.CharField(max_length=64)
     grant: fields.ForeignKeyRelation[OAuthGrant] = fields.ForeignKeyField(
-        "models.OAuthGrant", related_name="codes"
+        "models.OAuthGrant", related_name="codes", on_delete=fields.CASCADE
     )
     redirect_uri = fields.CharField(max_length=512)
     code_challenge = fields.CharField(max_length=128)
@@ -70,7 +70,7 @@ class OAuthToken(models.Model):
     refresh_token_hash = fields.CharField(max_length=64, unique=True)
     client_id = fields.CharField(max_length=64)
     grant: fields.ForeignKeyRelation[OAuthGrant] = fields.ForeignKeyField(
-        "models.OAuthGrant", related_name="tokens"
+        "models.OAuthGrant", related_name="tokens", on_delete=fields.CASCADE
     )
     scope = fields.CharField(max_length=255, null=True, default=None)
     access_expires_at = fields.DatetimeField()

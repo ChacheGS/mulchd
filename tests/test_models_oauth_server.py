@@ -71,3 +71,80 @@ async def test_oauth_code_and_token_link_to_grant(db):
         refresh_expires_at=datetime.now(UTC) + timedelta(days=30),
     )
     assert (await token.grant).id == grant.id
+
+
+async def test_oauth_code_hash_unique(db):
+    from datetime import UTC, datetime, timedelta
+
+    from mulchd.auth import create_user
+    from mulchd.models import OAuthClient, OAuthCode, OAuthGrant, Organization, Project
+    from tortoise.exceptions import IntegrityError
+
+    user, _ = await create_user("carol", "Carol")
+    org = await Organization.create(slug="acme3", display_name="Acme3")
+    project = await Project.create(slug="demo3", display_name="Demo3", org=org)
+    client = await OAuthClient.create(client_id="client-4", client_metadata={})
+    grant = await OAuthGrant.create(client=client, user=user, project=project)
+    kwargs = dict(
+        code_hash="dup-code-hash",
+        client_id=client.client_id,
+        grant=grant,
+        redirect_uri="http://localhost/cb",
+        code_challenge="challenge",
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+
+    await OAuthCode.create(**kwargs)
+    with pytest.raises(IntegrityError):
+        await OAuthCode.create(**kwargs)
+
+
+async def test_oauth_token_hashes_unique(db):
+    from datetime import UTC, datetime, timedelta
+
+    from mulchd.auth import create_user
+    from mulchd.models import OAuthClient, OAuthGrant, OAuthToken, Organization, Project
+    from tortoise.exceptions import IntegrityError
+
+    user, _ = await create_user("dave", "Dave")
+    org = await Organization.create(slug="acme4", display_name="Acme4")
+    project = await Project.create(slug="demo4", display_name="Demo4", org=org)
+    client = await OAuthClient.create(client_id="client-5", client_metadata={})
+    grant = await OAuthGrant.create(client=client, user=user, project=project)
+    now = datetime.now(UTC)
+
+    await OAuthToken.create(
+        access_token_hash="dup-access-hash",
+        refresh_token_hash="ref-hash-a",
+        client_id=client.client_id,
+        grant=grant,
+        access_expires_at=now + timedelta(hours=1),
+        refresh_expires_at=now + timedelta(days=30),
+    )
+    with pytest.raises(IntegrityError):
+        await OAuthToken.create(
+            access_token_hash="dup-access-hash",
+            refresh_token_hash="ref-hash-b",
+            client_id=client.client_id,
+            grant=grant,
+            access_expires_at=now + timedelta(hours=1),
+            refresh_expires_at=now + timedelta(days=30),
+        )
+
+    await OAuthToken.create(
+        access_token_hash="access-hash-c",
+        refresh_token_hash="dup-refresh-hash",
+        client_id=client.client_id,
+        grant=grant,
+        access_expires_at=now + timedelta(hours=1),
+        refresh_expires_at=now + timedelta(days=30),
+    )
+    with pytest.raises(IntegrityError):
+        await OAuthToken.create(
+            access_token_hash="access-hash-d",
+            refresh_token_hash="dup-refresh-hash",
+            client_id=client.client_id,
+            grant=grant,
+            access_expires_at=now + timedelta(hours=1),
+            refresh_expires_at=now + timedelta(days=30),
+        )
