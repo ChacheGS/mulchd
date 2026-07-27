@@ -193,3 +193,31 @@ async def test_resolve_mcp_tier_accepts_oauth_access_token(db):
     assert ctx is not None
     assert ctx.user.id == user.id
     assert ctx.project.id == project.id
+
+
+def test_mcp_oauth_disabled_omits_well_known_routes():
+    import os
+    import subprocess
+    import sys
+
+    env = os.environ.copy()
+    env["MULCHD_MCP_OAUTH_ENABLED"] = "false"
+    env["MULCHD_SECRET_KEY"] = "test-secret-key"
+    env["MULCHD_DB_URL"] = "sqlite://:memory:"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from mulchd.main import app; "
+            "assert not [r for r in app.router.routes if getattr(r, 'path', '') "
+            "== '/.well-known/oauth-authorization-server']; "
+            "print('DISABLED_OK')",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    assert "DISABLED_OK" in result.stdout

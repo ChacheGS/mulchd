@@ -35,6 +35,14 @@ See [docs/deployment.md](docs/deployment.md) for the full walkthrough: environme
 
 mulchd works with any MCP-compatible client. The `/connect` portal generates ready-to-paste config snippets for Claude Code and Claude Desktop — see [docs/mcp-tools.md](docs/mcp-tools.md) for the tool list and example client config.
 
+MCP clients that support OAuth (Claude Desktop, MCP Inspector) can connect directly to
+`{base_url}/mcp` — no manual token needed. The client discovers mulchd's OAuth endpoints
+automatically, registers itself, and opens a browser for you to log in (via SSO or a
+global token) and pick which project to connect to. This requires `MULCHD_BASE_URL` to be
+set to your instance's public `https://` URL — without it, mulchd logs a startup warning
+and falls back to the manual project-token flow below. Set `MULCHD_MCP_OAUTH_ENABLED=false`
+to disable the OAuth flow outright and always require a manually-pasted token.
+
 ## Development
 
 ```bash
