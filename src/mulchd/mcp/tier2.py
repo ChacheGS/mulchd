@@ -462,6 +462,23 @@ TIER2_TOOLS = [
         annotations=ToolAnnotations(readOnlyHint=True),
     ),
     Tool(
+        name="get_record_history",
+        description=(
+            "Show the write/edit/delete timeline for one record, including who "
+            "changed what and the pre-edit value of each changed field. Use this "
+            "before trusting a record's current content when it shows an edit "
+            "count, or when a supersession warning points here for prior text."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
+            },
+            "required": ["record_id"],
+        },
+        annotations=ToolAnnotations(readOnlyHint=True),
+    ),
+    Tool(
         name="edit_record",
         description=(
             "Update fields on an existing record. "
@@ -1286,6 +1303,35 @@ async def _get_record_schema(args: dict) -> list[TextContent]:
     return [TextContent(type="text", text="\n".join(lines))]
 
 
+async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]:
+    """Render the write/edit/delete timeline for one record, drawing on the
+    existing RecordEvent/RecordEdit audit tables (previously only visible via
+    the admin UI at /admin/audit) — no new storage, just a read surface."""
+    record_id = args["record_id"]
+    events = await RecordEvent.filter(
+        record_id=record_id, project=ctx.project
+    ).order_by("at").values("action", "at", "actor__username", "actor__display_name")
+    if not events:
+        return [TextContent(type="text", text=f"No history found for {record_id}.")]
+
+    edits = await RecordEdit.filter(
+        record_id=record_id, project=ctx.project
+    ).order_by("at").values_list("before_snapshot", flat=True)
+    edit_iter = iter(edits)
+
+    lines = [f"History for {record_id}:"]
+    for e in events:
+        actor = e["actor__display_name"] or e["actor__username"] or "unknown"
+        at = e["at"].strftime("%Y-%m-%dT%H:%M:%SZ")
+        lines.append(f"  {at}  {e['action']}  by {actor}")
+        if e["action"] == "edit":
+            before_snapshot = next(edit_iter, None)
+            if before_snapshot:
+                for field, old_value in before_snapshot.items():
+                    lines.append(f"    {field} (was): {old_value!r}")
+    return [TextContent(type="text", text="\n".join(lines))]
+
+
 async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
 
@@ -1454,6 +1500,8 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
             return await _get_recent(args, ctx)
         case "get_record_schema":
             return await _get_record_schema(args)
+        case "get_record_history":
+            return await _get_record_history(args, ctx)
         case "edit_record":
             return await _edit_record(args, ctx)
         case "delete_record":

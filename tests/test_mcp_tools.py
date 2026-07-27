@@ -2343,3 +2343,92 @@ async def test_read_resource_no_wrapping_when_no_records(team, data_path):
     text = contents[0].content
     assert "No records in domain" in text
     assert "<record_content>" not in text
+
+
+# ---------------------------------------------------------------------------
+# get_record_history
+# ---------------------------------------------------------------------------
+
+
+async def test_get_record_history_renders_write_edit_delete_timeline(
+    team, data_path, fake_write_record
+):
+    """get_record_history shows the full write/edit/delete timeline in order,
+    with actor and before_snapshot fields for edits."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record, _get_record_history
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {
+            "domain": "history-test",
+            "type": "convention",
+            "classification": "foundational",
+            "content": "Two-person sign-off required for all deletions.",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["history-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    await _edit_record(
+        {
+            "record_id": record_id,
+            "domain": "history-test",
+            "content": "Single-engineer discretion allowed for deletions.",
+        },
+        ctx(t.jorge, t.org, t.infra, role=Role.ADMIN),
+    )
+    mcp_tier2.edit_record = orig_edit
+
+    result = await _get_record_history({"record_id": record_id}, ctx(t.carlos, t.org, t.infra))
+    text = result[0].text
+
+    assert f"History for {record_id}" in text
+    assert "write" in text
+    assert "carlos" in text or "Carlos" in text
+    assert "edit" in text
+    assert "jorge" in text or "Jorge" in text
+    assert "Two-person sign-off required for all deletions." in text
+    write_idx = text.index("write")
+    edit_idx = text.index("edit")
+    assert write_idx < edit_idx
+
+
+async def test_get_record_history_no_history_found(team, data_path):
+    """A record with zero RecordEvent rows returns a plain message, not an error."""
+    from mulchd.mcp.tier2 import _get_record_history
+
+    t = team
+    result = await _get_record_history(
+        {"record_id": "mx-neverexisted"}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert "No history found for mx-neverexisted" in result[0].text
+
+
+async def test_get_record_history_reader_role_can_call(team, data_path, fake_write_record):
+    """get_record_history is read-only and available to READER role too."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _get_record_history
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "history-test", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["history-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    record_id = records[1]["records"][0]["id"]
+
+    result = await _get_record_history(
+        {"record_id": record_id}, ctx(t.carlos, t.org, t.infra, role=Role.READER)
+    )
+    assert f"History for {record_id}" in result[0].text
