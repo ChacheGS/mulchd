@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid7
 
@@ -1306,18 +1306,30 @@ async def _get_record_schema(args: dict) -> list[TextContent]:
 async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]:
     """Render the write/edit/delete timeline for one record, drawing on the
     existing RecordEvent/RecordEdit audit tables (previously only visible via
-    the admin UI at /admin/audit) — no new storage, just a read surface."""
+    the admin UI at /admin/audit) — no new storage, just a read surface.
+
+    RecordEdit rows are matched to their edit RecordEvent by session_id, not
+    by raw chronological position — mirroring admin/audit.py's approach —
+    since two concurrent editors can otherwise produce same-record edit
+    events whose (at) ordering doesn't line up 1:1 with RecordEdit's, which
+    would silently attribute one actor's before-snapshot to another's edit."""
     record_id = args["record_id"]
-    events = await RecordEvent.filter(
-        record_id=record_id, project=ctx.project
-    ).order_by("at").values("action", "at", "actor__username", "actor__display_name")
+    events = (
+        await RecordEvent.filter(record_id=record_id, project=ctx.project)
+        .order_by("at", "id")
+        .values("action", "at", "session_id", "actor__username", "actor__display_name")
+    )
     if not events:
         return [TextContent(type="text", text=f"No history found for {record_id}.")]
 
-    edits = await RecordEdit.filter(
-        record_id=record_id, project=ctx.project
-    ).order_by("at").values_list("before_snapshot", flat=True)
-    edit_iter = iter(edits)
+    edit_rows = (
+        await RecordEdit.filter(record_id=record_id, project=ctx.project)
+        .order_by("at", "id")
+        .values("session_id", "before_snapshot")
+    )
+    edit_queues: dict[str, deque] = defaultdict(deque)
+    for row in edit_rows:
+        edit_queues[str(row["session_id"])].append(row["before_snapshot"])
 
     lines = [f"History for {record_id}:"]
     for e in events:
@@ -1325,7 +1337,8 @@ async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]
         at = e["at"].strftime("%Y-%m-%dT%H:%M:%SZ")
         lines.append(f"  {at}  {e['action']}  by {actor}")
         if e["action"] == "edit":
-            before_snapshot = next(edit_iter, None)
+            queue = edit_queues.get(str(e["session_id"]))
+            before_snapshot = queue.popleft() if queue else None
             if before_snapshot:
                 for field, old_value in before_snapshot.items():
                     lines.append(f"    {field} (was): {old_value!r}")

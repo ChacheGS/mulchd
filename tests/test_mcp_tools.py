@@ -2413,6 +2413,56 @@ async def test_get_record_history_no_history_found(team, data_path):
     assert "No history found for mx-neverexisted" in result[0].text
 
 
+async def test_get_record_history_matches_snapshots_by_session_not_position(team, data_path):
+    """Two different actors editing the same record in overlapping sessions
+    must not have their before_snapshots swapped just because RecordEvent's
+    and RecordEdit's independent (at) orderings don't line up — snapshots are
+    matched by session_id, mirroring admin/audit.py's approach."""
+    import asyncio
+
+    from mulchd.mcp.tier2 import _get_record_history
+
+    t = team
+    record_id = "mx-concurrent1"
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    # RecordEvent order: carlos's edit (session_a) before jorge's edit (session_b).
+    await RecordEvent.create(
+        record_id=record_id, project=t.infra, domain="api", actor=t.carlos,
+        action="edit", client="test", session_id=session_a,
+    )
+    await asyncio.sleep(0.01)
+    await RecordEvent.create(
+        record_id=record_id, project=t.infra, domain="api", actor=t.jorge,
+        action="edit", client="test", session_id=session_b,
+    )
+    await asyncio.sleep(0.01)
+    # RecordEdit order deliberately reversed relative to RecordEvent's (at):
+    # jorge's (session_b) snapshot row is created — and so sorts — before
+    # carlos's (session_a) one, even though carlos's edit event came first.
+    await RecordEdit.create(
+        record_id=record_id, project=t.infra, domain="api", actor=t.jorge,
+        before_snapshot={"content": "jorge-old"}, client="test", session_id=session_b,
+    )
+    await asyncio.sleep(0.01)
+    await RecordEdit.create(
+        record_id=record_id, project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"content": "carlos-old"}, client="test", session_id=session_a,
+    )
+
+    result = await _get_record_history({"record_id": record_id}, ctx(t.carlos, t.org, t.infra))
+    text = result[0].text
+
+    carlos_line_idx = text.index("by Carlos G.")
+    jorge_line_idx = text.index("by Jorge M.")
+    carlos_snapshot_idx = text.index("carlos-old")
+    jorge_snapshot_idx = text.index("jorge-old")
+    # carlos's snapshot must follow carlos's line (and precede jorge's line);
+    # a naive positional zip would instead attach jorge-old to carlos's line.
+    assert carlos_line_idx < carlos_snapshot_idx < jorge_line_idx < jorge_snapshot_idx
+
+
 async def test_get_record_history_reader_role_can_call(team, data_path, fake_write_record):
     """get_record_history is read-only and available to READER role too."""
     import mulchd.mcp.tier2 as mcp_tier2
