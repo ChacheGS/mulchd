@@ -674,6 +674,8 @@ def test_safe_return_to_rejects_literal_scheme_but_allows_encoded_redirect_uri()
 
 
 async def test_connected_apps_lists_grants(client, alice_and_project):
+    """Connected apps are shown on the /connect/projects dashboard, not a
+    separate page — there's no standalone /connect/apps route."""
     from mulchd.models import OAuthClient, OAuthGrant
 
     user, token, org, project = alice_and_project
@@ -684,7 +686,7 @@ async def test_connected_apps_lists_grants(client, alice_and_project):
     )
     await OAuthGrant.create(client=oc, user=user, project=project)
 
-    resp = await client.get("/connect/apps")
+    resp = await client.get("/connect/projects")
     assert resp.status_code == 200
     assert "Cli F" in resp.text
     assert project.display_name in resp.text
@@ -703,6 +705,7 @@ async def test_connected_apps_revoke_deletes_grant(client, alice_and_project):
 
     resp = await client.post(f"/connect/apps/{grant.id}/revoke", follow_redirects=False)
     assert resp.status_code == 303
+    assert resp.headers["location"] == "/connect/projects"
     assert not await OAuthGrant.filter(id=grant.id).exists()
 
 
@@ -722,12 +725,6 @@ async def test_connected_apps_revoke_other_users_grant_404s(client, alice_and_pr
     resp = await client.post(f"/connect/apps/{grant.id}/revoke")
     assert resp.status_code == 404
     assert await OAuthGrant.filter(id=grant.id).exists()
-
-
-async def test_connected_apps_requires_auth(client):
-    resp = await client.get("/connect/apps", follow_redirects=False)
-    assert resp.status_code == 303
-    assert "/connect" in resp.headers["location"]
 
 
 async def test_connected_apps_revoke_requires_auth(client, alice_and_project):

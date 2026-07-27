@@ -19,4 +19,24 @@
 {% else %}
 <div class="empty-state">No projects yet — ask your admin to add you to a project.</div>
 {% endif %}
+
+<div class="page-title" style="font-size:17px;font-weight:600;margin:32px 0 20px;">Connected apps</div>
+{% if grants %}
+<div class="card">
+  {% for grant in grants %}
+  <div class="table-row" style="grid-template-columns:1fr auto auto; align-items:center;">
+    <div>
+      <div style="font-size:13px;font-weight:500;color:#1e293b;">{{ grant.client.client_metadata.client_name or grant.client.client_id }}</div>
+      <div class="text-muted">{{ grant.project.display_name }} — {{ grant.project.org.display_name }}</div>
+    </div>
+    <span class="text-muted">{{ grant.created_at.strftime('%Y-%m-%d') }}</span>
+    <form method="post" action="/connect/apps/{{ grant.id }}/revoke">
+      <button type="submit" class="btn-link-danger">Revoke</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No connected apps yet. Sign in from an MCP client's OAuth flow to see it here.</div>
+{% endif %}
 {% endblock %}
