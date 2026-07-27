@@ -1605,6 +1605,32 @@ async def test_format_records_renders_foundational_superseded_banner(team, data_
     assert "FOUNDATIONAL POLICY SUPERSEDED" not in text.split(tactical_old["id"], 1)[1].split("\n")[0]
 
 
+async def test_format_records_foundational_banner_includes_cross_domain_hint(team, data_path):
+    """The foundational-superseded banner carries the same (in <domain>) suffix
+    the plain 'superseded by' line shows — losing it would hide where the
+    replacement actually lives, which defeats the banner's purpose."""
+    from mulchd.mcp.tier2 import _format_records, _mark_superseded
+
+    t = team
+    original = _jot(
+        data_path, "acme", "infra", "guardrails",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    superseder = _jot(
+        data_path, "acme", "infra", "policies",
+        type="convention", classification="foundational", content="Replacement", owner="jorge",
+        supersedes=[original["id"]],
+    )
+    original["_domain"] = "guardrails"
+    superseder["_domain"] = "policies"
+
+    records = [original]
+    await _mark_superseded(records, "acme", "infra")
+    text = _format_records(records)
+
+    assert f"FOUNDATIONAL POLICY SUPERSEDED by {superseder['id']} (in policies)" in text
+
+
 async def test_mark_superseded_foundational_target_not_double_rendered(team, data_path):
     """A foundational supersede target must appear only in _supersedes_foundational,
     not also in the generic _supersedes_display — otherwise the id renders twice

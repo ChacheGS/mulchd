@@ -860,10 +860,11 @@ def _format_single(r: dict) -> str:
     else:
         if r.get("_superseded"):
             if r.get("_foundational_superseded"):
-                header += (
-                    f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']} — "
-                    f"see get_record_history('{r.get('id', '')}') for the original text"
-                )
+                banner = f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']}"
+                if r.get("_superseder_domain"):
+                    banner += f" (in {r['_superseder_domain']})"
+                banner += f" — see get_record_history('{rid}') for the original text"
+                header += banner
             else:
                 tag = (
                     f" • superseded by {r['_superseded_by']}"
@@ -908,10 +909,11 @@ def _format_records(records: list[dict]) -> str:
         else:
             if r.get("_superseded"):
                 if r.get("_foundational_superseded"):
-                    header += (
-                        f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']} — "
-                        f"see get_record_history('{r.get('id', '')}') for the original text"
-                    )
+                    banner = f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']}"
+                    if r.get("_superseder_domain"):
+                        banner += f" (in {r['_superseder_domain']})"
+                    banner += f" — see get_record_history('{rid}') for the original text"
+                    header += banner
                 else:
                     tag = (
                         f" • superseded by {r['_superseded_by']}"
