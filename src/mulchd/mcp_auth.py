@@ -91,8 +91,13 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         )
         if row is None or row.used:
             raise TokenError(error="invalid_grant", error_description="authorization code already used")
-        row.used = True
-        await row.save()
+        # Atomic compare-and-swap, not a read-then-write: two concurrent exchanges of the
+        # same code must not both succeed. update() only flips rows still unused, and
+        # returns the affected count — a second racing request sees 0 and is rejected,
+        # even though its earlier `row.used` read (above) also observed False.
+        claimed = await OAuthCode.filter(id=row.id, used=False).update(used=True)
+        if claimed == 0:
+            raise TokenError(error="invalid_grant", error_description="authorization code already used")
         return await self._issue_tokens(client.client_id, row.grant, authorization_code.scopes)
 
     async def load_refresh_token(
@@ -132,8 +137,12 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         )
         if row is None:
             raise TokenError(error="invalid_grant", error_description="refresh token not found")
-        row.revoked = True
-        await row.save()
+        # Atomic compare-and-swap: two concurrent refreshes of the same token must not
+        # both succeed and mint separate token pairs. See exchange_authorization_code
+        # for the same pattern and rationale.
+        claimed = await OAuthToken.filter(id=row.id, revoked=False).update(revoked=True)
+        if claimed == 0:
+            raise TokenError(error="invalid_grant", error_description="refresh token not found")
         return await self._issue_tokens(client.client_id, row.grant, scopes or refresh_token.scopes)
 
     async def load_access_token(self, token: str) -> AccessToken | None:

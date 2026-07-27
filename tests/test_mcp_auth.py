@@ -116,6 +116,70 @@ async def test_revoke_token(db):
     assert await provider.load_access_token(tokens.access_token) is None
 
 
+async def test_revoke_token_accepts_refresh_token(db):
+    """revoke_token's signature is AccessToken | RefreshToken — cover the refresh-token
+    branch too, not just access tokens."""
+    from mulchd.mcp_auth import MulchdOAuthProvider
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    refresh_token = await provider.load_refresh_token(client, tokens.refresh_token)
+    await provider.revoke_token(refresh_token)
+
+    assert await provider.load_refresh_token(client, tokens.refresh_token) is None
+    # revoking via the refresh token also invalidates the paired access token
+    assert await provider.load_access_token(tokens.access_token) is None
+
+
+async def test_load_access_token_rejects_expired_token(db):
+    from datetime import UTC, datetime, timedelta
+
+    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.models import OAuthToken
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    row = await OAuthToken.get(access_token_hash=_hash(tokens.access_token))
+    row.access_expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    await row.save()
+
+    assert await provider.load_access_token(tokens.access_token) is None
+
+
+async def test_load_refresh_token_reports_expiry_but_does_not_self_reject(db):
+    """
+    Unlike load_access_token, load_refresh_token intentionally does not reject an
+    expired token itself — the mcp SDK's own TokenHandler checks
+    RefreshToken.expires_at after calling this method (see token.py's refresh grant
+    branch). This pins that division of responsibility: the row's real (past)
+    expiry must still be reported accurately so the SDK's own check can act on it.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.models import OAuthToken
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    past_expiry = datetime.now(UTC) - timedelta(minutes=1)
+    row = await OAuthToken.get(refresh_token_hash=_hash(tokens.refresh_token))
+    row.refresh_expires_at = past_expiry
+    await row.save()
+
+    refresh_token = await provider.load_refresh_token(client, tokens.refresh_token)
+    assert refresh_token is not None
+    assert refresh_token.expires_at == int(past_expiry.timestamp())
+
+
 async def test_register_client_then_get_client_roundtrip(db):
     from mcp.shared.auth import OAuthClientMetadata
 
