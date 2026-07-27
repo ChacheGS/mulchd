@@ -393,6 +393,59 @@ async def test_oauth_consent_unknown_client_404s(client, alice_and_project):
     assert resp.status_code == 404
 
 
+async def test_oauth_consent_rejects_unregistered_redirect_uri(client, alice_and_project):
+    from mulchd.models import OAuthClient
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-evil-redirect",
+        client_metadata={
+            "client_id": "cli-evil-redirect",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Legit Client",
+        },
+    )
+    resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "cli-evil-redirect",
+            "redirect_uri": "https://evil.example/steal",
+            "code_challenge": "chal",
+            "state": "st-evil",
+        },
+    )
+    assert resp.status_code == 400
+
+
+async def test_oauth_consent_allow_rejects_unregistered_redirect_uri(client, alice_and_project):
+    from mulchd.models import OAuthClient
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-evil-redirect-2",
+        client_metadata={
+            "client_id": "cli-evil-redirect-2",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Legit Client 2",
+        },
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-evil-redirect-2",
+            "redirect_uri": "https://evil.example/steal",
+            "code_challenge": "chal",
+            "state": "st-evil2",
+            "scope": "",
+            "project_id": project.id,
+            "decision": "allow",
+        },
+    )
+    assert resp.status_code == 400
+
+
 async def test_oauth_consent_page_shows_project_picker(client, alice_and_project):
     from mulchd.models import OAuthClient
 

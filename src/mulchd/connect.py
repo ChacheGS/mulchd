@@ -471,6 +471,18 @@ async def oauth_callback(request: Request, provider: str):
     return response
 
 
+def _redirect_uri_registered(oauth_client: OAuthClient, redirect_uri: str) -> bool:
+    """
+    The mcp SDK's own /authorize handler validates redirect_uri against the client's
+    registered redirect_uris before ever calling MulchdOAuthProvider.authorize() — but
+    /connect/oauth-consent is a separately-reachable HTTP endpoint. Without this check,
+    a crafted link with a legitimate client_id but an attacker-controlled redirect_uri
+    would let a logged-in user's "Allow" click hand the authorization code to that
+    attacker instead of the real client.
+    """
+    return redirect_uri in (oauth_client.client_metadata.get("redirect_uris") or [])
+
+
 async def _issue_oauth_code(
     grant: OAuthGrant, redirect_uri: str, code_challenge: str, scope: str, state: str = ""
 ) -> RedirectResponse:
@@ -507,6 +519,8 @@ async def oauth_consent_page(
     oauth_client = await OAuthClient.filter(client_id=client_id).first()
     if oauth_client is None:
         return Response(status_code=404)
+    if not _redirect_uri_registered(oauth_client, redirect_uri):
+        return Response(status_code=400)
 
     existing_grant = (
         await OAuthGrant.filter(client=oauth_client, user=user).select_related("project").first()
@@ -549,6 +563,8 @@ async def oauth_consent_submit(
     oauth_client = await OAuthClient.filter(client_id=client_id).first()
     if oauth_client is None:
         return Response(status_code=404)
+    if not _redirect_uri_registered(oauth_client, redirect_uri):
+        return Response(status_code=400)
 
     if decision != "allow":
         return RedirectResponse(
