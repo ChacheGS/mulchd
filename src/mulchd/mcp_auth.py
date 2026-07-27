@@ -34,7 +34,10 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         row = await OAuthClient.filter(client_id=client_id).first()
         if row is None:
             return None
-        return OAuthClientInformationFull.model_validate(row.client_metadata)
+        # row.client_id is the authoritative business key; the stored client_metadata
+        # blob may carry a stale or placeholder value (e.g. captured before the real
+        # client_id was assigned), so it must not be trusted over the row itself.
+        return OAuthClientInformationFull.model_validate({**row.client_metadata, "client_id": row.client_id})
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         await OAuthClient.create(
