@@ -2086,3 +2086,43 @@ async def test_search_expertise_wraps_content_when_records_present(team, data_pa
     assert "<record_content>" in text
     assert "</record_content>" in text
     assert "Fake search hit" in text
+
+
+async def test_read_resource_wraps_content_when_records_present(team, data_path):
+    """The mulchd://domain/{name} resource endpoint renders record content
+    through the same _format_records path as read_records — it must get the
+    same untrusted-data boundary, not just the tool-call entry points."""
+    from pydantic import AnyUrl
+
+    from mulchd.mcp.tier2 import read_resource
+
+    t = team
+    _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="Resource-fetched rule", owner="carlos",
+    )
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        contents = await read_resource(AnyUrl("mulchd://domain/infra"))
+    finally:
+        _ctx.reset(token)
+    text = contents[0].content
+    assert "<record_content>" in text
+    assert "</record_content>" in text
+    assert "Resource-fetched rule" in text
+
+
+async def test_read_resource_no_wrapping_when_no_records(team, data_path):
+    from pydantic import AnyUrl
+
+    from mulchd.mcp.tier2 import read_resource
+
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        contents = await read_resource(AnyUrl("mulchd://domain/infra"))
+    finally:
+        _ctx.reset(token)
+    text = contents[0].content
+    assert "No records in domain" in text
+    assert "<record_content>" not in text

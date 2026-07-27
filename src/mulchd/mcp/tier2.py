@@ -1472,7 +1472,10 @@ async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
         for r in records:
             r["_domain"] = name
         await _mark_superseded(records, ctx.org.slug, ctx.project.slug)
-        text = _format_records(records) if records else f"No records in domain '{name}' yet."
+        if records:
+            text = _wrap_untrusted(_format_records(records))
+        else:
+            text = f"No records in domain '{name}' yet."
         return [ReadResourceContents(content=text, mime_type="text/plain")]
     raise ValueError(f"Unknown resource URI: {uri_str}")
 
