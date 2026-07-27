@@ -676,34 +676,52 @@ def _find_cycles(project_records: list[dict]) -> dict[str, list[str]]:
     on_stack: dict[str, bool] = {}
     sccs: list[list[str]] = []
 
-    def strongconnect(v: str) -> None:
-        nonlocal index_counter
-        index[v] = index_counter
-        lowlink[v] = index_counter
+    # Iterative Tarjan's — a recursive strongconnect() would hit Python's
+    # default recursion limit (RecursionError) on a supersede chain of
+    # roughly 1000+ records, turning every read of the domain into a crash.
+    # This is the standard explicit-work-stack transformation: each stack
+    # frame is (node, index of the next child edge to examine), so DFS
+    # recursion becomes a while-loop over an explicit list instead of the
+    # Python call stack.
+    for start in graph:
+        if start in index:
+            continue
+        work: list[tuple[str, int]] = [(start, 0)]
+        index[start] = index_counter
+        lowlink[start] = index_counter
         index_counter += 1
-        stack.append(v)
-        on_stack[v] = True
+        stack.append(start)
+        on_stack[start] = True
 
-        for w in graph.get(v, []):
-            if w not in index:
-                strongconnect(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif on_stack.get(w):
-                lowlink[v] = min(lowlink[v], index[w])
-
-        if lowlink[v] == index[v]:
-            component: list[str] = []
-            while True:
-                w = stack.pop()
-                on_stack[w] = False
-                component.append(w)
-                if w == v:
-                    break
-            sccs.append(component)
-
-    for node in graph:
-        if node not in index:
-            strongconnect(node)
+        while work:
+            v, i = work[-1]
+            children = graph.get(v, [])
+            if i < len(children):
+                w = children[i]
+                work[-1] = (v, i + 1)
+                if w not in index:
+                    index[w] = index_counter
+                    lowlink[w] = index_counter
+                    index_counter += 1
+                    stack.append(w)
+                    on_stack[w] = True
+                    work.append((w, 0))
+                elif on_stack.get(w):
+                    lowlink[v] = min(lowlink[v], index[w])
+            else:
+                work.pop()
+                if work:
+                    parent = work[-1][0]
+                    lowlink[parent] = min(lowlink[parent], lowlink[v])
+                if lowlink[v] == index[v]:
+                    component: list[str] = []
+                    while True:
+                        w = stack.pop()
+                        on_stack[w] = False
+                        component.append(w)
+                        if w == v:
+                            break
+                    sccs.append(component)
 
     result: dict[str, list[str]] = {}
     for component in sccs:

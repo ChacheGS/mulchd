@@ -1747,3 +1747,49 @@ def test_find_cycles_unrelated_records_not_flagged():
         {"id": "mx-b", "supersedes": []},
     ]
     assert _find_cycles(records) == {}
+
+
+def test_find_cycles_empty_input():
+    from mulchd.mcp.tier2 import _find_cycles
+
+    assert _find_cycles([]) == {}
+
+
+def test_find_cycles_self_loop_not_flagged_as_cycle():
+    """A record whose own supersedes list contains its own id (only reachable
+    via legacy data written before _validate_references existed) resolves to
+    a single-node component and is correctly not treated as a cycle — a lone
+    self-reference isn't a contradiction between two records the way A<->B is."""
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [{"id": "mx-a", "supersedes": ["mx-a"]}]
+    assert _find_cycles(records) == {}
+
+
+def test_find_cycles_duplicate_ids_in_supersedes_list():
+    """Duplicate IDs within one record's supersedes list must not corrupt the
+    algorithm's bookkeeping (double-pushing onto the stack, duplicate entries
+    in the reported cycle, etc.)."""
+    from mulchd.mcp.tier2 import _find_cycles
+
+    records = [
+        {"id": "mx-a", "supersedes": ["mx-b", "mx-b"]},
+        {"id": "mx-b", "supersedes": ["mx-a"]},
+    ]
+    cycles = _find_cycles(records)
+    assert cycles["mx-a"] == ["mx-b"]
+    assert cycles["mx-b"] == ["mx-a"]
+
+
+def test_find_cycles_handles_long_chain_without_recursion_error():
+    """A ~2000-record linear supersede chain must not crash — this is the
+    scenario a recursive Tarjan's implementation fails on (Python's default
+    recursion limit is 1000), and it's realistic: nothing prevents a
+    long-lived project's supersede history from accumulating a chain this
+    long over years of legitimate use."""
+    from mulchd.mcp.tier2 import _find_cycles
+
+    n = 2000
+    records = [{"id": f"mx-{i}", "supersedes": [f"mx-{i + 1}"]} for i in range(n)]
+    records.append({"id": f"mx-{n}", "supersedes": []})
+    assert _find_cycles(records) == {}
