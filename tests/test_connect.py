@@ -525,6 +525,62 @@ async def test_oauth_consent_allow_creates_grant_and_redirects_with_code(client,
     assert await OAuthGrant.filter(user=user, project=project).exists()
 
 
+async def test_oauth_consent_allow_nonexistent_project_returns_403(client, alice_and_project):
+    from mulchd.models import OAuthClient, OAuthGrant
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-noproj",
+        client_metadata={"client_id": "cli-noproj", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli NoProj"},
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-noproj",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st-noproj",
+            "scope": "",
+            "project_id": 999999,
+            "decision": "allow",
+        },
+    )
+    assert resp.status_code == 403
+    assert not await OAuthGrant.filter(user=user).exists()
+
+
+async def test_oauth_consent_allow_non_member_project_returns_403(client, alice_and_project):
+    from mulchd.models import OAuthClient, OAuthGrant, Organization, Project
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    other_org = await Organization.create(slug="other-org", display_name="Other Org")
+    other_project = await Project.create(slug="other-proj", display_name="Other Proj", org=other_org)
+    await OAuthClient.create(
+        client_id="cli-notmember",
+        client_metadata={
+            "client_id": "cli-notmember",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli NotMember",
+        },
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-notmember",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st-notmember",
+            "scope": "",
+            "project_id": other_project.id,
+            "decision": "allow",
+        },
+    )
+    assert resp.status_code == 403
+    assert not await OAuthGrant.filter(user=user).exists()
+
+
 async def test_oauth_consent_allow_second_time_skips_picker(client, alice_and_project):
     """An existing grant for (client, user) issues a code immediately, no form."""
     from mulchd.models import OAuthClient, OAuthGrant
