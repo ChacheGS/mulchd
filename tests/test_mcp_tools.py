@@ -1537,6 +1537,136 @@ async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
     assert records[1].get("_supersedes_foundational") == [original["id"]]
 
 
+async def test_mark_superseded_sets_generic_outgoing_tag(team, data_path):
+    """A non-foundational outgoing supersedes relationship now gets a display
+    tag too — today only the foundational-specific tag exists."""
+    from mulchd.mcp.tier2 import _mark_superseded
+
+    t = team
+    old = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="Old", owner="carlos",
+    )
+    new = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="New", owner="carlos",
+        supersedes=[old["id"]],
+    )
+    old["_domain"] = "infra"
+    new["_domain"] = "infra"
+    records = [old, new]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert records[1]["_supersedes_display"] == [old["id"]]
+
+
+async def test_mark_superseded_labels_deleted_target(team, data_path):
+    """An outgoing supersedes target that's been archived is labeled (deleted),
+    not shown as if it were still live."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mcp.tier2 import _mark_superseded
+
+    t = team
+    m_dir = mulch_dir("acme", "infra")
+    archive_dir = m_dir / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "infra.jsonl").write_text(
+        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"}) + "\n"
+    )
+    new = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="New", owner="carlos",
+        supersedes=["mx-archived1"],
+    )
+    new["_domain"] = "infra"
+    records = [new]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert records[0]["_supersedes_display"] == ["mx-archived1 (deleted)"]
+
+
+async def test_mark_superseded_labels_missing_target(team, data_path):
+    """An outgoing supersedes target that never existed at all (legacy data
+    written before write-time validation existed) is labeled (missing)."""
+    from mulchd.mcp.tier2 import _mark_superseded
+
+    t = team
+    new = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="New", owner="carlos",
+        supersedes=["mx-never-existed"],
+    )
+    new["_domain"] = "infra"
+    records = [new]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert records[0]["_supersedes_display"] == ["mx-never-existed (missing)"]
+
+
+async def test_mark_superseded_flags_direct_cycle(team, data_path):
+    """Two records that mutually supersede each other get _cycle_with set on both."""
+    from mulchd.mcp.tier2 import _mark_superseded
+
+    t = team
+    a = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="A", owner="carlos",
+    )
+    b = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="B", owner="carlos",
+        supersedes=[a["id"]],
+    )
+    # Edit A directly in JSONL to also supersede B, completing the cycle
+    path = data_path / "acme" / "infra" / ".mulch" / "expertise" / "infra.jsonl"
+    lines = path.read_text().splitlines()
+    new_lines = []
+    for line in lines:
+        rec = json.loads(line)
+        if rec["id"] == a["id"]:
+            rec["supersedes"] = [b["id"]]
+        new_lines.append(json.dumps(rec))
+    path.write_text("\n".join(new_lines) + "\n")
+
+    a["_domain"] = "infra"
+    b["_domain"] = "infra"
+    records = [a, b]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert records[0].get("_cycle_with") == [b["id"]]
+    assert records[1].get("_cycle_with") == [a["id"]]
+
+
+async def test_read_records_renders_cycle_warning_not_normal_tags(team, data_path):
+    """The formatted text output shows the CONTRADICTORY warning for a cycle,
+    not the normal superseded/supersedes tags."""
+    t = team
+    a = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="A", owner="carlos",
+    )
+    b = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="B", owner="carlos",
+        supersedes=[a["id"]],
+    )
+    path = data_path / "acme" / "infra" / ".mulch" / "expertise" / "infra.jsonl"
+    lines = path.read_text().splitlines()
+    new_lines = []
+    for line in lines:
+        rec = json.loads(line)
+        if rec["id"] == a["id"]:
+            rec["supersedes"] = [b["id"]]
+        new_lines.append(json.dumps(rec))
+    path.write_text("\n".join(new_lines) + "\n")
+
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert "CONTRADICTORY" in text_content[0].text
+    assert "superseded by" not in text_content[0].text
+
+
 async def test_write_record_supersession_warning_on_foundational(
     team, data_path, fake_write_record
 ):

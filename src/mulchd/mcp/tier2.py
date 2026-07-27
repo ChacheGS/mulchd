@@ -551,47 +551,66 @@ _RECORD_SCHEMAS: dict[str, dict] = {
 
 
 async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str) -> None:
-    """Tag each record whose ID is referenced in any live record's supersedes list.
+    """Tag each record with incoming/outgoing supersede relationships and
+    cycle membership.
 
     Scans all domains — not just the current result set — so cross-domain
     supersession and same-domain supersession where the superseder was not
-    co-retrieved are both detected.
+    co-retrieved are both detected. Also scans archive/ so an outgoing
+    reference to a now-deleted record can be labeled distinctly from a live
+    one or a reference that never resolved to anything.
 
     Sets _superseder_domain when the superseder lives in a different domain
     than the superseded record (used to build cross-domain read hints).
     """
-    target_ids = {r.get("id") for r in records if r.get("id")}
-    if not target_ids:
+    if not records:
         return
+    m_dir = mulch_dir(org_slug, project_slug)
+    project_records = await _load_project_records(m_dir)
+    archived_ids = await _load_archived_ids(m_dir)
+    live_by_id = {r["id"]: r for r in project_records if r.get("id")}
+
     # {victim_id: (superseder_id, superseder_domain)}
     superseded_by: dict[str, tuple[str, str]] = {}
-    # {record_id: classification} — built while scanning, used for _supersedes_foundational
-    classifications: dict[str, str] = {}
-    expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
-    if expertise_dir.exists():
-        for jsonl_file in expertise_dir.glob("*.jsonl"):
-            superseder_domain = jsonl_file.stem
-            for stored in await read_domain_records(jsonl_file):
-                sid = stored.get("id", "")
-                if sid:
-                    classifications[sid] = stored.get("classification", "")
-                for vid in stored.get("supersedes") or []:
-                    if vid in target_ids:
-                        superseded_by[vid] = (sid, superseder_domain)
+    for stored in project_records:
+        sid = stored.get("id", "")
+        for vid in stored.get("supersedes") or []:
+            if sid:
+                superseded_by[vid] = (sid, stored.get("_domain", ""))
+
+    cycles = _find_cycles(project_records)
+
     for r in records:
         rid = r.get("id")
+
+        if rid in cycles:
+            r["_cycle_with"] = cycles[rid]
+            continue
+
         if rid in superseded_by:
             superseder_id, superseder_domain = superseded_by[rid]
             r["_superseded"] = True
             r["_superseded_by"] = superseder_id
             if superseder_domain and superseder_domain != r.get("_domain", ""):
                 r["_superseder_domain"] = superseder_domain
-        # Flag records that themselves supersede foundational records
-        displaced = [
-            sid for sid in (r.get("supersedes") or []) if classifications.get(sid) == "foundational"
-        ]
-        if displaced:
-            r["_supersedes_foundational"] = displaced
+
+        outgoing = r.get("supersedes") or []
+        if outgoing:
+            display: list[str] = []
+            displaced_foundational: list[str] = []
+            for tid in outgoing:
+                target = live_by_id.get(tid)
+                if target is not None:
+                    display.append(tid)
+                    if target.get("classification") == "foundational":
+                        displaced_foundational.append(tid)
+                elif tid in archived_ids:
+                    display.append(f"{tid} (deleted)")
+                else:
+                    display.append(f"{tid} (missing)")
+            r["_supersedes_display"] = display
+            if displaced_foundational:
+                r["_supersedes_foundational"] = displaced_foundational
 
 
 async def _load_project_records(m_dir: Path) -> list[dict]:
@@ -811,21 +830,26 @@ def _format_single(r: dict) -> str:
     header = f"[{domain}/{rtype}] {rid}"
     if title:
         header += f" — {title}"
-    if r.get("_superseded"):
-        tag = (
-            f" • superseded by {r['_superseded_by']}"
-            if r.get("_superseded_by")
-            else " • superseded"
-        )
-        if r.get("_superseder_domain"):
-            tag += f" (in {r['_superseder_domain']})"
-        header += tag
+    if r.get("_cycle_with"):
+        header += f" ⚠ CONTRADICTORY: cycle with {', '.join(r['_cycle_with'])}"
+    else:
+        if r.get("_superseded"):
+            tag = (
+                f" • superseded by {r['_superseded_by']}"
+                if r.get("_superseded_by")
+                else " • superseded"
+            )
+            if r.get("_superseder_domain"):
+                tag += f" (in {r['_superseder_domain']})"
+            header += tag
+        if r.get("_supersedes_display"):
+            header += f" • supersedes {', '.join(r['_supersedes_display'])}"
+        if r.get("_supersedes_foundational"):
+            header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
     if r.get("_edited"):
         n = r.get("_edit_count", "")
         editor = r.get("_last_edited_by", "")
         header += f" • edited {n}×" + (f" by {editor}" if editor else "")
-    if r.get("_supersedes_foundational"):
-        header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
     if body:
         header += f"\n    {body}"
     return header
@@ -848,21 +872,26 @@ def _format_records(records: list[dict]) -> str:
         )
         if title:
             header += f" — {title}"
-        if r.get("_superseded"):
-            tag = (
-                f" • superseded by {r['_superseded_by']}"
-                if r.get("_superseded_by")
-                else " • superseded"
-            )
-            if r.get("_superseder_domain"):
-                tag += f" (in {r['_superseder_domain']})"
-            header += tag
+        if r.get("_cycle_with"):
+            header += f" ⚠ CONTRADICTORY: cycle with {', '.join(r['_cycle_with'])}"
+        else:
+            if r.get("_superseded"):
+                tag = (
+                    f" • superseded by {r['_superseded_by']}"
+                    if r.get("_superseded_by")
+                    else " • superseded"
+                )
+                if r.get("_superseder_domain"):
+                    tag += f" (in {r['_superseder_domain']})"
+                header += tag
+            if r.get("_supersedes_display"):
+                header += f" • supersedes {', '.join(r['_supersedes_display'])}"
+            if r.get("_supersedes_foundational"):
+                header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
         if r.get("_edited"):
             n = r.get("_edit_count", "")
             editor = r.get("_last_edited_by", "")
             header += f" • edited {n}×" + (f" by {editor}" if editor else "")
-        if r.get("_supersedes_foundational"):
-            header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
         lines.append(header)
         if body:
             lines.append(f"  {body}")
