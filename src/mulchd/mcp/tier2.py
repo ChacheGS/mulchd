@@ -1310,7 +1310,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             self_id=record_id,
         )
     if "supersedes" in updates:
-        added = [sid for sid in updates["supersedes"] if sid not in (record.get("supersedes") or [])]
+        added = [sid for sid in (updates["supersedes"] or []) if sid not in (record.get("supersedes") or [])]
         if added:
             effective_classification = updates.get("classification", record.get("classification", ""))
             alerts = await _supersede_alerts(m_dir, added, effective_classification)
