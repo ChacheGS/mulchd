@@ -524,6 +524,16 @@ async def test_oauth_consent_allow_creates_grant_and_redirects_with_code(client,
     assert "state=st4" in location
     assert await OAuthGrant.filter(user=user, project=project).exists()
 
+    from mulchd.models import OAuthCode
+
+    # OAuthCode.client_id must be the OAuthClient's string client_id ("cli-d"), not
+    # the related row's integer primary key — regression test for a bug where
+    # _issue_oauth_code derived it from grant.client_id (Tortoise's raw FK column,
+    # an int) instead of the caller's already-loaded OAuthClient.client_id string.
+    code_row = await OAuthCode.filter(grant__user=user, grant__project=project).first()
+    assert code_row is not None
+    assert code_row.client_id == "cli-d"
+
 
 async def test_oauth_consent_allow_nonexistent_project_returns_403(client, alice_and_project):
     from mulchd.models import OAuthClient, OAuthGrant
@@ -606,6 +616,12 @@ async def test_oauth_consent_allow_second_time_skips_picker(client, alice_and_pr
     assert resp.status_code == 302
     assert resp.headers["location"].startswith("http://localhost/cb?")
     assert "code=" in resp.headers["location"]
+
+    from mulchd.models import OAuthCode
+
+    code_row = await OAuthCode.filter(grant__user=user, grant__project=project).first()
+    assert code_row is not None
+    assert code_row.client_id == "cli-e"
 
 
 async def test_oauth_consent_login_round_trip_returns_to_pending_authorization(

@@ -484,12 +484,16 @@ def _redirect_uri_registered(oauth_client: OAuthClient, redirect_uri: str) -> bo
 
 
 async def _issue_oauth_code(
-    grant: OAuthGrant, redirect_uri: str, code_challenge: str, scope: str, state: str = ""
+    grant: OAuthGrant, client_id: str, redirect_uri: str, code_challenge: str, scope: str, state: str = ""
 ) -> RedirectResponse:
+    # client_id must be OAuthClient.client_id (the SDK-facing string business key),
+    # not grant.client_id — Tortoise's raw FK attribute on grant.client is the related
+    # OAuthClient row's integer primary key, not its client_id string. Passing the
+    # caller's already-loaded OAuthClient row's .client_id avoids that trap.
     code = generate_token()
     await OAuthCode.create(
         code_hash=_hash(code),
-        client_id=grant.client_id,
+        client_id=client_id,
         grant=grant,
         redirect_uri=redirect_uri,
         code_challenge=code_challenge,
@@ -526,7 +530,9 @@ async def oauth_consent_page(
         await OAuthGrant.filter(client=oauth_client, user=user).select_related("project").first()
     )
     if existing_grant is not None:
-        return await _issue_oauth_code(existing_grant, redirect_uri, code_challenge, scope, state)
+        return await _issue_oauth_code(
+            existing_grant, oauth_client.client_id, redirect_uri, code_challenge, scope, state
+        )
 
     memberships = await UserMembership.filter(user=user).select_related("project__org").all()
     return templates.TemplateResponse(
@@ -583,7 +589,7 @@ async def oauth_consent_submit(
         grant.project = project
         await grant.save()
 
-    return await _issue_oauth_code(grant, redirect_uri, code_challenge, scope, state)
+    return await _issue_oauth_code(grant, oauth_client.client_id, redirect_uri, code_challenge, scope, state)
 
 
 @router.get("/logout")
