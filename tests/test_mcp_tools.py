@@ -1297,6 +1297,35 @@ async def test_record_expertise_accepts_valid_cross_domain_supersedes(team, data
     assert len(structured["records"]) == 1
 
 
+async def test_record_expertise_without_references_skips_project_scan(team, data_path, monkeypatch, fake_write_record):
+    """A write with no supersedes/relates_to at all must not trigger a
+    project-wide scan — _load_project_records should not be called."""
+    import mulchd.mcp.tier2 as mcp_tier2
+
+    t = team
+    called = False
+    original = mcp_tier2._load_project_records
+
+    async def _tracking(*a, **kw):
+        nonlocal called
+        called = True
+        return await original(*a, **kw)
+
+    monkeypatch.setattr(mcp_tier2, "_load_project_records", _tracking)
+
+    await mcp_tier2._record_expertise(
+        {
+            "type": "decision",
+            "domain": "infra",
+            "classification": "tactical",
+            "title": "Plain decision",
+            "rationale": "No relationships involved",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert called is False
+
+
 async def test_record_expertise_rejects_archived_supersedes_target(team, data_path, fake_write_record):
     """A supersedes target that's been archived (soft-deleted) is rejected the
     same as a fabricated ID — it's no longer live."""
@@ -1354,6 +1383,60 @@ async def test_edit_record_rejects_self_reference(team, data_path, fake_write_re
             {"record_id": r["id"], "domain": "infra", "supersedes": [r["id"]]},
             ctx(t.carlos, t.org, t.infra),
         )
+
+
+async def test_edit_record_rejects_relates_to_self_reference(team, data_path, fake_write_record):
+    """The self-reference guard applies to relates_to too, not just supersedes —
+    _validate_references' loop is field-agnostic."""
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+    )
+    with pytest.raises(ValueError, match="relates_to cannot reference the record's own id"):
+        await _edit_record(
+            {"record_id": r["id"], "domain": "infra", "relates_to": [r["id"]]},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_edit_record_content_only_skips_reference_validation(team, data_path, monkeypatch, fake_write_record):
+    """Editing a field other than supersedes/relates_to must not trigger a
+    project-wide scan at all — _load_project_records should not be called."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+    )
+
+    called = False
+    original = mcp_tier2._load_project_records
+
+    async def _tracking(*a, **kw):
+        nonlocal called
+        called = True
+        return await original(*a, **kw)
+
+    monkeypatch.setattr(mcp_tier2, "_load_project_records", _tracking)
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        await _edit_record(
+            {"record_id": r["id"], "domain": "infra", "content": "v2"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+    assert called is False
 
 
 async def test_annotate_edits_sets_edited_flag(team, data_path):

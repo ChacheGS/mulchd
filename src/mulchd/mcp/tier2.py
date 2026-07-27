@@ -944,13 +944,14 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    project_records = await _load_project_records(m_dir)
-    live_ids = {r["id"] for r in project_records if r.get("id")}
-    _validate_references(
-        live_ids,
-        list(args.get("supersedes") or []),
-        list(args.get("relates_to") or []),
-    )
+    if args.get("supersedes") or args.get("relates_to"):
+        project_records = await _load_project_records(m_dir)
+        live_ids = {r["id"] for r in project_records if r.get("id")}
+        _validate_references(
+            live_ids,
+            list(args.get("supersedes") or []),
+            list(args.get("relates_to") or []),
+        )
     await init_ml_project(m_dir)
     domain_file = m_dir / "expertise" / f"{domain}.jsonl"
     pre_existed = domain_file.exists()
