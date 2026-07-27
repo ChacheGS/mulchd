@@ -191,3 +191,13 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
             expires_in=int(ACCESS_TOKEN_TTL.total_seconds()),
             scope=scope_str,
         )
+
+
+async def is_known_oauth_token(token: str) -> bool:
+    """
+    True if this token hash matches an OAuthToken row mulchd itself issued, regardless
+    of whether it's since expired or been revoked. Used to distinguish "this was ours,
+    but it's no longer valid" (→ 401 invalid_token, so OAuth clients know to refresh)
+    from "mulchd never issued this" (→ existing tier1 fallback, unchanged).
+    """
+    return await OAuthToken.filter(access_token_hash=_hash(token)).exists()

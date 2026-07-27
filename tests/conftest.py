@@ -6,6 +6,10 @@ from tortoise import Tortoise
 
 os.environ.setdefault("MULCHD_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("MULCHD_DB_URL", "sqlite://:memory:")
+# MULCHD_HOST defaults to 0.0.0.0, which the mcp SDK's issuer-URL validation rejects
+# (RFC 8414 requires HTTPS, with an explicit localhost/127.0.0.1 carve-out for testing).
+# Point resolved_base_url at that carve-out so the OAuth routes can be registered.
+os.environ.setdefault("MULCHD_HOST", "127.0.0.1")
 
 from mulchd.main import app  # noqa: E402 — env must be set before import
 
