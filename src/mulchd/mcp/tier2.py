@@ -601,9 +601,13 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             for tid in outgoing:
                 target = live_by_id.get(tid)
                 if target is not None:
-                    display.append(tid)
                     if target.get("classification") == "foundational":
+                        # Shown via the dedicated "⚠ supersedes foundational" line
+                        # below instead — listing it in the generic tag too would
+                        # render the same id twice back-to-back.
                         displaced_foundational.append(tid)
+                    else:
+                        display.append(tid)
                 elif tid in archived_ids:
                     display.append(f"{tid} (deleted)")
                 else:

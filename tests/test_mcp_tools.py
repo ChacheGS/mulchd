@@ -1537,6 +1537,31 @@ async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
     assert records[1].get("_supersedes_foundational") == [original["id"]]
 
 
+async def test_mark_superseded_foundational_target_not_double_rendered(team, data_path):
+    """A foundational supersede target must appear only in _supersedes_foundational,
+    not also in the generic _supersedes_display — otherwise the id renders twice
+    back-to-back in the formatted text (once per tag)."""
+    from mulchd.mcp.tier2 import _mark_superseded
+
+    t = team
+    old = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+    )
+    new = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="Weakened rule", owner="carlos",
+        supersedes=[old["id"]],
+    )
+    old["_domain"] = "infra"
+    new["_domain"] = "infra"
+    records = [old, new]
+    await _mark_superseded(records, "acme", "infra")
+
+    assert new.get("_supersedes_display") in (None, [])
+    assert new["_supersedes_foundational"] == [old["id"]]
+
+
 async def test_mark_superseded_sets_generic_outgoing_tag(team, data_path):
     """A non-foundational outgoing supersedes relationship now gets a display
     tag too — today only the foundational-specific tag exists."""
