@@ -57,7 +57,7 @@ def _get_invite_user_id(request: Request) -> int | None:
 async def _validate_invite(token: str) -> InviteLink | None:
     """Steps 1-4: existence, revoked, expired, exhausted. Returns None for any failure.
 
-    Reuses InviteLink.status (added in Task 2, src/mulchd/models.py) instead of
+    Reuses InviteLink.status (added in Task 2, src/mulchd/models/identity.py) instead of
     re-deriving revoked/expired/exhausted here, so the admin UI and this claim
     path can't drift out of sync.
     """
