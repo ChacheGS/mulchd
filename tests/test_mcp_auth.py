@@ -3,6 +3,119 @@ import pytest
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
+async def _make_client_grant(project=None):
+    from mulchd.auth import create_user
+    from mulchd.models import OAuthClient, OAuthGrant, Organization, Project
+
+    user, _ = await create_user(f"user-{secrets_suffix()}", "User")
+    org = await Organization.create(slug=f"org-{secrets_suffix()}", display_name="Org")
+    project = project or await Project.create(slug=f"proj-{secrets_suffix()}", display_name="Proj", org=org)
+    client = await OAuthClient.create(
+        client_id=f"client-{secrets_suffix()}",
+        client_metadata={
+            "client_id": "placeholder",
+            "redirect_uris": ["http://localhost/cb"],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+        },
+    )
+    grant = await OAuthGrant.create(client=client, user=user, project=project)
+    return user, project, client, grant
+
+
+def secrets_suffix() -> str:
+    import secrets
+
+    return secrets.token_hex(4)
+
+
+async def test_exchange_authorization_code_issues_tokens(db):
+    from datetime import UTC, datetime, timedelta
+
+    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.models import OAuthCode, OAuthToken
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+
+    code_row = await OAuthCode.create(
+        code_hash=_hash("raw-code-1"),
+        client_id=client_row.client_id,
+        grant=grant,
+        redirect_uri="http://localhost/cb",
+        code_challenge="chal",
+        scope="mulchd",
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
+    )
+
+    auth_code = await provider.load_authorization_code(client, "raw-code-1")
+    assert auth_code is not None
+    assert auth_code.client_id == client_row.client_id
+
+    tokens = await provider.exchange_authorization_code(client, auth_code)
+    assert tokens.access_token
+    assert tokens.refresh_token
+
+    await code_row.refresh_from_db()
+    assert code_row.used is True
+
+    # replay is rejected
+    assert await provider.load_authorization_code(client, "raw-code-1") is None
+
+    # regression: OAuthToken.client_id must be the string client_id, not grant's raw FK int
+    issued = await OAuthToken.filter(access_token_hash=_hash(tokens.access_token)).first()
+    assert issued.client_id == client_row.client_id
+
+
+async def test_load_access_token_carries_project_claim(db):
+    from mulchd.mcp_auth import MulchdOAuthProvider
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    access_token = await provider.load_access_token(tokens.access_token)
+    assert access_token is not None
+    assert access_token.subject == str(user.id)
+    assert access_token.claims["project_id"] == project.id
+
+
+async def test_refresh_token_rotation(db):
+    from mulchd.mcp_auth import MulchdOAuthProvider
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    refresh_token = await provider.load_refresh_token(client, tokens.refresh_token)
+    assert refresh_token is not None
+
+    new_tokens = await provider.exchange_refresh_token(client, refresh_token, ["mulchd"])
+    assert new_tokens.access_token != tokens.access_token
+    assert new_tokens.refresh_token != tokens.refresh_token
+
+    # old refresh token no longer loads
+    assert await provider.load_refresh_token(client, tokens.refresh_token) is None
+
+
+async def test_revoke_token(db):
+    from mulchd.mcp_auth import MulchdOAuthProvider
+
+    user, project, client_row, grant = await _make_client_grant()
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    access_token = await provider.load_access_token(tokens.access_token)
+    await provider.revoke_token(access_token)
+
+    assert await provider.load_access_token(tokens.access_token) is None
+
+
 async def test_register_client_then_get_client_roundtrip(db):
     from mcp.shared.auth import OAuthClientMetadata
 

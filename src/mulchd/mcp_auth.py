@@ -56,3 +56,129 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
             }
         )
         return f"/connect/oauth-consent?{query}"
+
+    async def load_authorization_code(
+        self, client: OAuthClientInformationFull, authorization_code: str
+    ) -> AuthorizationCode | None:
+        row = (
+            await OAuthCode.filter(code_hash=_hash(authorization_code), client_id=client.client_id, used=False)
+            .select_related("grant")
+            .first()
+        )
+        if row is None:
+            return None
+        expires_at = row.expires_at.replace(tzinfo=UTC) if row.expires_at.tzinfo is None else row.expires_at
+        if expires_at < datetime.now(UTC):
+            return None
+        return AuthorizationCode(
+            code=authorization_code,
+            scopes=row.scope.split() if row.scope else [],
+            expires_at=expires_at.timestamp(),
+            client_id=client.client_id,
+            code_challenge=row.code_challenge,
+            redirect_uri=row.redirect_uri,
+            redirect_uri_provided_explicitly=True,
+            subject=str(row.grant.user_id),
+        )
+
+    async def exchange_authorization_code(
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+    ) -> SdkOAuthToken:
+        row = (
+            await OAuthCode.filter(code_hash=_hash(authorization_code.code), client_id=client.client_id)
+            .select_related("grant")
+            .first()
+        )
+        if row is None or row.used:
+            raise TokenError(error="invalid_grant", error_description="authorization code already used")
+        row.used = True
+        await row.save()
+        return await self._issue_tokens(client.client_id, row.grant, authorization_code.scopes)
+
+    async def load_refresh_token(
+        self, client: OAuthClientInformationFull, refresh_token: str
+    ) -> RefreshToken | None:
+        row = (
+            await OAuthToken.filter(
+                refresh_token_hash=_hash(refresh_token), client_id=client.client_id, revoked=False
+            )
+            .select_related("grant")
+            .first()
+        )
+        if row is None:
+            return None
+        expires_at = row.refresh_expires_at
+        expires_at = expires_at.replace(tzinfo=UTC) if expires_at.tzinfo is None else expires_at
+        return RefreshToken(
+            token=refresh_token,
+            client_id=client.client_id,
+            scopes=row.scope.split() if row.scope else [],
+            expires_at=int(expires_at.timestamp()),
+            subject=str(row.grant.user_id),
+        )
+
+    async def exchange_refresh_token(
+        self,
+        client: OAuthClientInformationFull,
+        refresh_token: RefreshToken,
+        scopes: list[str],
+    ) -> SdkOAuthToken:
+        row = (
+            await OAuthToken.filter(
+                refresh_token_hash=_hash(refresh_token.token), client_id=client.client_id, revoked=False
+            )
+            .select_related("grant")
+            .first()
+        )
+        if row is None:
+            raise TokenError(error="invalid_grant", error_description="refresh token not found")
+        row.revoked = True
+        await row.save()
+        return await self._issue_tokens(client.client_id, row.grant, scopes or refresh_token.scopes)
+
+    async def load_access_token(self, token: str) -> AccessToken | None:
+        row = await OAuthToken.filter(access_token_hash=_hash(token), revoked=False).select_related("grant").first()
+        if row is None:
+            return None
+        expires_at = row.access_expires_at
+        expires_at = expires_at.replace(tzinfo=UTC) if expires_at.tzinfo is None else expires_at
+        if expires_at < datetime.now(UTC):
+            return None
+        return AccessToken(
+            token=token,
+            client_id=row.client_id,
+            scopes=row.scope.split() if row.scope else [],
+            expires_at=int(expires_at.timestamp()),
+            subject=str(row.grant.user_id),
+            claims={"project_id": row.grant.project_id},
+        )
+
+    async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
+        token_hash = _hash(token.token)
+        await OAuthToken.filter(access_token_hash=token_hash).update(revoked=True)
+        await OAuthToken.filter(refresh_token_hash=token_hash).update(revoked=True)
+
+    async def _issue_tokens(self, client_id: str, grant: OAuthGrant, scopes: list[str]) -> SdkOAuthToken:
+        # client_id must be the caller's OAuthClientInformationFull.client_id (string) —
+        # NOT grant.client_id, which is Tortoise's raw FK column and holds the related
+        # OAuthClient row's integer primary key, not its client_id string. Every caller
+        # of this method already has the correct string in scope as `client.client_id`.
+        access_token = _generate_secret()
+        refresh_token = _generate_secret()
+        now = datetime.now(UTC)
+        scope_str = " ".join(scopes) if scopes else None
+        await OAuthToken.create(
+            access_token_hash=_hash(access_token),
+            refresh_token_hash=_hash(refresh_token),
+            client_id=client_id,
+            grant=grant,
+            scope=scope_str,
+            access_expires_at=now + ACCESS_TOKEN_TTL,
+            refresh_expires_at=now + REFRESH_TOKEN_TTL,
+        )
+        return SdkOAuthToken(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=int(ACCESS_TOKEN_TTL.total_seconds()),
+            scope=scope_str,
+        )
