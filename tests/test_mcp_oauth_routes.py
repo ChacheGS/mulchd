@@ -122,6 +122,48 @@ async def test_mcp_revoked_oauth_token_returns_401(client, db):
     assert resp.status_code == 401
 
 
+def test_mcp_oauth_invalid_issuer_url_degrades_gracefully():
+    """
+    This project's own default settings (MULCHD_HOST=0.0.0.0, no MULCHD_BASE_URL)
+    resolve to an issuer URL the mcp SDK's RFC 8414 validation rejects (HTTPS
+    required, with a localhost/127.0.0.1 carve-out this doesn't match). Since
+    mcp_oauth_enabled defaults to True, a deployer who follows the example env
+    file as-is must not have their entire app fail to start over this — OAuth AS
+    routes should simply not register, with everything else (admin, /connect,
+    tier1/tier2 MCP) unaffected.
+
+    Run in a subprocess, not via importlib.reload(mulchd.main) in-process:
+    reloading this module while other already-imported modules (conftest's
+    `client` fixture, other test files' cached imports) still hold references to
+    the old module objects corrupts shared global state (Tortoise's model
+    registry, the mcp session managers' internal contextvars) in ways that broke
+    unrelated tests elsewhere in the suite depending on run order — confirmed by
+    trying exactly that approach first. A subprocess sidesteps it entirely: this
+    process's own already-imported `mulchd.main` (used by every other test in
+    this file via the `client` fixture) is never touched.
+    """
+    import os
+    import subprocess
+    import sys
+
+    env = os.environ.copy()
+    env["MULCHD_HOST"] = "0.0.0.0"
+    env.pop("MULCHD_BASE_URL", None)
+    env["MULCHD_SECRET_KEY"] = "test-secret-key"
+    env["MULCHD_DB_URL"] = "sqlite://:memory:"
+
+    result = subprocess.run(
+        [sys.executable, "-c", "from mulchd.main import app; print('IMPORT_OK')"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    assert "IMPORT_OK" in result.stdout
+    assert "not registered" in result.stderr
+
+
 async def test_resolve_mcp_tier_accepts_oauth_access_token(db):
     from mulchd.auth import create_user
     from mulchd.main import resolve_mcp_tier

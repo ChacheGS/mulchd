@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from importlib.metadata import version as _pkg_version
 
@@ -27,6 +28,7 @@ from .mcp_auth import MulchdOAuthProvider, is_known_oauth_token
 from .models import Project, User, UserMembership
 
 sse = SseServerTransport("/messages/")
+_log = logging.getLogger("mulchd.main")
 
 
 def _client_from_request(request: Request) -> str:
@@ -129,20 +131,40 @@ app.include_router(connect_router)
 app.include_router(invite_router)
 
 if settings.mcp_oauth_enabled:
+    # create_auth_routes validates the issuer URL (RFC 8414 requires HTTPS, with a
+    # localhost/127.0.0.1 carve-out for local testing) and raises ValueError if it
+    # doesn't qualify. resolved_base_url falls back to http://{host}:{port} — with
+    # this project's own default settings (host=0.0.0.0, no MULCHD_BASE_URL), that
+    # fallback always fails validation. A deployer enabling mcp_oauth_enabled's
+    # default without also setting MULCHD_BASE_URL to a real https:// URL must not
+    # bring down the entire app (admin UI, /connect, tier1/tier2 MCP included) over
+    # an OAuth-specific misconfiguration — degrade to "OAuth AS routes unavailable"
+    # instead, and say why.
     issuer_url = AnyHttpUrl(settings.resolved_base_url)
-    auth_routes = create_auth_routes(
-        provider=oauth_provider,
-        issuer_url=issuer_url,
-        client_registration_options=ClientRegistrationOptions(enabled=True),
-        revocation_options=RevocationOptions(enabled=True),
-    )
-    resource_routes = create_protected_resource_routes(
-        resource_url=AnyHttpUrl(f"{settings.resolved_base_url}/mcp"),
-        authorization_servers=[issuer_url],
-        resource_name="mulchd",
-    )
-    app.router.routes.extend(auth_routes)
-    app.router.routes.extend(resource_routes)
+    try:
+        auth_routes = create_auth_routes(
+            provider=oauth_provider,
+            issuer_url=issuer_url,
+            client_registration_options=ClientRegistrationOptions(enabled=True),
+            revocation_options=RevocationOptions(enabled=True),
+        )
+        resource_routes = create_protected_resource_routes(
+            resource_url=AnyHttpUrl(f"{settings.resolved_base_url}/mcp"),
+            authorization_servers=[issuer_url],
+            resource_name="mulchd",
+        )
+    except ValueError as exc:
+        _log.warning(
+            "MCP OAuth authorization server routes not registered (issuer URL "
+            "%r invalid: %s). Set MULCHD_BASE_URL to a public https:// URL to "
+            "enable OAuth-based MCP client connections; falling back to "
+            "project-token-only authentication for /mcp.",
+            settings.resolved_base_url,
+            exc,
+        )
+    else:
+        app.router.routes.extend(auth_routes)
+        app.router.routes.extend(resource_routes)
 
 
 class _SseNoop(Response):
