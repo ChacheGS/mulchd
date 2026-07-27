@@ -353,3 +353,196 @@ async def test_oauth_login_bootstraps_matching_admin_email(db, monkeypatch):
     await maybe_bootstrap_admin(user)
 
     assert await is_superadmin(user) is True
+
+
+# ── OAuth consent ────────────────────────────────────────────────────────────
+
+
+async def test_oauth_consent_redirects_to_login_when_unauthenticated(client, db):
+    from mulchd.models import OAuthClient
+
+    await OAuthClient.create(
+        client_id="cli-a",
+        client_metadata={"client_id": "cli-a", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli A"},
+    )
+    resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "cli-a",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st1",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"].startswith("/connect?return_to=")
+
+
+async def test_oauth_consent_unknown_client_404s(client, alice_and_project):
+    user, token, *_ = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "does-not-exist",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+        },
+    )
+    assert resp.status_code == 404
+
+
+async def test_oauth_consent_page_shows_project_picker(client, alice_and_project):
+    from mulchd.models import OAuthClient
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-b",
+        client_metadata={"client_id": "cli-b", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli B"},
+    )
+    resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "cli-b",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st2",
+        },
+    )
+    assert resp.status_code == 200
+    assert "Cli B" in resp.text
+    assert project.display_name in resp.text
+
+
+async def test_oauth_consent_deny_redirects_with_error(client, alice_and_project):
+    from mulchd.models import OAuthClient
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-c",
+        client_metadata={"client_id": "cli-c", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli C"},
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-c",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st3",
+            "scope": "",
+            "decision": "deny",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert "error=access_denied" in resp.headers["location"]
+    assert "state=st3" in resp.headers["location"]
+
+
+async def test_oauth_consent_allow_creates_grant_and_redirects_with_code(client, alice_and_project):
+    from mulchd.models import OAuthClient, OAuthGrant
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-d",
+        client_metadata={"client_id": "cli-d", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli D"},
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-d",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st4",
+            "scope": "",
+            "project_id": project.id,
+            "decision": "allow",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    location = resp.headers["location"]
+    assert location.startswith("http://localhost/cb?")
+    assert "code=" in location
+    assert "state=st4" in location
+    assert await OAuthGrant.filter(user=user, project=project).exists()
+
+
+async def test_oauth_consent_allow_second_time_skips_picker(client, alice_and_project):
+    """An existing grant for (client, user) issues a code immediately, no form."""
+    from mulchd.models import OAuthClient, OAuthGrant
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    oc = await OAuthClient.create(
+        client_id="cli-e",
+        client_metadata={"client_id": "cli-e", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli E"},
+    )
+    await OAuthGrant.create(client=oc, user=user, project=project)
+
+    resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "cli-e",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st5",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    assert resp.headers["location"].startswith("http://localhost/cb?")
+    assert "code=" in resp.headers["location"]
+
+
+async def test_oauth_consent_login_round_trip_returns_to_pending_authorization(
+    client, alice_and_project
+):
+    """Unauthenticated consent hit -> follow to /connect?return_to=... -> log in ->
+    land back on the original oauth-consent URL, not /connect/projects."""
+    from mulchd.models import OAuthClient
+
+    user, token, org, project = alice_and_project
+    await OAuthClient.create(
+        client_id="cli-f",
+        client_metadata={"client_id": "cli-f", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli F"},
+    )
+
+    consent_resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "cli-f",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st6",
+        },
+        follow_redirects=False,
+    )
+    assert consent_resp.status_code == 303
+    login_location = consent_resp.headers["location"]
+    assert login_location.startswith("/connect?return_to=")
+
+    await client.get(login_location, follow_redirects=False)
+
+    login_resp = await client.post(
+        "/connect", data={"token": token, "remember_me": ""}, follow_redirects=False
+    )
+    assert login_resp.status_code == 303
+    final_location = login_resp.headers["location"]
+    assert final_location.startswith("/connect/oauth-consent?")
+    assert "client_id=cli-f" in final_location
+    assert "state=st6" in final_location
+
+
+def test_safe_return_to_rejects_literal_scheme_but_allows_encoded_redirect_uri():
+    from mulchd.connect import _safe_return_to
+
+    encoded = "/connect/oauth-consent?redirect_uri=http%3A%2F%2Flocalhost%2Fcb"
+    assert _safe_return_to(encoded) == encoded
+
+    literal = "/connect/oauth-consent?redirect_uri=http://localhost/cb"
+    assert _safe_return_to(literal) is None

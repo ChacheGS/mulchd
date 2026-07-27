@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -7,9 +8,15 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from authlib.integrations.base_client import OAuthError
+from mcp.server.auth.provider import construct_redirect_uri
 
 from .admin_grants import maybe_bootstrap_admin
-from .auth import authenticate_global_token, create_project_token, create_user_from_oauth
+from .auth import (
+    authenticate_global_token,
+    create_project_token,
+    create_user_from_oauth,
+    generate_token,
+)
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
 from .instance_events import log_event
 from .invite import (
@@ -18,8 +25,12 @@ from .invite import (
     _validate_invite,
     matches_allowed_domains,
 )
+from .mcp_auth import AUTH_CODE_TTL, _hash
 from .models import (
     InstanceEventCategory,
+    OAuthClient,
+    OAuthCode,
+    OAuthGrant,
     OAuthIdentity,
     Organization,
     Project,
@@ -458,6 +469,105 @@ async def oauth_callback(request: Request, provider: str):
     response = RedirectResponse(redirect_url, status_code=303)
     _set_connect_cookie(response, user.id, remember=False)
     return response
+
+
+async def _issue_oauth_code(
+    grant: OAuthGrant, redirect_uri: str, code_challenge: str, scope: str, state: str = ""
+) -> RedirectResponse:
+    code = generate_token()
+    await OAuthCode.create(
+        code_hash=_hash(code),
+        client_id=grant.client_id,
+        grant=grant,
+        redirect_uri=redirect_uri,
+        code_challenge=code_challenge,
+        scope=scope or None,
+        expires_at=datetime.now(UTC) + AUTH_CODE_TTL,
+    )
+    return RedirectResponse(
+        construct_redirect_uri(redirect_uri, code=code, state=state or None),
+        status_code=302,
+    )
+
+
+@router.get("/oauth-consent", response_class=HTMLResponse)
+async def oauth_consent_page(
+    request: Request,
+    client_id: str,
+    redirect_uri: str,
+    code_challenge: str,
+    state: str = "",
+    scope: str = "",
+):
+    user = await _require_user(request)
+    if user is None:
+        return_to = f"/connect/oauth-consent?{request.url.query}"
+        return RedirectResponse(f"/connect?return_to={quote(return_to)}", status_code=303)
+
+    oauth_client = await OAuthClient.filter(client_id=client_id).first()
+    if oauth_client is None:
+        return Response(status_code=404)
+
+    existing_grant = (
+        await OAuthGrant.filter(client=oauth_client, user=user).select_related("project").first()
+    )
+    if existing_grant is not None:
+        return await _issue_oauth_code(existing_grant, redirect_uri, code_challenge, scope, state)
+
+    memberships = await UserMembership.filter(user=user).select_related("project__org").all()
+    return templates.TemplateResponse(
+        request,
+        "connect/oauth_consent.html",
+        {
+            "user": user,
+            "client_name": oauth_client.client_metadata.get("client_name") or client_id,
+            "memberships": memberships,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "code_challenge": code_challenge,
+            "state": state,
+            "scope": scope,
+        },
+    )
+
+
+@router.post("/oauth-consent")
+async def oauth_consent_submit(
+    request: Request,
+    client_id: str = Form(...),
+    redirect_uri: str = Form(...),
+    code_challenge: str = Form(...),
+    state: str = Form(default=""),
+    scope: str = Form(default=""),
+    project_id: int = Form(default=0),
+    decision: str = Form(...),
+):
+    user = await _require_user(request)
+    if user is None:
+        return RedirectResponse("/connect", status_code=303)
+
+    oauth_client = await OAuthClient.filter(client_id=client_id).first()
+    if oauth_client is None:
+        return Response(status_code=404)
+
+    if decision != "allow":
+        return RedirectResponse(
+            construct_redirect_uri(redirect_uri, error="access_denied", state=state or None),
+            status_code=302,
+        )
+
+    project = await Project.filter(id=project_id).first()
+    if project is None or not await UserMembership.filter(user=user, project=project).exists():
+        return Response(status_code=403)
+
+    grant = await OAuthGrant.filter(client=oauth_client, user=user).first()
+    if grant is None:
+        grant = await OAuthGrant.create(client=oauth_client, user=user, project=project)
+    elif grant.project_id != project.id:
+        grant.project = project
+        await grant.save()
+
+    return await _issue_oauth_code(grant, redirect_uri, code_challenge, scope, state)
 
 
 @router.get("/logout")

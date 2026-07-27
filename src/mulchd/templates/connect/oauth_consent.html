@@ -1,0 +1,36 @@
+{% extends "connect/connect_base.html" %}
+{% block page_title %}authorize{% endblock %}
+{% block content %}
+<div class="page-title" style="font-size:17px;font-weight:600;margin-bottom:8px;">Authorize {{ client_name }}</div>
+<p class="text-muted" style="margin-bottom:20px;">{{ client_name }} wants to access one of your mulchd projects.</p>
+
+{% if memberships %}
+<form method="post" action="/connect/oauth-consent">
+  <input type="hidden" name="client_id" value="{{ client_id }}">
+  <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+  <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+  <input type="hidden" name="state" value="{{ state }}">
+  <input type="hidden" name="scope" value="{{ scope }}">
+
+  <div class="card" style="margin-bottom:20px;">
+    {% for m in memberships %}
+    <label class="table-row" style="grid-template-columns:auto 1fr auto; align-items:center; cursor:pointer;">
+      <input type="radio" name="project_id" value="{{ m.project.id }}" {% if loop.first %}checked{% endif %}>
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#1e293b;">{{ m.project.display_name }}</div>
+        <div class="text-muted">{{ m.project.org.display_name }}</div>
+      </div>
+      <span class="badge badge-{{ m.role }}">{{ m.role }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div style="display:flex;gap:8px;">
+    <button type="submit" name="decision" value="allow" class="btn btn-primary">Allow</button>
+    <button type="submit" name="decision" value="deny" class="btn btn-secondary">Deny</button>
+  </div>
+</form>
+{% else %}
+<div class="empty-state">You don't have any projects yet — ask your admin to add you to one first.</div>
+{% endif %}
+{% endblock %}

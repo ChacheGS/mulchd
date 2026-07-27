@@ -36,3 +36,35 @@ async def test_get_client_unknown_returns_none(db):
 
     provider = MulchdOAuthProvider()
     assert await provider.get_client("does-not-exist") is None
+
+
+async def test_authorize_redirects_to_consent_page(db):
+    from mcp.server.auth.provider import AuthorizationParams
+
+    from mulchd.mcp_auth import MulchdOAuthProvider
+    from mulchd.models import OAuthClient
+
+    provider = MulchdOAuthProvider()
+    client_row = await OAuthClient.create(
+        client_id="client-9",
+        client_metadata={
+            "client_id": "client-9",
+            "redirect_uris": ["http://localhost:1234/cb"],
+            "token_endpoint_auth_method": "none",
+            "grant_types": ["authorization_code", "refresh_token"],
+            "response_types": ["code"],
+        },
+    )
+    client = await provider.get_client(client_row.client_id)
+    params = AuthorizationParams(
+        state="xyz",
+        scopes=["mulchd"],
+        code_challenge="challenge123",
+        redirect_uri="http://localhost:1234/cb",
+        redirect_uri_provided_explicitly=True,
+    )
+    url = await provider.authorize(client, params)
+    assert url.startswith("/connect/oauth-consent?")
+    assert "client_id=client-9" in url
+    assert "code_challenge=challenge123" in url
+    assert "state=xyz" in url

@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode
 
 from mcp.server.auth.provider import (
     AccessToken,
@@ -40,3 +41,15 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
             client_id=client_info.client_id,
             client_metadata=client_info.model_dump(mode="json"),
         )
+
+    async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
+        query = urlencode(
+            {
+                "client_id": client.client_id,
+                "redirect_uri": str(params.redirect_uri),
+                "code_challenge": params.code_challenge,
+                "state": params.state or "",
+                "scope": " ".join(params.scopes or []),
+            }
+        )
+        return f"/connect/oauth-consent?{query}"
