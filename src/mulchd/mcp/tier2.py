@@ -625,6 +625,31 @@ async def _load_archived_ids(m_dir: Path) -> set[str]:
     return ids
 
 
+def _validate_references(
+    live_ids: set[str],
+    supersedes: list[str],
+    relates_to: list[str],
+    self_id: str | None = None,
+) -> None:
+    """Raise ValueError if any supersedes/relates_to ID doesn't resolve to a
+    live record in live_ids, or references self_id. live_ids should come from
+    _load_project_records — archived and fabricated IDs are both simply absent
+    from that set, so both are rejected the same way. Reports every problem
+    across both fields in one error, not just the first one found."""
+    errors: list[str] = []
+    for field_name, ids in (("supersedes", supersedes), ("relates_to", relates_to)):
+        self_refs = [i for i in ids if self_id is not None and i == self_id]
+        missing = [i for i in ids if i != self_id and i not in live_ids]
+        if self_refs:
+            errors.append(
+                f"{field_name} cannot reference the record's own id: {', '.join(self_refs)}"
+            )
+        if missing:
+            errors.append(f"{field_name} references records that don't exist: {', '.join(missing)}")
+    if errors:
+        raise ValueError("\n".join(errors))
+
+
 from enum import IntEnum
 
 
@@ -919,6 +944,13 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
+    project_records = await _load_project_records(m_dir)
+    live_ids = {r["id"] for r in project_records if r.get("id")}
+    _validate_references(
+        live_ids,
+        list(args.get("supersedes") or []),
+        list(args.get("relates_to") or []),
+    )
     await init_ml_project(m_dir)
     domain_file = m_dir / "expertise" / f"{domain}.jsonl"
     pre_existed = domain_file.exists()
@@ -1108,7 +1140,17 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     if not updates:
         raise ValueError("no fields to update — pass at least one content field")
     before_snapshot = {k: record[k] for k in updates if k in record}
-    await edit_record(mulch_dir(ctx.org.slug, ctx.project.slug), domain, record_id, updates)
+    m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
+    if "supersedes" in updates or "relates_to" in updates:
+        project_records = await _load_project_records(m_dir)
+        live_ids = {r["id"] for r in project_records if r.get("id")}
+        _validate_references(
+            live_ids,
+            list(updates.get("supersedes") or []),
+            list(updates.get("relates_to") or []),
+            self_id=record_id,
+        )
+    await edit_record(m_dir, domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     await RecordEvent.create(
         record_id=record_id,

@@ -1200,6 +1200,162 @@ async def test_load_archived_ids_no_archive_directory(team, data_path):
     assert ids == set()
 
 
+# ---------------------------------------------------------------------------
+# _validate_references — write-time referential integrity
+# ---------------------------------------------------------------------------
+
+
+def test_validate_references_accepts_existing_ids():
+    from mulchd.mcp.tier2 import _validate_references
+
+    # Should not raise
+    _validate_references({"mx-a", "mx-b"}, ["mx-a"], ["mx-b"])
+
+
+def test_validate_references_rejects_fabricated_supersedes_id():
+    from mulchd.mcp.tier2 import _validate_references
+
+    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
+        _validate_references({"mx-a"}, ["mx-ghost"], [])
+
+
+def test_validate_references_rejects_fabricated_relates_to_id():
+    from mulchd.mcp.tier2 import _validate_references
+
+    with pytest.raises(ValueError, match="relates_to references records that don't exist: mx-ghost"):
+        _validate_references({"mx-a"}, [], ["mx-ghost"])
+
+
+def test_validate_references_lists_multiple_bad_ids_in_one_error():
+    from mulchd.mcp.tier2 import _validate_references
+
+    with pytest.raises(ValueError, match="mx-ghost1, mx-ghost2"):
+        _validate_references(set(), ["mx-ghost1", "mx-ghost2"], [])
+
+
+def test_validate_references_rejects_self_reference():
+    from mulchd.mcp.tier2 import _validate_references
+
+    with pytest.raises(ValueError, match="supersedes cannot reference the record's own id: mx-a"):
+        _validate_references({"mx-a"}, ["mx-a"], [], self_id="mx-a")
+
+
+def test_validate_references_no_self_id_means_no_self_check():
+    from mulchd.mcp.tier2 import _validate_references
+
+    # A brand-new write has no self_id yet (the record doesn't have an ID
+    # until after write_record runs) — self_id=None must not raise just
+    # because some coincidental ID appears in the live set.
+    _validate_references({"mx-a"}, ["mx-a"], [])
+
+
+async def test_record_expertise_rejects_fabricated_supersedes(team, data_path, fake_write_record):
+    """The write_* MCP tools reject a supersedes ID that doesn't exist anywhere
+    in the project, before anything is written."""
+    from mulchd.mcp.tier2 import _record_expertise
+
+    t = team
+    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
+        await _record_expertise(
+            {
+                "type": "decision",
+                "domain": "infra",
+                "classification": "tactical",
+                "title": "New decision",
+                "rationale": "Because reasons",
+                "supersedes": ["mx-ghost"],
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+    # Nothing should have been written
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert structured["records"] == []
+
+
+async def test_record_expertise_accepts_valid_cross_domain_supersedes(team, data_path, fake_write_record):
+    """A supersedes target in a different domain is accepted — cross-domain
+    supersession is a supported, designed-for case."""
+    from mulchd.mcp.tier2 import _record_expertise
+
+    t = team
+    old = _jot(
+        data_path, "acme", "infra", "guardrails",
+        type="convention", classification="foundational", content="Old", owner="carlos",
+    )
+    await _record_expertise(
+        {
+            "type": "decision",
+            "domain": "policies",
+            "classification": "foundational",
+            "title": "New rule",
+            "rationale": "Replaces the old guardrail",
+            "supersedes": [old["id"]],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    _, structured = await _read_expertise({"domains": ["policies"]}, ctx(t.carlos, t.org, t.infra))
+    assert len(structured["records"]) == 1
+
+
+async def test_record_expertise_rejects_archived_supersedes_target(team, data_path, fake_write_record):
+    """A supersedes target that's been archived (soft-deleted) is rejected the
+    same as a fabricated ID — it's no longer live."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mcp.tier2 import _record_expertise
+
+    t = team
+    m_dir = mulch_dir("acme", "infra")
+    archive_dir = m_dir / "archive"
+    archive_dir.mkdir(parents=True)
+    (archive_dir / "infra.jsonl").write_text(
+        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"}) + "\n"
+    )
+    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-archived1"):
+        await _record_expertise(
+            {
+                "type": "decision",
+                "domain": "infra",
+                "classification": "tactical",
+                "title": "New decision",
+                "rationale": "Because reasons",
+                "supersedes": ["mx-archived1"],
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_edit_record_rejects_fabricated_supersedes(team, data_path, fake_write_record):
+    """edit_record's supersedes update is validated the same way write is."""
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+    )
+    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
+        await _edit_record(
+            {"record_id": r["id"], "domain": "infra", "supersedes": ["mx-ghost"]},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_edit_record_rejects_self_reference(team, data_path, fake_write_record):
+    """A record cannot be edited to supersede or relate to itself."""
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+    )
+    with pytest.raises(ValueError, match="supersedes cannot reference the record's own id"):
+        await _edit_record(
+            {"record_id": r["id"], "domain": "infra", "supersedes": [r["id"]]},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
 async def test_annotate_edits_sets_edited_flag(team, data_path):
     """_annotate_edits marks records that have RecordEdit rows with _edited and edit count."""
     from mulchd.mcp.tier2 import _annotate_edits
