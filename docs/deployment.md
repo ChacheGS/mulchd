@@ -17,6 +17,7 @@ Fill in all values. Key variables:
 |---|---|---|
 | `mulchd.env` | `MULCHD_SECRET_KEY` | 64-char hex string — `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `mulchd.env` | `MULCHD_BOOTSTRAP_ADMIN_EMAIL` | Email of the first admin — grants access on first SSO login, then goes inert |
+| `mulchd.env` | `MULCHD_BASE_URL` | Public `https://` URL, e.g. `https://mulchd.your-domain.com` — should match `MULCHD_HOSTNAME` below. Required for MCP OAuth (step 6) to work; without it, mulchd falls back to an insecure default URL that the OAuth routes refuse to register under |
 | `.env` | `MULCHD_HOSTNAME` | Public hostname, e.g. `mulchd.your-domain.com` |
 
 ## 2. Deploy
@@ -44,3 +45,7 @@ Log in to `/admin` and create an account for each team member. Each user gets a 
 ## 5. Configure SSO (optional)
 
 To enable GitHub or OIDC sign-in on the `/connect` portal, uncomment and fill in the relevant OAuth vars in `deploy/mulchd.env` (see `mulchd.env.example`). Users must have their email set in the admin before their first SSO login — the server matches the provider's verified email to `User.email` to link the identity automatically.
+
+## 6. MCP OAuth for clients (on by default)
+
+MCP clients that support OAuth (Claude Desktop, MCP Inspector) connect directly to `https://mulchd.your-domain.com/mcp` without a manually-pasted token, provided `MULCHD_BASE_URL` (step 1) is set — the OAuth authorization-server routes silently don't register without it, and mulchd logs a startup warning if they don't. Set `MULCHD_MCP_OAUTH_ENABLED=false` in `mulchd.env` to disable this and always require the manual project-token flow instead.
