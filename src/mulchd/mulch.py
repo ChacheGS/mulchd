@@ -9,6 +9,7 @@ and the format is trivially simple.
 import asyncio
 import json
 import os
+from enum import StrEnum
 from pathlib import Path
 
 
@@ -164,3 +165,29 @@ async def init_ml_project(mulch_dir: Path) -> None:
     mulch_dir.parent.mkdir(parents=True, exist_ok=True)
     if not (mulch_dir / "mulch.config.yaml").exists():
         await _run(mulch_dir, ["init"], stdin_data=None)
+
+
+class OutcomeStatus(StrEnum):
+    """Matches ml outcome --status's exact choices."""
+
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILURE = "failure"
+
+
+async def record_outcome(
+    mulch_dir: Path,
+    domain: str,
+    record_id: str,
+    status: OutcomeStatus,
+    notes: str | None = None,
+) -> dict:
+    """
+    Append an outcome to an existing record via `ml outcome`. This feeds the
+    confirmation-frequency boost ml's search already applies by default —
+    mulchd previously never called this, so that boost had nothing to boost.
+    """
+    args = ["outcome", domain, record_id, "--status", status.value]
+    if notes:
+        args += ["--notes", notes]
+    return await _run(mulch_dir, args)

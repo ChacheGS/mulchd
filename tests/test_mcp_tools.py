@@ -2482,3 +2482,118 @@ async def test_get_record_history_reader_role_can_call(team, data_path, fake_wri
         {"record_id": record_id}, ctx(t.carlos, t.org, t.infra, role=Role.READER)
     )
     assert f"History for {record_id}" in result[0].text
+
+
+# ---------------------------------------------------------------------------
+# record_outcome
+# ---------------------------------------------------------------------------
+
+
+async def test_record_outcome_creates_visible_outcome(team, data_path, fake_write_record):
+    """record_outcome appends an outcome visible on a subsequent read, and
+    returns a confirmation naming the status."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None):
+        path = m_dir / "expertise" / f"{domain}.jsonl"
+        lines = path.read_text().splitlines()
+        rewritten = []
+        for line in lines:
+            rec = json.loads(line)
+            if rec.get("id") == rid:
+                rec.setdefault("outcomes", []).append(
+                    {
+                        "status": status.value,
+                        "recorded_at": datetime.now(timezone.utc).isoformat(),
+                        "notes": notes,
+                    }
+                )
+            rewritten.append(json.dumps(rec))
+        path.write_text("\n".join(rewritten) + "\n")
+        return {"success": True}
+
+    orig = mcp_tier2.record_outcome
+    mcp_tier2.record_outcome = _fake_outcome
+    try:
+        result = await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "success", "notes": "worked great"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.record_outcome = orig
+
+    assert f"Recorded success outcome for {record_id}" in result[0].text
+    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    outcomes = records2[1]["records"][0]["outcomes"]
+    assert outcomes[0]["status"] == "success"
+    assert outcomes[0]["notes"] == "worked great"
+
+
+async def test_record_outcome_non_owner_writer_allowed(team, data_path, fake_write_record):
+    """Unlike edit_record, any WRITER can record an outcome on someone else's
+    record — confirming whether guidance worked isn't restricted to its author."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+    assert records[1]["records"][0]["owner"] == "carlos"
+
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None):
+        return {"success": True}
+
+    orig = mcp_tier2.record_outcome
+    mcp_tier2.record_outcome = _fake_outcome
+    try:
+        result = await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "failure"},
+            ctx(t.jorge, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.record_outcome = orig
+
+    assert f"Recorded failure outcome for {record_id}" in result[0].text
+
+
+async def test_record_outcome_reader_role_rejected(team, data_path, fake_write_record):
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    with pytest.raises(ValueError, match="reader role cannot record outcomes"):
+        await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "success"},
+            ctx(t.carlos, t.org, t.infra, role=Role.READER),
+        )
+
+
+async def test_record_outcome_record_not_found(team, data_path):
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    with pytest.raises(ValueError, match="record mx-ghost not found in domain infra"):
+        await _record_outcome(
+            {"record_id": "mx-ghost", "domain": "infra", "status": "success"},
+            ctx(t.carlos, t.org, t.infra),
+        )

@@ -21,9 +21,11 @@ from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, mulch_dir
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
+    OutcomeStatus,
     delete_record,
     edit_record,
     init_ml_project,
+    record_outcome,
     search_domains,
     write_record,
 )
@@ -477,6 +479,32 @@ TIER2_TOOLS = [
             "required": ["record_id"],
         },
         annotations=ToolAnnotations(readOnlyHint=True),
+    ),
+    Tool(
+        name="record_outcome",
+        description=(
+            "Record whether a record's guidance worked when applied. This directly "
+            "improves search ranking — ml boosts confirmed records over unconfirmed "
+            "ones. Call this proactively after applying a record's guidance and "
+            "observing the result, the same way you'd call write_* for a new decision."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
+                "domain": {
+                    "type": "string",
+                    "description": "The record's own domain (lookup key, not the context the outcome applies to)",
+                },
+                "status": {"type": "string", "enum": ["success", "failure", "partial"]},
+                "notes": {
+                    "type": "string",
+                    "description": "Optional context, e.g. what was applied and where",
+                },
+            },
+            "required": ["record_id", "domain", "status"],
+        },
+        annotations=ToolAnnotations(destructiveHint=False),
     ),
     Tool(
         name="edit_record",
@@ -1430,6 +1458,22 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=msg)]
 
 
+async def _record_outcome(args: dict, ctx: AuthContext) -> list[TextContent]:
+    from ..models import Role
+
+    if ctx.role == Role.READER:
+        raise ValueError("reader role cannot record outcomes")
+    record_id = args["record_id"]
+    domain = args["domain"]
+    status = OutcomeStatus(args["status"])
+    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
+    if record is None:
+        raise ValueError(f"record {record_id} not found in domain {domain}")
+    m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
+    await record_outcome(m_dir, domain, record_id, status, args.get("notes"))
+    return [TextContent(type="text", text=f"Recorded {status.value} outcome for {record_id}")]
+
+
 async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     from ..models import Role
 
@@ -1515,6 +1559,8 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
             return await _get_record_schema(args)
         case "get_record_history":
             return await _get_record_history(args, ctx)
+        case "record_outcome":
+            return await _record_outcome(args, ctx)
         case "edit_record":
             return await _edit_record(args, ctx)
         case "delete_record":
