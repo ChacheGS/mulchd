@@ -2,7 +2,7 @@ import asyncio
 import base64
 import json
 import logging
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid7
 
@@ -891,6 +891,21 @@ async def _annotate_edits(records: list[dict], project_id: int) -> None:
             r["_last_edited_by"] = last_editors[rid]
 
 
+def _format_outcomes_tag(r: dict) -> str:
+    """Render the confirmation-outcome tally tag, or "" if there are none.
+    Iterates OutcomeStatus (not a hardcoded tuple) so display order always
+    matches the enum's own definition order."""
+    outcomes = r.get("outcomes") or []
+    if not outcomes:
+        return ""
+    counts = Counter(o.get("status", "") for o in outcomes)
+    parts = [f"{counts[status]} {status.value}" for status in OutcomeStatus if counts[status]]
+    tag = f" • ✓ {', '.join(parts)}"
+    if r.get("_outcomes_stale"):
+        tag += " ⚠ stale (edited since last confirmed)"
+    return tag
+
+
 def _format_single(r: dict) -> str:
     title = r.get("title") or r.get("name") or ""
     body = r.get("content") or r.get("rationale") or r.get("description") or ""
@@ -927,6 +942,7 @@ def _format_single(r: dict) -> str:
         n = r.get("_edit_count", "")
         editor = r.get("_last_edited_by", "")
         header += f" • edited {n}×" + (f" by {editor}" if editor else "")
+    header += _format_outcomes_tag(r)
     if body:
         header += f"\n    {body}"
     return header
@@ -976,6 +992,7 @@ def _format_records(records: list[dict]) -> str:
             n = r.get("_edit_count", "")
             editor = r.get("_last_edited_by", "")
             header += f" • edited {n}×" + (f" by {editor}" if editor else "")
+        header += _format_outcomes_tag(r)
         lines.append(header)
         if body:
             lines.append(f"  {body}")

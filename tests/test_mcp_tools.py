@@ -2597,3 +2597,45 @@ async def test_record_outcome_record_not_found(team, data_path):
             {"record_id": "mx-ghost", "domain": "infra", "status": "success"},
             ctx(t.carlos, t.org, t.infra),
         )
+
+
+def test_format_outcomes_tag_single_status():
+    from mulchd.mcp.tier2 import _format_outcomes_tag
+
+    r = {"outcomes": [{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}]}
+    assert _format_outcomes_tag(r) == " • ✓ 1 success"
+
+
+def test_format_outcomes_tag_mixed_statuses_fixed_order():
+    from mulchd.mcp.tier2 import _format_outcomes_tag
+
+    r = {
+        "outcomes": [
+            {"status": "failure", "recorded_at": "2026-07-28T00:00:00+00:00"},
+            {"status": "success", "recorded_at": "2026-07-28T00:01:00+00:00"},
+            {"status": "success", "recorded_at": "2026-07-28T00:02:00+00:00"},
+            {"status": "partial", "recorded_at": "2026-07-28T00:03:00+00:00"},
+        ]
+    }
+    assert _format_outcomes_tag(r) == " • ✓ 2 success, 1 partial, 1 failure"
+
+
+def test_format_outcomes_tag_empty():
+    from mulchd.mcp.tier2 import _format_outcomes_tag
+
+    assert _format_outcomes_tag({}) == ""
+    assert _format_outcomes_tag({"outcomes": []}) == ""
+
+
+async def test_read_records_renders_outcomes_tag(team, data_path):
+    """A record seeded directly into JSONL with outcomes (legacy-data path,
+    same as this session's other fixture-based tests) renders the tag on
+    read without ever going through record_outcome itself."""
+    t = team
+    _jot(
+        data_path, "acme", "infra", "infra",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
+    )
+    text_content, _ = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert "✓ 1 success" in text_content[0].text
