@@ -772,6 +772,32 @@ async def test_live_write_record_decision_succeeds(team, data_path):
     assert "decision" in result[0].text
 
 
+@ml_available
+async def test_live_audit_corpus_returns_report_and_suggestions(team, data_path):
+    """audit_corpus should shell out to the real ml audit --json --suggest and
+    return the full {report, suggestions} payload for a real seeded corpus."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mulch import audit_corpus
+
+    t = team
+    await _record_expertise(
+        {
+            "domain": "quality-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Always enable S3 versioning on all buckets",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    result = await audit_corpus(mulch_dir("acme", "infra"))
+    report = result["report"]
+    assert report["total_records"] >= 1
+    assert "quality-test" in report["domains"]
+    assert "signals" in report
+    assert "evidence_coverage" in report["signals"]
+    assert "suggestions" in result
+
+
 # High: domain orphaned when ml write fails
 # ------------------------------------------
 

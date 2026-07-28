@@ -191,3 +191,13 @@ async def record_outcome(
     if notes:
         args += ["--notes", notes]
     return await _run(mulch_dir, args)
+
+
+async def audit_corpus(mulch_dir: Path, domain: str | None = None) -> dict:
+    """Run `ml audit --json --suggest`, returning the full {report, suggestions}
+    payload. mulchd does no analysis of its own — this is a pure pass-through
+    to ml's existing corpus-quality report."""
+    args = ["audit", "--suggest"]
+    if domain:
+        args += ["--domain", domain]
+    return await _run(mulch_dir, args)
