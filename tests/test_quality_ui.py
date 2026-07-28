@@ -197,6 +197,33 @@ async def test_quality_page_renders_suggestions(admin_client, tmp_path, monkeypa
     assert "1 convention lacks rule-signal language" in resp.text
     assert "mx-abc123" in resp.text
     assert "ml edit mx-abc123" in resp.text
+    # The illustrative command is reference text only — never wrapped in
+    # anything that would make it look runnable from the browser.
+    suggestion_block = resp.text.split('class="suggestion-block"', 1)[1]
+    assert "<form" not in suggestion_block
+    assert "<button" not in suggestion_block
+
+
+async def test_quality_page_forwards_domain_filter_to_audit_corpus(admin_client, tmp_path, monkeypatch):
+    """The domain= query param must reach audit_corpus, and the Clear link
+    must be present so the filter can be removed."""
+    import mulchd.admin.quality as quality_module
+
+    org, project, alice = await _setup(tmp_path, monkeypatch)
+
+    received = {}
+
+    async def _fake_audit(m_dir, domain=None):
+        received["domain"] = domain
+        return _fake_report()
+
+    monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
+
+    resp = await admin_client.get("/admin/quality?project=acme/platform&domain=api")
+    assert resp.status_code == 200
+    assert received["domain"] == "api"
+    assert 'value="api"' in resp.text
+    assert "/admin/quality?project=acme/platform" in resp.text  # Clear link present
 
 
 async def test_quality_page_omits_failures_warnings_when_empty(admin_client, tmp_path, monkeypatch):
