@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — quality{% endblock %}
+{% block content %}
+
+<style>
+  .signal-badge { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .signal-pass { background: #d1fae5; color: #065f46; }
+  .signal-warn { background: #fef3c7; color: #92400e; }
+  .signal-fail { background: #fee2e2; color: #991b1b; }
+  .signal-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+  .signal-row:last-child { border-bottom: none; }
+  .signal-name { font-weight: 500; min-width: 160px; }
+  .signal-detail { color: #64748b; font-size: 12px; }
+  .quality-section-title { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.07em; margin: 24px 0 6px; }
+  .quality-section-title:first-of-type { margin-top: 0; }
+  .domain-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .domain-table th { text-align: left; padding: 8px 16px; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; }
+  .domain-table td { padding: 8px 16px; border-bottom: 1px solid #f1f5f9; }
+  .domain-table tr:last-child td { border-bottom: none; }
+  .suggestion-block { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
+  .suggestion-block:last-child { border-bottom: none; }
+  .suggestion-headline { font-weight: 500; font-size: 13px; }
+  .suggestion-rationale { color: #64748b; font-size: 12px; margin-top: 3px; }
+  .suggestion-ids { margin-top: 6px; font-size: 12px; }
+  .suggestion-command { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 8px 10px; font-family: monospace; font-size: 11px; margin-top: 6px; white-space: pre-wrap; word-break: break-word; color: #475569; }
+</style>
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
+  <div class="page-title" style="margin-bottom:0">Quality</div>
+  <form method="get" action="/admin/quality" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+    <select name="project" onchange="this.form.submit()"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
+      <option value="">— project —</option>
+      {% for p in projects %}
+      <option value="{{ p.org.slug }}/{{ p.slug }}"
+        {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
+        {{ p.org.slug }} / {{ p.slug }}
+      </option>
+      {% endfor %}
+    </select>
+    {% if selected %}
+    <input type="text" name="domain" value="{{ filter_domain }}" placeholder="domain filter"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; width:140px; outline:none">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    {% if filter_domain %}
+    <a href="/admin/quality?project={{ selected }}" class="btn btn-secondary">Clear</a>
+    {% endif %}
+    {% endif %}
+  </form>
+</div>
+
+{% if not selected %}
+<div class="card">
+  <div class="empty-state">Select a project above to view its corpus quality report.</div>
+</div>
+
+{% else %}
+
+{% if not report %}
+<div class="card">
+  <div class="empty-state">No report data returned for this project.</div>
+</div>
+{% else %}
+
+<div class="quality-section-title">Health signals</div>
+<div class="card">
+  {% for signal_name, signal in report.get("signals", {}).items() %}
+    {% if "verdict" in signal %}
+    <div class="signal-row">
+      <span class="signal-name">{{ signal_name | replace("_", " ") }}</span>
+      <span class="signal-badge signal-{{ signal.verdict | lower }}">{{ signal.verdict }}</span>
+      <span class="signal-detail">value {{ signal.value }} — threshold {{ signal.threshold }}</span>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+{% if report.get("failures") or report.get("warnings") %}
+<div class="quality-section-title">Failures &amp; warnings</div>
+<div class="card">
+  {% for f in report.get("failures", []) %}
+  <div class="signal-row"><span class="signal-badge signal-fail">FAIL</span> {{ f | replace("_", " ") }}</div>
+  {% endfor %}
+  {% for w in report.get("warnings", []) %}
+  <div class="signal-row"><span class="signal-badge signal-warn">WARN</span> {{ w | replace("_", " ") }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="quality-section-title">Per-domain breakdown</div>
+<div class="card">
+  <table class="domain-table">
+    <thead>
+      <tr><th>Domain</th><th>Records</th><th>High-value %</th><th>Last recorded</th></tr>
+    </thead>
+    <tbody>
+      {% for d in report.get("by_domain", []) %}
+      <tr>
+        <td>{{ d.domain }}</td>
+        <td>{{ d.total }}</td>
+        <td>{{ d.high_value_pct }}%</td>
+        <td class="text-muted">{{ d.last_recorded_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if report.get("type_mix") %}
+<div class="quality-section-title">Type mix</div>
+<div class="card">
+  {% for t in report.type_mix %}
+  <div class="signal-row"><span class="signal-name">{{ t.type }}</span> <span class="signal-detail">{{ t.count }} ({{ t.pct }}%)</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if suggestions %}
+<div class="quality-section-title">Suggestions</div>
+<div class="card">
+  {% for s in suggestions %}
+  <div class="suggestion-block">
+    <span class="badge" style="background:#f1f5f9; color:#475569">{{ s.action }}</span>
+    <div class="suggestion-headline">{{ s.headline }}</div>
+    <div class="suggestion-rationale">{{ s.rationale }}</div>
+    <div class="suggestion-ids">Records: {{ s.record_ids | join(", ") }}</div>
+    {% for cmd in s.commands %}
+    <div class="suggestion-command">{{ cmd }}</div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endif %}
+{% endif %}
+
+{% endblock %}

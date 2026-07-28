@@ -8,6 +8,7 @@ from .memberships import router as memberships_router
 from .orgs import router as orgs_router
 from .project_tokens import router as project_tokens_router
 from .projects import router as projects_router
+from .quality import router as quality_router
 from .records_view import router as records_router
 from .usage_api import router as usage_router
 from .users import router as users_router
@@ -23,4 +24,5 @@ router.include_router(memberships_router)
 router.include_router(project_tokens_router)
 router.include_router(records_router)
 router.include_router(audit_router)
+router.include_router(quality_router)
 router.include_router(activity_router)
