@@ -817,6 +817,9 @@ class Classification(IntEnum):
             return cls.observational
 
 
+_CONTENT_FIELD_KEYS = frozenset({"content", "title", "name", "description", "resolution", "rationale"})
+
+
 async def _supersede_alerts(
     m_dir: Path, supersedes: list[str], new_classification: str
 ) -> dict[str, str]:
@@ -889,6 +892,35 @@ async def _annotate_edits(records: list[dict], project_id: int) -> None:
             r["_edited"] = True
             r["_edit_count"] = counts[rid]
             r["_last_edited_by"] = last_editors[rid]
+
+
+async def _annotate_outcome_staleness(records: list[dict], project_id: int) -> None:
+    """Flag records whose most recent content-field edit postdates their most
+    recent recorded outcome — the accumulated confirmation trust (and the
+    search-ranking boost it earns) no longer describes what's actually there."""
+    target_ids = [r.get("id") for r in records if r.get("outcomes")]
+    if not target_ids:
+        return
+    edit_rows = (
+        await RecordEdit.filter(record_id__in=target_ids, project_id=project_id)
+        .order_by("-at")
+        .values("record_id", "before_snapshot", "at")
+    )
+    last_content_edit: dict[str, datetime] = {}
+    for row in edit_rows:
+        rid = row["record_id"]
+        if rid in last_content_edit:
+            continue  # already have the most recent one, rows are newest-first
+        if _CONTENT_FIELD_KEYS & row["before_snapshot"].keys():
+            last_content_edit[rid] = row["at"]
+    for r in records:
+        rid = r.get("id")
+        outcomes = r.get("outcomes") or []
+        if not outcomes or rid not in last_content_edit:
+            continue
+        last_outcome_at = max(o["recorded_at"] for o in outcomes)
+        if last_content_edit[rid].isoformat() > last_outcome_at:
+            r["_outcomes_stale"] = True
 
 
 def _format_outcomes_tag(r: dict) -> str:
@@ -1094,6 +1126,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     )
     await _mark_superseded(page, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(page, ctx.project.id)
+    await _annotate_outcome_staleness(page, ctx.project.id)
     cross_domain_hints = [
         {
             "record_id": r["id"],
@@ -1251,6 +1284,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
         results = [r for r in results if r.get("owner") == author_filter]
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
+    await _annotate_outcome_staleness(results, ctx.project.id)
     formatted = _format_records(results)
     if results:
         formatted = _wrap_untrusted(formatted)
@@ -1327,6 +1361,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     meta_by_id = {m["record_id"]: m for m in meta_rows}
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
+    await _annotate_outcome_staleness(results, ctx.project.id)
     formatted = _format_recent(results, meta_by_id)
     if results:
         formatted = _wrap_untrusted(formatted)
@@ -1464,6 +1499,12 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             f"Stop and flag this to the user before continuing."
         )
     msg += supersession_alert_text
+    existing_outcomes = record.get("outcomes") or []
+    if updates.keys() & _CONTENT_FIELD_KEYS and existing_outcomes:
+        msg += (
+            f"\n\n⚠ OUTCOME TRUST STALE: {len(existing_outcomes)} confirmed outcome(s) describe "
+            f"the previous content — they no longer apply to what you just wrote."
+        )
     try:
         req_ctx = tier2_server.request_context
         notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}

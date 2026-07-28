@@ -2639,3 +2639,181 @@ async def test_read_records_renders_outcomes_tag(team, data_path):
     )
     text_content, _ = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     assert "✓ 1 success" in text_content[0].text
+
+
+async def test_annotate_outcome_staleness_flags_edit_after_outcome(team, data_path):
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.models import RecordEdit
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v2", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
+    )
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+    )
+    records = [r.copy()]
+    await _annotate_outcome_staleness(records, t.infra.id)
+    assert records[0].get("_outcomes_stale") is True
+
+
+async def test_annotate_outcome_staleness_not_flagged_when_outcome_is_newer(team, data_path):
+    """A fresh outcome recorded after the edit means the content has since
+    been re-confirmed — not stale."""
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.models import RecordEdit
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v2", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T23:59:59+00:00"}],
+    )
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        at=datetime(2026, 7, 28, 0, 0, tzinfo=timezone.utc),
+    )
+    records = [r.copy()]
+    await _annotate_outcome_staleness(records, t.infra.id)
+    assert records[0].get("_outcomes_stale") is None
+
+
+async def test_annotate_outcome_staleness_ignores_non_content_edits(team, data_path):
+    """An edit that only touched classification/supersedes (not a content
+    field) must not trigger staleness even if it postdates the outcome."""
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.models import RecordEdit
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
+    )
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"classification": "observational"}, client="test", session_id=uuid.uuid4(),
+    )
+    records = [r.copy()]
+    await _annotate_outcome_staleness(records, t.infra.id)
+    assert records[0].get("_outcomes_stale") is None
+
+
+async def test_annotate_outcome_staleness_skips_records_without_outcomes(team, data_path):
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.models import RecordEdit
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v2", owner="carlos",
+    )
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+    )
+    records = [r.copy()]
+    await _annotate_outcome_staleness(records, t.infra.id)
+    assert records[0].get("_outcomes_stale") is None
+
+
+def test_format_outcomes_tag_stale_suffix():
+    from mulchd.mcp.tier2 import _format_outcomes_tag
+
+    r = {
+        "outcomes": [{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
+        "_outcomes_stale": True,
+    }
+    assert _format_outcomes_tag(r) == " • ✓ 1 success ⚠ stale (edited since last confirmed)"
+
+
+async def test_edit_record_outcome_stale_advisory_on_content_change(team, data_path, fake_write_record):
+    """Editing a content field on a record with existing outcomes appends
+    the OUTCOME TRUST STALE advisory."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+        outcomes=[
+            {"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"},
+            {"status": "success", "recorded_at": "2026-07-28T00:01:00+00:00"},
+        ],
+    )
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": r["id"], "domain": "api", "content": "v2"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "OUTCOME TRUST STALE" in result[0].text
+    assert "2 confirmed outcome(s)" in result[0].text
+
+
+async def test_edit_record_no_stale_advisory_without_outcomes(team, data_path, fake_write_record):
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+    )
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": r["id"], "domain": "api", "content": "v2"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "OUTCOME TRUST STALE" not in result[0].text
+
+
+async def test_edit_record_no_stale_advisory_for_non_content_field(team, data_path, fake_write_record):
+    """Changing only classification (not in _CONTENT_FIELD_KEYS) on a record
+    with outcomes must not trigger the advisory."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
+    )
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": r["id"], "domain": "api", "classification": "observational"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "OUTCOME TRUST STALE" not in result[0].text
