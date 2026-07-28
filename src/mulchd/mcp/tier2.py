@@ -905,7 +905,19 @@ async def _annotate_edits(records: list[dict], project_id: int) -> None:
 async def _annotate_outcome_staleness(records: list[dict], project_id: int) -> None:
     """Flag records whose most recent content-field edit postdates their most
     recent recorded outcome — the accumulated confirmation trust (and the
-    search-ranking boost it earns) no longer describes what's actually there."""
+    search-ranking boost it earns) no longer describes what's actually there.
+
+    Known limitation, deliberate per the design spec (detection, not
+    prevention — ml has no way to clear outcomes on edit, so this can't be a
+    hard gate): record_outcome has no ownership check by design, so whoever
+    just edited a record's content can immediately call record_outcome
+    themselves and clear this flag before anyone else reads it — see
+    test_edit_then_self_confirm_clears_stale_flag. This doesn't defeat the
+    feature's actual goal (an unconfirmed or genuinely-stale record still
+    reads as such to anyone who hasn't self-confirmed it), but it means the
+    flag is not a guarantee against a determined single bad actor, only a
+    passive signal for everyone else reading the record afterward.
+    """
     target_ids = [r.get("id") for r in records if r.get("outcomes")]
     if not target_ids:
         return
