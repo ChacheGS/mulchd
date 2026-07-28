@@ -97,6 +97,54 @@ async def test_quality_page_renders_real_audit_report(admin_client, tmp_path, mo
     assert "evidence" in resp.text.lower() or "coverage" in resp.text.lower()
 
 
+@ml_available
+async def test_quality_page_renders_when_no_conventions_recorded(admin_client, tmp_path, monkeypatch):
+    """ml audit returns signals.rule_density as null (not omitted) when the
+    corpus has zero convention-type records — any brand-new project or a
+    domain filter that excludes conventions hits this. Must not 500."""
+    from mulchd.domains import mulch_dir
+    from mulchd.mulch import init_ml_project, write_record
+
+    org, project, alice = await _setup(tmp_path, monkeypatch)
+    m_dir = mulch_dir("acme", "platform")
+    await init_ml_project(m_dir)
+    await write_record(
+        m_dir,
+        "api",
+        {
+            "type": "decision",
+            "classification": "tactical",
+            "title": "Use webhook signature validation",
+            "rationale": "Prevents forged webhook payloads from being processed.",
+            "owner": "alice",
+        },
+    )
+
+    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    assert resp.status_code == 200
+    assert "api" in resp.text
+
+
+async def test_quality_page_renders_when_a_signal_is_null(admin_client, tmp_path, monkeypatch):
+    """Deterministic version of the null-signal case above, for fast/offline
+    coverage without depending on real ml's actual scoring behavior."""
+    import mulchd.admin.quality as quality_module
+
+    org, project, alice = await _setup(tmp_path, monkeypatch)
+
+    async def _fake_audit(m_dir, domain=None):
+        report = _fake_report()
+        report["report"]["signals"]["rule_density"] = None
+        return report
+
+    monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
+
+    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    assert resp.status_code == 200
+    assert "PASS" in resp.text  # evidence_coverage still renders
+    assert "FAIL" in resp.text  # floater_rate still renders
+
+
 # ---------------------------------------------------------------------------
 # Rendering branches (monkeypatched, deterministic)
 # ---------------------------------------------------------------------------

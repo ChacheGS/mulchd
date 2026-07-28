@@ -65,7 +65,7 @@
 <div class="quality-section-title">Health signals</div>
 <div class="card">
   {% for signal_name, signal in report.get("signals", {}).items() %}
-    {% if "verdict" in signal %}
+    {% if signal and "verdict" in signal %}
     <div class="signal-row">
       <span class="signal-name">{{ signal_name | replace("_", " ") }}</span>
       <span class="signal-badge signal-{{ signal.verdict | lower }}">{{ signal.verdict }}</span>
