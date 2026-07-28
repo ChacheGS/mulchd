@@ -2660,6 +2660,29 @@ async def test_annotate_outcome_staleness_flags_edit_after_outcome(team, data_pa
     assert records[0].get("_outcomes_stale") is True
 
 
+async def test_annotate_outcome_staleness_handles_z_suffix_timestamp(team, data_path):
+    """A real ml-produced outcome timestamp isn't guaranteed to use Python's
+    own +00:00 offset style — Z-suffix ISO 8601 must parse and compare
+    correctly too, not just the format Python happens to emit."""
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.models import RecordEdit
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v2", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00Z"}],
+    )
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        at=datetime(2026, 7, 28, 0, 0, 1, tzinfo=timezone.utc),
+    )
+    records = [r.copy()]
+    await _annotate_outcome_staleness(records, t.infra.id)
+    assert records[0].get("_outcomes_stale") is True
+
+
 async def test_annotate_outcome_staleness_not_flagged_when_outcome_is_newer(team, data_path):
     """A fresh outcome recorded after the edit means the content has since
     been re-confirmed — not stale."""

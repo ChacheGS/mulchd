@@ -918,8 +918,22 @@ async def _annotate_outcome_staleness(records: list[dict], project_id: int) -> N
         outcomes = r.get("outcomes") or []
         if not outcomes or rid not in last_content_edit:
             continue
-        last_outcome_at = max(o["recorded_at"] for o in outcomes)
-        if last_content_edit[rid].isoformat() > last_outcome_at:
+        outcome_times: list[datetime] = []
+        for o in outcomes:
+            ts = o.get("recorded_at", "")
+            if not ts:
+                continue
+            try:
+                parsed = datetime.fromisoformat(ts)
+            except ValueError:
+                continue
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            outcome_times.append(parsed)
+        if not outcome_times:
+            continue
+        last_outcome_at = max(outcome_times)
+        if last_content_edit[rid] > last_outcome_at:
             r["_outcomes_stale"] = True
 
 
