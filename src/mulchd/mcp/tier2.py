@@ -1614,6 +1614,13 @@ async def _record_tool_call(name: str, ctx: AuthContext) -> None:
 
 @tier2_server.list_tools()
 async def list_tools() -> list[Tool]:
+    from ..models import Role
+
+    ctx = _ctx.get()
+    if ctx is None:
+        raise ValueError("No auth context — use a project token for this connection")
+    if ctx.role == Role.READER:
+        return [t for t in TIER2_TOOLS if t.annotations and t.annotations.readOnlyHint]
     return TIER2_TOOLS
 
 

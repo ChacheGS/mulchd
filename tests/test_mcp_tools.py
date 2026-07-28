@@ -401,6 +401,78 @@ async def test_write_convention_dispatch_rejects_missing_content(team, data_path
 
 
 # ---------------------------------------------------------------------------
+# list_tools — role-filtered advertising
+# ---------------------------------------------------------------------------
+
+
+async def test_list_tools_hides_mutating_tools_from_reader(team, data_path):
+    from mulchd.mcp.tier2 import list_tools
+
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
+    try:
+        tools = await list_tools()
+    finally:
+        _ctx.reset(token)
+
+    names = {tool.name for tool in tools}
+    assert names == {
+        "read_records",
+        "search_records",
+        "list_domains",
+        "get_recent",
+        "get_record_schema",
+        "get_record_history",
+    }
+
+
+async def test_list_tools_shows_everything_to_writer(team, data_path):
+    from mulchd.mcp.tier2 import TIER2_TOOLS, list_tools
+
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.WRITER))
+    try:
+        tools = await list_tools()
+    finally:
+        _ctx.reset(token)
+
+    assert {tool.name for tool in tools} == {tool.name for tool in TIER2_TOOLS}
+
+
+async def test_list_tools_shows_everything_to_admin(team, data_path):
+    from mulchd.mcp.tier2 import TIER2_TOOLS, list_tools
+
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.ADMIN))
+    try:
+        tools = await list_tools()
+    finally:
+        _ctx.reset(token)
+
+    assert {tool.name for tool in tools} == {tool.name for tool in TIER2_TOOLS}
+
+
+async def test_list_tools_raises_without_auth_context():
+    from mulchd.mcp.tier2 import list_tools
+
+    with pytest.raises(ValueError, match="No auth context"):
+        await list_tools()
+
+
+async def test_call_tool_still_rejects_reader_for_hidden_tool(team, data_path):
+    """The advertised list changing must not weaken the actual enforcement —
+    a READER token calling a hidden tool directly still gets the existing
+    specific rejection message."""
+    t = team
+    token = _ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
+    try:
+        with pytest.raises(ValueError, match="reader role cannot edit records"):
+            await call_tool("edit_record", {"record_id": "mx-whatever", "domain": "infra", "content": "x"})
+    finally:
+        _ctx.reset(token)
+
+
+# ---------------------------------------------------------------------------
 # get_recent — timestamp filtering
 # ---------------------------------------------------------------------------
 
