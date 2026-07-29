@@ -42,14 +42,20 @@ def _load_domain_descriptions(m_dir: Path) -> dict[str, str]:
     return descriptions
 
 
+def list_domain_names(org: str, project: str) -> list[str]:
+    """Domain names only, no record parsing — for callers that just need to
+    validate/enumerate domains without paying for a full corpus read."""
+    expertise_dir = mulch_dir(org, project) / "expertise"
+    if not expertise_dir.exists():
+        return []
+    return sorted(p.stem for p in expertise_dir.glob("*.jsonl"))
+
+
 async def list_available_domains(org: str, project: str) -> list[dict]:
     m_dir = mulch_dir(org, project)
     expertise_dir = m_dir / "expertise"
     descriptions = _load_domain_descriptions(m_dir)
-
-    domain_names: list[str] = []
-    if expertise_dir.exists():
-        domain_names = sorted(p.stem for p in expertise_dir.glob("*.jsonl"))
+    domain_names = list_domain_names(org, project)
 
     results = []
     for name in domain_names:

@@ -1,6 +1,25 @@
 import pytest
 
-from mulchd.domains import expertise_path
+from mulchd.domains import expertise_path, list_domain_names
+
+
+def test_list_domain_names_returns_stems_without_reading_content(tmp_path, monkeypatch):
+    from mulchd.config import settings
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    expertise_dir = tmp_path / "acme" / "infra" / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "infra.jsonl").write_text("not valid json\n")
+    (expertise_dir / "policies.jsonl").write_text("{}\n")
+
+    assert list_domain_names("acme", "infra") == ["infra", "policies"]
+
+
+def test_list_domain_names_missing_project_returns_empty(tmp_path, monkeypatch):
+    from mulchd.config import settings
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    assert list_domain_names("acme", "nope") == []
 
 
 def test_expertise_path_accepts_normal_slug():

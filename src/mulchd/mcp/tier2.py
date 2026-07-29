@@ -18,7 +18,7 @@ import urllib.parse
 from pydantic import AnyUrl
 
 from ..auth import AuthContext
-from ..domains import expertise_path, list_available_domains, mulch_dir
+from ..domains import expertise_path, list_available_domains, list_domain_names, mulch_dir
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
     OutcomeStatus,
@@ -1130,7 +1130,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     domains = args.get("domains", [])
     limit = int(args.get("limit", 50))
     cursor = args.get("cursor")
-    available = {d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)}
+    available = set(list_domain_names(ctx.org.slug, ctx.project.slug))
     unknown = [d for d in domains if d not in available]
     warning = ""
     if unknown:
@@ -1308,7 +1308,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     query = args["query"]
     domains: list[str] | None = args.get("domains") or None
     author_filter = args.get("owner")
-    available = {d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)}
+    available = set(list_domain_names(ctx.org.slug, ctx.project.slug))
     unknown = [d for d in (domains or []) if d not in available]
     warning = ""
     if unknown:
@@ -1370,7 +1370,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     if args.get("domains"):
         domains = args["domains"]
     else:
-        domains = [d["name"] for d in await list_available_domains(ctx.org.slug, ctx.project.slug)]
+        domains = list_domain_names(ctx.org.slug, ctx.project.slug)
     results: list[dict] = []
     for domain in domains:
         for r in await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, domain)):
