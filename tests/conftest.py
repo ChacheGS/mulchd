@@ -1,8 +1,16 @@
 import os
+import shutil
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 from tortoise import Tortoise
+
+# node_modules/.bin/ml (the mulch CLI) isn't on PATH by default — add it if present.
+if shutil.which("ml") is None:
+    _bin_dir = Path(__file__).resolve().parent.parent / "node_modules" / ".bin"
+    if (_bin_dir / "ml").exists():
+        os.environ["PATH"] = f"{_bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"
 
 os.environ.setdefault("MULCHD_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("MULCHD_DB_URL", "sqlite://:memory:")

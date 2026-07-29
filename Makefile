@@ -34,9 +34,7 @@ format:
 	uv run isort src/ tests/
 	uv run black src/ tests/
 
-# node_modules/.bin/ml is the mulch CLI some tests shell out to
-# (@os-eco/mulch-cli declares both `mulch` and `ml` as bin entries).
-# Depending on this file target means `bun install` only runs when missing.
+# ml (the mulch CLI) some tests need; conftest.py puts it on PATH once installed.
 node_modules/.bin/ml:
 	bun install
 
@@ -44,10 +42,10 @@ typecheck:
 	uv run pyright
 
 test: node_modules/.bin/ml
-	PATH="$(CURDIR)/node_modules/.bin:$$PATH" uv run pytest tests/ -v
+	uv run pytest tests/ -v
 
 coverage: node_modules/.bin/ml
-	PATH="$(CURDIR)/node_modules/.bin:$$PATH" uv run pytest tests/ --cov --cov-report=term-missing
+	uv run pytest tests/ --cov --cov-report=term-missing
 
 # ---------------------------------------------------------------------------
 # Backup / restore
