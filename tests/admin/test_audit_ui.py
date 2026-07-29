@@ -59,6 +59,18 @@ def _jot(tmp_path: Path, domain: str, **fields) -> dict:
 # ---------------------------------------------------------------------------
 
 
+async def test_audit_page_renders(admin_client):
+    resp = await admin_client.get("/admin/audit")
+    assert resp.status_code == 200
+    assert "Audit" in resp.text
+
+
+async def test_audit_page_redirects_when_not_logged_in(client):
+    resp = await client.get("/admin/audit", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
 async def test_audit_page_with_project_shows_events(admin_client, tmp_path, monkeypatch):
     """Selecting a project renders the event log with record IDs and action badges."""
     org, project, alice, bob = await _setup(tmp_path, monkeypatch)
