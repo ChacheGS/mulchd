@@ -532,11 +532,7 @@ TIER2_TOOLS = [
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
                 "domain": {"type": "string"},
-                "classification": {
-                    "type": "string",
-                    "enum": ["foundational", "tactical", "observational"],
-                    "description": "foundational: core conventions/decisions that rarely change; tactical: current approach, may evolve; observational: useful context, specific to a situation or moment",
-                },
+                "classification": _CLASSIFICATION_PROPERTY,
                 "title": {"type": "string", "description": "decision: title field"},
                 "rationale": {"type": "string", "description": "decision: rationale field"},
                 "content": {"type": "string", "description": "convention: body text"},
@@ -546,21 +542,7 @@ TIER2_TOOLS = [
                 },
                 "resolution": {"type": "string", "description": "failure: resolution field"},
                 "name": {"type": "string", "description": "pattern/reference/guide: name field"},
-                "files": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Related file paths",
-                },
-                "relates_to": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Related record IDs",
-                },
-                "supersedes": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Record IDs this record replaces",
-                },
+                **_RELATED_RECORD_PROPERTIES,
             },
             "required": ["record_id", "domain"],
         },
