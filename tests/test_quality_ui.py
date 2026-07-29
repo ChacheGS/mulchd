@@ -13,7 +13,7 @@ import pytest
 from mulchd.models import Organization, Project, Role, User, UserMembership
 
 ml_available = pytest.mark.skipif(
-    not shutil.which("ml"), reason="ml not in PATH — run via: PATH=\"$(pwd)/node_modules/.bin:$PATH\""
+    not shutil.which("ml"), reason="ml not in PATH — run via: make test (or mise x -- uv run pytest)"
 )
 
 

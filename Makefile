@@ -34,14 +34,20 @@ format:
 	uv run isort src/ tests/
 	uv run black src/ tests/
 
+# node_modules/.bin/ml is the mulch CLI some tests shell out to
+# (@os-eco/mulch-cli declares both `mulch` and `ml` as bin entries).
+# Depending on this file target means `bun install` only runs when missing.
+node_modules/.bin/ml:
+	bun install
+
 typecheck:
 	uv run pyright
 
-test:
-	uv run pytest tests/ -v
+test: node_modules/.bin/ml
+	PATH="$(CURDIR)/node_modules/.bin:$$PATH" uv run pytest tests/ -v
 
-coverage:
-	uv run pytest tests/ --cov --cov-report=term-missing
+coverage: node_modules/.bin/ml
+	PATH="$(CURDIR)/node_modules/.bin:$$PATH" uv run pytest tests/ --cov --cov-report=term-missing
 
 # ---------------------------------------------------------------------------
 # Backup / restore

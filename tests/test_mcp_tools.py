@@ -45,7 +45,7 @@ from mulchd.models import (
 from mulchd.mulch import MulchError
 
 ml_available = pytest.mark.skipif(
-    not shutil.which("ml"), reason="ml not in PATH — run via: mise x -- uv run pytest"
+    not shutil.which("ml"), reason="ml not in PATH — run via: make test (or mise x -- uv run pytest)"
 )
 
 # ---------------------------------------------------------------------------
