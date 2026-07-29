@@ -9,16 +9,21 @@ from ._shared import get_admin_user, is_admin, redirect_login, templates
 router = APIRouter()
 
 
-@router.get("/orgs")
-async def orgs_page(request: Request, error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
+async def _render_orgs(request: Request, *, error: str = "", status_code: int = 200) -> Response:
     orgs = await Organization.all().order_by("slug").prefetch_related("projects")
     return templates.TemplateResponse(
         request,
         "orgs.html",
         {"active": "orgs", "orgs": orgs, "error": error},
+        status_code=status_code,
     )
+
+
+@router.get("/orgs")
+async def orgs_page(request: Request, error: str = "") -> Response:
+    if not await is_admin(request):
+        return redirect_login()
+    return await _render_orgs(request, error=error)
 
 
 @router.post("/orgs")
@@ -33,16 +38,6 @@ async def create_org(
     try:
         org = await Organization.create(slug=slug.strip(), display_name=display_name.strip())
     except IntegrityError:
-        orgs = await Organization.all().order_by("slug").prefetch_related("projects")
-        return templates.TemplateResponse(
-            request,
-            "orgs.html",
-            {
-                "active": "orgs",
-                "orgs": orgs,
-                "error": f"Org slug '{slug}' already exists.",
-            },
-            status_code=409,
-        )
+        return await _render_orgs(request, error=f"Org slug '{slug}' already exists.", status_code=409)
     await log_event(InstanceEventCategory.ORG_CREATED, actor=admin, detail={"org_slug": org.slug})
     return RedirectResponse("/admin/orgs", status_code=303)

@@ -9,10 +9,9 @@ from ._shared import get_admin_user, is_admin, redirect_login, templates
 router = APIRouter()
 
 
-@router.get("/memberships")
-async def memberships_page(request: Request, user: str = "", error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
+async def _render_memberships(
+    request: Request, *, preselect_user: str = "", error: str = "", status_code: int = 200
+) -> Response:
     memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")
     users = await User.filter(active=True).order_by("username")
     projects = await Project.all().order_by("slug").prefetch_related("org")
@@ -25,10 +24,18 @@ async def memberships_page(request: Request, user: str = "", error: str = "") ->
             "users": users,
             "projects": projects,
             "roles": list(Role),
-            "preselect_user": user,
+            "preselect_user": preselect_user,
             "error": error,
         },
+        status_code=status_code,
     )
+
+
+@router.get("/memberships")
+async def memberships_page(request: Request, user: str = "", error: str = "") -> Response:
+    if not await is_admin(request):
+        return redirect_login()
+    return await _render_memberships(request, preselect_user=user, error=error)
 
 
 @router.post("/memberships")
@@ -48,21 +55,9 @@ async def add_membership(
     try:
         await UserMembership.create(user=user, project=project, role=Role(role))
     except IntegrityError:
-        memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")
-        users = await User.filter(active=True).order_by("username")
-        projects = await Project.all().order_by("slug").prefetch_related("org")
-        return templates.TemplateResponse(
+        return await _render_memberships(
             request,
-            "memberships.html",
-            {
-                "active": "memberships",
-                "memberships": memberships,
-                "users": users,
-                "projects": projects,
-                "roles": list(Role),
-                "preselect_user": "",
-                "error": f"{user.username} already has access to that project.",
-            },
+            error=f"{user.username} already has access to that project.",
             status_code=409,
         )
     await log_event(

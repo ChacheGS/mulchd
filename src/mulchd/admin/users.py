@@ -23,16 +23,21 @@ from ._shared import get_admin_user, is_admin, redirect_login, templates
 router = APIRouter()
 
 
-@router.get("/users")
-async def users_page(request: Request, error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
+async def _render_users(request: Request, *, error: str = "", status_code: int = 200) -> Response:
     users = await User.all().order_by("username")
     return templates.TemplateResponse(
         request,
         "users.html",
         {"active": "users", "users": users, "error": error},
+        status_code=status_code,
     )
+
+
+@router.get("/users")
+async def users_page(request: Request, error: str = "") -> Response:
+    if not await is_admin(request):
+        return redirect_login()
+    return await _render_users(request, error=error)
 
 
 @router.post("/users")
@@ -52,16 +57,8 @@ async def create_user_route(
             email=email.strip() or None,
         )
     except IntegrityError:
-        users = await User.all().order_by("username")
-        return templates.TemplateResponse(
-            request,
-            "users.html",
-            {
-                "active": "users",
-                "users": users,
-                "error": f"Username '{username}' is already taken.",
-            },
-            status_code=409,
+        return await _render_users(
+            request, error=f"Username '{username}' is already taken.", status_code=409
         )
     await log_event(InstanceEventCategory.USER_CREATED, actor=admin, subject_user=user)
     request.session["pending_token"] = {
