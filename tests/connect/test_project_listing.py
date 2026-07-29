@@ -1,0 +1,44 @@
+import pytest
+
+pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+from mulchd.models import Organization, Project
+
+from tests.connect.conftest import _authed_client
+
+# ── projects ────────────────────────────────────────────────────────────────
+
+
+async def test_connect_projects_requires_auth(client):
+    resp = await client.get("/connect/projects", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_connect_projects_lists_memberships(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects")
+    assert resp.status_code == 200
+    assert "demo" in resp.text
+
+
+# ── project page ────────────────────────────────────────────────────────────
+
+
+async def test_connect_project_page_renders(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects/acme/demo")
+    assert resp.status_code == 200
+    assert "project-page" in resp.text
+
+
+async def test_connect_project_page_nonmember_404(client, alice_and_project):
+    user, token, *_ = alice_and_project
+    # Create a second org/project that alice is not a member of
+    org2 = await Organization.create(slug="other", display_name="Other")
+    await Project.create(slug="secret", display_name="Secret", org=org2)
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects/other/secret")
+    assert resp.status_code == 404
