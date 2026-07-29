@@ -1113,6 +1113,26 @@ def _wrap_untrusted(body: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _require_writer(ctx: AuthContext, action: str) -> None:
+    from ..models import Role
+
+    if ctx.role == Role.READER:
+        raise ValueError(f"reader role cannot {action}")
+
+
+async def _get_owned_record(
+    ctx: AuthContext, domain: str, record_id: str, verb: str, *, owner_check: bool = True
+) -> dict:
+    from ..models import Role
+
+    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
+    if record is None:
+        raise ValueError(f"record {record_id} not found in domain {domain}")
+    if owner_check and ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
+        raise ValueError(f"you can only {verb} your own records (writer role)")
+    return record
+
+
 async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     domains = args.get("domains", [])
     limit = int(args.get("limit", 50))
@@ -1221,10 +1241,7 @@ async def _notify_domain(
 
 
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
-    from ..models import Role
-
-    if ctx.role == Role.READER:
-        raise ValueError("reader role cannot write records")
+    _require_writer(ctx, "write records")
     rtype = args["type"]
     required = list(_RECORD_SCHEMAS[rtype]["required"])
     missing = [f for f in required if not args.get(f)]
@@ -1455,17 +1472,10 @@ async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]
 
 
 async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
-    from ..models import Role
-
-    if ctx.role == Role.READER:
-        raise ValueError("reader role cannot edit records")
+    _require_writer(ctx, "edit records")
     record_id = args["record_id"]
     domain = args["domain"]
-    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
-    if record is None:
-        raise ValueError(f"record {record_id} not found in domain {domain}")
-    if ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
-        raise ValueError("you can only edit your own records (writer role)")
+    record = await _get_owned_record(ctx, domain, record_id, "edit")
     update_keys = {
         "classification",
         "title",
@@ -1553,33 +1563,21 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
 
 
 async def _record_outcome(args: dict, ctx: AuthContext) -> list[TextContent]:
-    from ..models import Role
-
-    if ctx.role == Role.READER:
-        raise ValueError("reader role cannot record outcomes")
+    _require_writer(ctx, "record outcomes")
     record_id = args["record_id"]
     domain = args["domain"]
     status = OutcomeStatus(args["status"])
-    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
-    if record is None:
-        raise ValueError(f"record {record_id} not found in domain {domain}")
+    await _get_owned_record(ctx, domain, record_id, "record outcomes", owner_check=False)
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await record_outcome(m_dir, domain, record_id, status, args.get("notes"))
     return [TextContent(type="text", text=f"Recorded {status.value} outcome for {record_id}")]
 
 
 async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
-    from ..models import Role
-
-    if ctx.role == Role.READER:
-        raise ValueError("reader role cannot delete records")
+    _require_writer(ctx, "delete records")
     record_id = args["record_id"]
     domain = args["domain"]
-    record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
-    if record is None:
-        raise ValueError(f"record {record_id} not found in domain {domain}")
-    if ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
-        raise ValueError("you can only delete your own records (writer role)")
+    record = await _get_owned_record(ctx, domain, record_id, "delete")
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await delete_record(m_dir, domain, record_id)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
