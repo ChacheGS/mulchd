@@ -18,14 +18,9 @@ ml_available = pytest.mark.skipif(
 
 
 async def _setup(tmp_path, monkeypatch):
-    import mulchd.domains as domains
+    from mulchd.config import settings
 
-    # test_oauth.py reloads mulchd.config, which rebinds mulchd.config.settings
-    # to a new Settings instance. mulchd.domains bound `settings` by name at
-    # import time and keeps the old one, so patch the object mulch_dir actually
-    # reads rather than whatever `from mulchd.config import settings` returns
-    # now (which may be the post-reload instance domains.py never sees).
-    monkeypatch.setattr(domains.settings, "data_path", tmp_path)
+    monkeypatch.setattr(settings, "data_path", tmp_path)
     org = await Organization.create(slug="acme", display_name="Acme")
     project = await Project.create(slug="platform", display_name="Platform", org=org)
     alice = await User.create(username="alice", display_name="Alice K.", token_hash="h1")
