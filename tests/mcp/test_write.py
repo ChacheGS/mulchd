@@ -235,19 +235,19 @@ async def test_record_expertise_accepts_valid_cross_domain_supersedes(team, data
 
 async def test_record_expertise_without_references_skips_project_scan(team, data_path, monkeypatch, fake_write_record):
     """A write with no supersedes/relates_to at all must not trigger a
-    project-wide scan — _load_project_records should not be called."""
+    project-wide scan — get_project_records should not be called."""
     import mulchd.mcp.tier2 as mcp_tier2
 
     t = team
     called = False
-    original = mcp_tier2._load_project_records
+    original = mcp_tier2.get_project_records
 
     async def _tracking(*a, **kw):
         nonlocal called
         called = True
         return await original(*a, **kw)
 
-    monkeypatch.setattr(mcp_tier2, "_load_project_records", _tracking)
+    monkeypatch.setattr(mcp_tier2, "get_project_records", _tracking)
 
     await mcp_tier2._record_expertise(
         {

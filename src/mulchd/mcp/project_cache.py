@@ -1,9 +1,9 @@
 """Per-project cache in front of the full-corpus record read.
 
-_load_project_records used to reparse every domain's JSONL on every call
-(cycle detection, cross-domain supersede tagging, and write/edit-time
-reference validation all need the whole project's record set, not just
-the current read scope). That's O(total corpus) work per call.
+The old tier2 helper this replaces used to reparse every domain's JSONL on
+every call (cycle detection, cross-domain supersede tagging, and
+write/edit-time reference validation all need the whole project's record
+set, not just the current read scope). That's O(total corpus) work per call.
 
 This module caches the parsed result per domain, keyed on the domain
 file's mtime. Every call re-verifies against disk (a cheap stat() per

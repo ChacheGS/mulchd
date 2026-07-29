@@ -69,30 +69,6 @@ async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_pa
     assert r["id"] not in alerts
 
 
-async def test_load_project_records_scans_all_domains(team, data_path):
-    """_load_project_records returns every live record across every domain,
-    each tagged with its _domain, regardless of which domain is queried."""
-    from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _load_project_records
-
-    _jot(data_path, "acme", "infra", "api", type="convention", classification="tactical", content="A", owner="carlos")
-    _jot(data_path, "acme", "infra", "guardrails", type="convention", classification="tactical", content="B", owner="carlos")
-
-    records = await _load_project_records(mulch_dir("acme", "infra"))
-    assert len(records) == 2
-    domains = {r["_domain"] for r in records}
-    assert domains == {"api", "guardrails"}
-
-
-async def test_load_project_records_empty_project(team, data_path):
-    """No expertise/ directory yet — returns an empty list, not an error."""
-    from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _load_project_records
-
-    records = await _load_project_records(mulch_dir("acme", "infra"))
-    assert records == []
-
-
 async def test_load_archived_ids_reads_archive_directory(team, data_path):
     """_load_archived_ids returns the IDs of records under archive/, not expertise/."""
     from mulchd.domains import mulch_dir

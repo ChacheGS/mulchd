@@ -1,5 +1,5 @@
 """Tests for project_cache.get_project_records — the per-domain, mtime-
-validated cache in front of _load_project_records's old full rescan."""
+validated cache in front of the full-corpus rescan it replaced."""
 
 import json
 

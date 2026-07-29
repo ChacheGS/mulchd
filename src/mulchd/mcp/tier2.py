@@ -19,6 +19,7 @@ from pydantic import AnyUrl
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, list_domain_names, mulch_dir
+from .project_cache import get_project_records
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
     OutcomeStatus,
@@ -607,7 +608,7 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
-    project_records = await _load_project_records(m_dir)
+    project_records = await get_project_records(m_dir)
     archived_ids = await _load_archived_ids(m_dir)
     live_by_id = {r["id"]: r for r in project_records if r.get("id")}
 
@@ -660,23 +661,6 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
                 r["_supersedes_foundational"] = displaced_foundational
 
 
-async def _load_project_records(m_dir: Path) -> list[dict]:
-    """Read every live record across all domains in the project, each tagged
-    with its _domain. Used for write-time existence validation and read-time
-    cycle detection — both need the whole project's supersede graph, not just
-    the current read scope."""
-    records: list[dict] = []
-    expertise_dir = m_dir / "expertise"
-    if not expertise_dir.exists():
-        return records
-    for jsonl_file in expertise_dir.glob("*.jsonl"):
-        domain = jsonl_file.stem
-        for r in await read_domain_records(jsonl_file):
-            r["_domain"] = domain
-            records.append(r)
-    return records
-
-
 async def _load_archived_ids(m_dir: Path) -> set[str]:
     """IDs of soft-deleted (archived) records — stored under archive/, outside
     the live expertise/ tree read_domain_records normally reads."""
@@ -699,7 +683,7 @@ def _validate_references(
 ) -> None:
     """Raise ValueError if any supersedes/relates_to ID doesn't resolve to a
     live record in live_ids, or references self_id. live_ids should come from
-    _load_project_records — archived and fabricated IDs are both simply absent
+    get_project_records — archived and fabricated IDs are both simply absent
     from that set, so both are rejected the same way. Reports every problem
     across both fields in one error, not just the first one found."""
     errors: list[str] = []
@@ -1251,7 +1235,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     if args.get("supersedes") or args.get("relates_to"):
-        project_records = await _load_project_records(m_dir)
+        project_records = await get_project_records(m_dir)
         live_ids = {r["id"] for r in project_records if r.get("id")}
         _validate_references(
             live_ids,
@@ -1483,7 +1467,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     supersession_alert_text = ""
     if "supersedes" in updates or "relates_to" in updates:
-        project_records = await _load_project_records(m_dir)
+        project_records = await get_project_records(m_dir)
         live_ids = {r["id"] for r in project_records if r.get("id")}
         _validate_references(
             live_ids,

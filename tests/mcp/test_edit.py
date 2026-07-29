@@ -97,7 +97,7 @@ async def test_edit_record_rejects_relates_to_self_reference(team, data_path, fa
 
 async def test_edit_record_content_only_skips_reference_validation(team, data_path, monkeypatch, fake_write_record):
     """Editing a field other than supersedes/relates_to must not trigger a
-    project-wide scan at all — _load_project_records should not be called."""
+    project-wide scan at all — get_project_records should not be called."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _edit_record
 
@@ -108,14 +108,14 @@ async def test_edit_record_content_only_skips_reference_validation(team, data_pa
     )
 
     called = False
-    original = mcp_tier2._load_project_records
+    original = mcp_tier2.get_project_records
 
     async def _tracking(*a, **kw):
         nonlocal called
         called = True
         return await original(*a, **kw)
 
-    monkeypatch.setattr(mcp_tier2, "_load_project_records", _tracking)
+    monkeypatch.setattr(mcp_tier2, "get_project_records", _tracking)
 
     async def _noop_edit(m_dir, domain, rid, updates):
         pass
