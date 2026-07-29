@@ -1240,6 +1240,18 @@ async def _notify_domain(
         registry.unregister_session(s)
 
 
+def _fire_notify(domain: str, ctx: AuthContext, action: str, record: dict) -> None:
+    """Schedule _notify_domain as a tracked background task. A no-op outside a
+    live MCP request (request_context raises LookupError), e.g. in tests."""
+    try:
+        req_ctx = tier2_server.request_context
+    except LookupError:
+        return
+    _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, action, record))
+    _background_tasks.add(_t)
+    _t.add_done_callback(_background_tasks.discard)
+
+
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "write records")
     rtype = args["type"]
@@ -1306,13 +1318,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         m_dir, list(args.get("supersedes") or []), args["classification"]
     )
     msg += _format_supersession_alerts(alerts, args["classification"])
-    try:
-        req_ctx = tier2_server.request_context
-        _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "write", written))
-        _background_tasks.add(_t)
-        _t.add_done_callback(_background_tasks.discard)
-    except LookupError:
-        pass
+    _fire_notify(domain, ctx, "write", written)
     return [TextContent(type="text", text=msg)]
 
 
@@ -1551,14 +1557,8 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             f"\n\n⚠ OUTCOME TRUST STALE: {len(existing_outcomes)} confirmed outcome(s) describe "
             f"the previous content — they no longer apply to what you just wrote."
         )
-    try:
-        req_ctx = tier2_server.request_context
-        notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
-        _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "edit", notif_record))
-        _background_tasks.add(_t)
-        _t.add_done_callback(_background_tasks.discard)
-    except LookupError:
-        pass
+    notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
+    _fire_notify(domain, ctx, "edit", notif_record)
     return [TextContent(type="text", text=msg)]
 
 
@@ -1599,13 +1599,7 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     domain_path = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     if domain_path.exists() and not await read_domain_records(domain_path):
         domain_path.unlink()
-    try:
-        req_ctx = tier2_server.request_context
-        _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, "delete", record))
-        _background_tasks.add(_t)
-        _t.add_done_callback(_background_tasks.discard)
-    except LookupError:
-        pass
+    _fire_notify(domain, ctx, "delete", record)
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
 
 
