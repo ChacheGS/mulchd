@@ -978,15 +978,10 @@ def _format_outcomes_tag(r: dict) -> str:
     return tag
 
 
-def _format_single(r: dict) -> str:
-    title = r.get("title") or r.get("name") or ""
-    body = r.get("content") or r.get("rationale") or r.get("description") or ""
-    domain = r.get("_domain", "?")
-    rtype = r.get("type", "?")
+def _decorate_header(header: str, r: dict) -> str:
+    """Append the cycle/superseded/supersedes/edited/outcomes tags shared by
+    every record header rendering, regardless of the prefix each caller builds."""
     rid = r.get("id", "?")
-    header = f"[{domain}/{rtype}] {rid}"
-    if title:
-        header += f" — {title}"
     if r.get("_cycle_with"):
         header += f" ⚠ CONTRADICTORY: cycle with {', '.join(r['_cycle_with'])}"
     else:
@@ -1015,6 +1010,19 @@ def _format_single(r: dict) -> str:
         editor = r.get("_last_edited_by", "")
         header += f" • edited {n}×" + (f" by {editor}" if editor else "")
     header += _format_outcomes_tag(r)
+    return header
+
+
+def _format_single(r: dict) -> str:
+    title = r.get("title") or r.get("name") or ""
+    body = r.get("content") or r.get("rationale") or r.get("description") or ""
+    domain = r.get("_domain", "?")
+    rtype = r.get("type", "?")
+    rid = r.get("id", "?")
+    header = f"[{domain}/{rtype}] {rid}"
+    if title:
+        header += f" — {title}"
+    header = _decorate_header(header, r)
     if body:
         header += f"\n    {body}"
     return header
@@ -1037,34 +1045,7 @@ def _format_records(records: list[dict]) -> str:
         )
         if title:
             header += f" — {title}"
-        if r.get("_cycle_with"):
-            header += f" ⚠ CONTRADICTORY: cycle with {', '.join(r['_cycle_with'])}"
-        else:
-            if r.get("_superseded"):
-                if r.get("_foundational_superseded"):
-                    banner = f" 🚨 FOUNDATIONAL POLICY SUPERSEDED by {r['_superseded_by']}"
-                    if r.get("_superseder_domain"):
-                        banner += f" (in {r['_superseder_domain']})"
-                    banner += f" — see get_record_history('{rid}') for the original text"
-                    header += banner
-                else:
-                    tag = (
-                        f" • superseded by {r['_superseded_by']}"
-                        if r.get("_superseded_by")
-                        else " • superseded"
-                    )
-                    if r.get("_superseder_domain"):
-                        tag += f" (in {r['_superseder_domain']})"
-                    header += tag
-            if r.get("_supersedes_display"):
-                header += f" • supersedes {', '.join(r['_supersedes_display'])}"
-            if r.get("_supersedes_foundational"):
-                header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
-        if r.get("_edited"):
-            n = r.get("_edit_count", "")
-            editor = r.get("_last_edited_by", "")
-            header += f" • edited {n}×" + (f" by {editor}" if editor else "")
-        header += _format_outcomes_tag(r)
+        header = _decorate_header(header, r)
         lines.append(header)
         if body:
             lines.append(f"  {body}")
