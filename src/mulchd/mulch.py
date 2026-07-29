@@ -105,16 +105,18 @@ async def search_domains(
     Run BM25 search via `ml --json search`.
 
     When `domains` is None, mulch searches all configured domains in one call.
-    When specific domains are requested, we call once per domain with --domain
-    and merge the results in the order returned.
+    When specific domains are requested, we call once per domain with --domain,
+    in parallel, and merge the results in `domains` order.
     """
     if not domains:
         result = await _run(mulch_dir, ["search", query])
         return _extract_matches(result)
 
+    results = await asyncio.gather(
+        *(_run(mulch_dir, ["search", query, "--domain", domain]) for domain in domains)
+    )
     records: list[dict] = []
-    for domain in domains:
-        result = await _run(mulch_dir, ["search", query, "--domain", domain])
+    for domain, result in zip(domains, results):
         for entry in _extract_matches(result):
             entry["_domain"] = domain
             records.append(entry)

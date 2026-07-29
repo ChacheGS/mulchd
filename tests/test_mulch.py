@@ -209,6 +209,34 @@ async def test_run_parses_json_stdout_on_success(monkeypatch, tmp_path):
     assert await _run(tmp_path, ["status"]) == {"success": True, "count": 3}
 
 
+async def test_search_domains_runs_per_domain_calls_concurrently(monkeypatch, tmp_path):
+    """Specific-domain search must not spawn its ml subprocesses one at a time —
+    verified by having each fake call block until all have started."""
+    import asyncio
+
+    from mulchd.mulch import search_domains
+
+    domains = ["a", "b", "c"]
+    started = asyncio.Event()
+    start_count = 0
+
+    async def _fake_run(mulch_dir, args, stdin_data=None):
+        nonlocal start_count
+        start_count += 1
+        if start_count == len(domains):
+            started.set()
+        await asyncio.wait_for(started.wait(), timeout=1)
+        domain = args[args.index("--domain") + 1]
+        return {"domains": [{"domain": domain, "matches": [{"id": f"m-{domain}"}]}]}
+
+    import mulchd.mulch as mulch_module
+
+    monkeypatch.setattr(mulch_module, "_run", _fake_run)
+
+    results = await search_domains(tmp_path, "query", domains=domains)
+    assert [r["_domain"] for r in results] == domains
+
+
 # ---------------------------------------------------------------------------
 # _extract_matches — pure function
 # ---------------------------------------------------------------------------
