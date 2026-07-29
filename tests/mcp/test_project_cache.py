@@ -60,7 +60,6 @@ async def test_changed_domain_is_reparsed(tmp_path):
     path = expertise_dir / "infra.jsonl"
     _write_domain(expertise_dir, "infra", {"id": "mx-1", "content": "new"})
     import os
-    import time
 
     new_mtime = path.stat().st_mtime + 2
     os.utime(path, (new_mtime, new_mtime))
