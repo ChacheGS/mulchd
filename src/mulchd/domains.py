@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import yaml
@@ -5,12 +6,22 @@ import yaml
 from .config import settings
 from .records import get_file_mod_time, read_domain_records
 
+_DOMAIN_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
+
+
+def validate_domain(domain: str) -> None:
+    """Raise ValueError unless domain is a plain slug — callers build filesystem
+    paths from this value, so anything else risks path traversal."""
+    if not _DOMAIN_RE.match(domain):
+        raise ValueError(f"invalid domain: {domain!r}")
+
 
 def mulch_dir(org: str, project: str) -> Path:
     return settings.data_path / org / project / ".mulch"
 
 
 def expertise_path(org: str, project: str, domain: str) -> Path:
+    validate_domain(domain)
     return mulch_dir(org, project) / "expertise" / f"{domain}.jsonl"
 
 

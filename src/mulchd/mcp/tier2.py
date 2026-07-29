@@ -1261,7 +1261,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
             list(args.get("relates_to") or []),
         )
     await init_ml_project(m_dir)
-    domain_file = m_dir / "expertise" / f"{domain}.jsonl"
+    domain_file = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     pre_existed = domain_file.exists()
     from ..mulch import MulchError
 

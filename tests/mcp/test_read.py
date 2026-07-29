@@ -3,8 +3,22 @@ read_records tests not covered by a more specific concern file.
 """
 
 from datetime import datetime, timezone
+
+import pytest
+
 from mulchd.mcp.tier2 import _read_expertise
 from tests.mcp.conftest import ctx, _jot
+
+
+async def test_read_records_rejects_path_traversal_domain(team, data_path):
+    """A domain containing path segments must be rejected, not resolved onto disk —
+    otherwise a caller could read another org/project's records via ../.. segments."""
+    t = team
+    with pytest.raises(ValueError, match="invalid domain"):
+        await _read_expertise(
+            {"domains": ["../../other-org/other-project/.mulch/expertise/secrets"]},
+            ctx(t.carlos, t.org, t.infra),
+        )
 
 
 async def test_read_records_unknown_domain_warns(team, data_path):

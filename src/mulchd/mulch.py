@@ -12,6 +12,8 @@ import os
 from enum import StrEnum
 from pathlib import Path
 
+from .domains import validate_domain
+
 
 class MulchError(Exception):
     pass
@@ -51,6 +53,7 @@ async def write_record(mulch_dir: Path, domain: str, record: dict) -> dict:
     Pipe `record` to `ml record {domain} --stdin --json`.
     Returns the written record dict (with id populated by mulch).
     """
+    validate_domain(domain)
     result = await _run(mulch_dir, ["record", domain, "--stdin"], stdin_data=json.dumps(record))
     # ml's --stdin mode returns a summary {success, created, ...} without the record object.
     # Fall back to reading the JSONL and matching on the fields we set.
