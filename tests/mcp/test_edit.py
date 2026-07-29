@@ -433,3 +433,45 @@ async def test_annotate_edits_counts_multiple_edits(team, data_path):
     await _annotate_edits(records, t.infra.id)
     assert records[0]["_edit_count"] == 3
     assert records[0]["_last_edited_by"] == "Jorge M."
+
+
+async def test_edit_rolls_back_jsonl_when_db_event_fails(team, data_path, fake_write_record, monkeypatch):
+    """If RecordEvent/RecordEdit creation fails after the JSONL edit already
+    applied, the pre-edit values must be restored so the operation fails
+    cleanly instead of leaving an untracked edit on disk."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {
+            "domain": "rollback-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "original",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["rollback-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    record_id = records[1]["records"][0]["id"]
+
+    calls = []
+
+    async def _fake_edit(m_dir, domain, rid, updates):
+        calls.append(updates)
+
+    async def _fail(*args, **kwargs):
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(mcp_tier2, "edit_record", _fake_edit)
+    monkeypatch.setattr(mcp_tier2.RecordEvent, "create", _fail)
+
+    with pytest.raises(RuntimeError, match="db unavailable"):
+        await _edit_record(
+            {"record_id": record_id, "domain": "rollback-test", "content": "updated"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+    assert calls == [{"content": "updated"}, {"content": "original"}]

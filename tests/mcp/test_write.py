@@ -10,7 +10,7 @@ import json
 import pytest
 from mulchd.models import Role, UserMembership
 from mulchd.mcp.tier2 import _read_expertise, _record_expertise, call_tool
-from tests.mcp.conftest import ctx, _jot, ml_available
+from tests.mcp.conftest import _make_fake_delete, ctx, _jot, ml_available
 
 
 async def test_cross_user_record_then_read(team, data_path, fake_write_record):
@@ -376,3 +376,34 @@ async def test_write_record_no_warning_when_superseding_tactical(
         ctx(t.carlos, t.org, t.infra),
     )
     assert "SUPERSESSION WARNING" not in result[0].text
+
+
+async def test_write_rolls_back_jsonl_when_db_metadata_fails(team, data_path, fake_write_record, monkeypatch):
+    """If RecordMeta.create fails after the JSONL write already succeeded, the
+    record must be removed from disk so the operation fails cleanly instead of
+    leaving a record invisible to get_record_history/session grouping."""
+    import mulchd.mcp.tier2 as mcp_tier2
+
+    t = team
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(expertise))
+
+    async def _fail(*args, **kwargs):
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr(mcp_tier2.RecordMeta, "create", _fail)
+
+    with pytest.raises(RuntimeError, match="db unavailable"):
+        await _record_expertise(
+            {
+                "domain": "infra",
+                "type": "convention",
+                "classification": "tactical",
+                "content": "should not persist",
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+    assert not (expertise / "infra.jsonl").exists() or "should not persist" not in (
+        expertise / "infra.jsonl"
+    ).read_text()

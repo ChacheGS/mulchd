@@ -26,6 +26,7 @@ from ..mulch import (
     edit_record,
     init_ml_project,
     record_outcome,
+    restore_record,
     search_domains,
     write_record,
 )
@@ -1272,23 +1273,31 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
             domain_file.unlink()
         raise
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
-    await RecordMeta.create(
-        record_id=written["id"],
-        project=ctx.project,
-        domain=domain,
-        author=ctx.user,
-        session_id=session_id,
-        client=ctx.client,
-    )
-    await RecordEvent.create(
-        record_id=written["id"],
-        project=ctx.project,
-        domain=domain,
-        actor=ctx.user,
-        action="write",
-        client=ctx.client,
-        session_id=session_id,
-    )
+    try:
+        await RecordMeta.create(
+            record_id=written["id"],
+            project=ctx.project,
+            domain=domain,
+            author=ctx.user,
+            session_id=session_id,
+            client=ctx.client,
+        )
+        await RecordEvent.create(
+            record_id=written["id"],
+            project=ctx.project,
+            domain=domain,
+            actor=ctx.user,
+            action="write",
+            client=ctx.client,
+            session_id=session_id,
+        )
+    except Exception:
+        # The JSONL write already succeeded — without this the record would be
+        # visible on disk but invisible to get_record_history/session grouping,
+        # with no trace of the failure. Roll the JSONL side back so the whole
+        # operation fails cleanly instead of leaving silent cross-store drift.
+        await delete_record(m_dir, domain, written["id"])
+        raise
     msg = f"Recorded {written['type']} in {domain} ({written['id']})"
     alerts = await _supersede_alerts(
         m_dir, list(args.get("supersedes") or []), args["classification"]
@@ -1506,24 +1515,31 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             supersession_alert_text = _format_supersession_alerts(alerts, effective_classification)
     await edit_record(m_dir, domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
-    await RecordEvent.create(
-        record_id=record_id,
-        project=ctx.project,
-        domain=domain,
-        actor=ctx.user,
-        action="edit",
-        client=ctx.client,
-        session_id=session_id,
-    )
-    await RecordEdit.create(
-        record_id=record_id,
-        project=ctx.project,
-        domain=domain,
-        actor=ctx.user,
-        before_snapshot=before_snapshot,
-        client=ctx.client,
-        session_id=session_id,
-    )
+    try:
+        await RecordEvent.create(
+            record_id=record_id,
+            project=ctx.project,
+            domain=domain,
+            actor=ctx.user,
+            action="edit",
+            client=ctx.client,
+            session_id=session_id,
+        )
+        await RecordEdit.create(
+            record_id=record_id,
+            project=ctx.project,
+            domain=domain,
+            actor=ctx.user,
+            before_snapshot=before_snapshot,
+            client=ctx.client,
+            session_id=session_id,
+        )
+    except Exception:
+        # The JSONL edit already applied — restore the pre-edit values so the
+        # whole operation fails cleanly instead of leaving an edit on disk
+        # with no corresponding history/event row.
+        await edit_record(m_dir, domain, record_id, before_snapshot)
+        raise
     msg = f"Updated {record_id} in {domain}"
     old_cls = before_snapshot.get("classification", "")
     new_cls = updates.get("classification", "")
@@ -1581,15 +1597,21 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await delete_record(m_dir, domain, record_id)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
-    await RecordEvent.create(
-        record_id=record_id,
-        project=ctx.project,
-        domain=domain,
-        actor=ctx.user,
-        action="delete",
-        client=ctx.client,
-        session_id=session_id,
-    )
+    try:
+        await RecordEvent.create(
+            record_id=record_id,
+            project=ctx.project,
+            domain=domain,
+            actor=ctx.user,
+            action="delete",
+            client=ctx.client,
+            session_id=session_id,
+        )
+    except Exception:
+        # The archive already happened on disk — restore it so the whole
+        # operation fails cleanly instead of leaving a deleted-but-untracked record.
+        await restore_record(m_dir, record_id)
+        raise
     domain_path = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     if domain_path.exists() and not await read_domain_records(domain_path):
         domain_path.unlink()
