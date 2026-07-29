@@ -43,6 +43,10 @@ class Settings(BaseSettings):
             return self.base_url.rstrip("/")
         return f"http://{self.host}:{self.port}"
 
+    @property
+    def is_https(self) -> bool:
+        return self.resolved_base_url.startswith("https://")
+
 
 settings = Settings()  # type: ignore[call-arg]
 

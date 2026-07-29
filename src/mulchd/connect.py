@@ -102,6 +102,7 @@ def _set_connect_cookie(response: Response, user_id: int, remember: bool) -> Non
         signed,
         httponly=True,
         samesite="lax",
+        secure=settings.is_https,
         max_age=max_age,
     )
 

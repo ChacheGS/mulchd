@@ -123,7 +123,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
     session_cookie="mulchd_session",
-    https_only=False,
+    https_only=settings.is_https,
 )
 app.include_router(admin_router)
 app.include_router(api_router)
