@@ -25,6 +25,25 @@ async def test_dashboard_renders(admin_client):
     assert "Dashboard" in resp.text
 
 
+async def test_dashboard_renders_project_stats(admin_client):
+    """With projects and tool calls present, the per-project aggregation
+    loops (never exercised by the empty-state test above) must run."""
+    from mulchd.models import Organization, Project, ToolCall, User
+
+    org = await Organization.create(slug="acme", display_name="Acme")
+    project = await Project.create(slug="demo", display_name="Demo Project", org=org)
+    user = await User.create(username="dashuser", display_name="Dash User", token_hash="h-dash")
+    await ToolCall.create(project=project, author=user, tool="read_records", client="test")
+    await ToolCall.create(project=project, author=user, tool="read_records", client="test")
+    await ToolCall.create(project=project, author=user, tool="write_decision", client="test")
+
+    resp = await admin_client.get("/admin/")
+    assert resp.status_code == 200
+    assert "Demo Project" in resp.text
+    assert "read_records" in resp.text
+    assert "write_decision" in resp.text
+
+
 async def test_create_user(admin_client):
     resp = await admin_client.post(
         "/admin/users",
@@ -216,6 +235,159 @@ async def test_records_count_with_jsonl(admin_client, tmp_path, monkeypatch):
     resp = await admin_client.get("/admin/records/count?project=acme/demo")
     assert resp.status_code == 200
     assert resp.json() == {"count": 3}
+
+
+async def test_records_page_requires_auth(client):
+    resp = await client.get("/admin/records", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_records_page_no_project_selected(admin_client):
+    resp = await admin_client.get("/admin/records")
+    assert resp.status_code == 200
+
+
+async def test_records_page_renders_domains_and_records(admin_client, tmp_path, monkeypatch):
+    """Unlike /records/count and the edit/delete actions, records_page also
+    requires a matching DB Project row (selected_project) before it'll load
+    JSONL data at all — not just a matching directory on disk."""
+    from mulchd.config import settings
+    from mulchd.models import Organization, Project
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    org = await Organization.create(slug="acme", display_name="Acme")
+    await Project.create(slug="demo", display_name="Demo", org=org)
+    expertise = tmp_path / "acme" / "demo" / ".mulch" / "expertise"
+    expertise.mkdir(parents=True)
+    (expertise / "architecture.jsonl").write_text(
+        '{"id":"mx-aaa","type":"decision","classification":"tactical",'
+        '"title":"Use Postgres","owner":"carlos","recorded_at":"2026-07-01T00:00:00+00:00"}\n'
+    )
+    resp = await admin_client.get("/admin/records?project=acme/demo")
+    assert resp.status_code == 200
+    assert "architecture" in resp.text
+    assert "mx-aaa" in resp.text
+
+
+async def test_delete_record_action_requires_auth(client):
+    resp = await client.post(
+        "/admin/records/delete",
+        data={"project": "acme/demo", "domain": "architecture", "record_id": "mx-aaa"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_delete_record_action_calls_delete_record(admin_client, tmp_path, monkeypatch):
+    import mulchd.admin.records_view as records_view
+    from mulchd.config import settings
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    called = {}
+
+    async def _fake_delete(m_dir, domain, record_id):
+        called["args"] = (domain, record_id)
+
+    monkeypatch.setattr(records_view, "delete_record", _fake_delete)
+
+    resp = await admin_client.post(
+        "/admin/records/delete",
+        data={"project": "acme/demo", "domain": "architecture", "record_id": "mx-aaa"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "/admin/records?project=acme/demo" in resp.headers["location"]
+    assert called["args"] == ("architecture", "mx-aaa")
+
+
+async def test_edit_record_action_requires_auth(client):
+    resp = await client.post(
+        "/admin/records/edit",
+        data={
+            "project": "acme/demo",
+            "domain": "architecture",
+            "record_id": "mx-aaa",
+            "field": "content",
+            "value": "new",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_edit_record_action_calls_edit_record(admin_client, tmp_path, monkeypatch):
+    import mulchd.admin.records_view as records_view
+    from mulchd.config import settings
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    called = {}
+
+    async def _fake_edit(m_dir, domain, record_id, updates):
+        called["args"] = (domain, record_id, updates)
+
+    monkeypatch.setattr(records_view, "edit_record", _fake_edit)
+
+    resp = await admin_client.post(
+        "/admin/records/edit",
+        data={
+            "project": "acme/demo",
+            "domain": "architecture",
+            "record_id": "mx-aaa",
+            "field": "content",
+            "value": "  new content  ",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "/admin/records?project=acme/demo" in resp.headers["location"]
+    # value.strip() is applied before calling edit_record
+    assert called["args"] == ("architecture", "mx-aaa", {"content": "new content"})
+
+
+async def test_project_tokens_page_requires_auth(client):
+    resp = await client.get("/admin/project-tokens", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_project_tokens_page_renders(admin_client):
+    from mulchd.models import Organization, Project, ProjectToken, User
+
+    org = await Organization.create(slug="acme", display_name="Acme")
+    project = await Project.create(slug="demo", display_name="Demo", org=org)
+    user = await User.create(username="tokenowner", display_name="Token Owner", token_hash="h-tok1")
+    await ProjectToken.create(user=user, project=project, token_hash="th-1", label="CI token")
+
+    resp = await admin_client.get("/admin/project-tokens")
+    assert resp.status_code == 200
+    assert "CI token" in resp.text
+
+
+async def test_revoke_token_action_requires_auth(client):
+    resp = await client.post("/admin/project-tokens/1/revoke", follow_redirects=False)
+    assert resp.status_code == 303
+    assert "/connect" in resp.headers["location"]
+
+
+async def test_revoke_token_action_deactivates_token(admin_client):
+    from mulchd.models import Organization, Project, ProjectToken, User
+
+    org = await Organization.create(slug="acme", display_name="Acme")
+    project = await Project.create(slug="demo", display_name="Demo", org=org)
+    user = await User.create(username="tokenowner2", display_name="Token Owner", token_hash="h-tok2")
+    token = await ProjectToken.create(user=user, project=project, token_hash="th-2", label="CI token")
+
+    resp = await admin_client.post(
+        f"/admin/project-tokens/{token.id}/revoke", follow_redirects=False
+    )
+    assert resp.status_code == 303
+    assert "/admin/project-tokens" in resp.headers["location"]
+
+    await token.refresh_from_db()
+    assert token.active is False
 
 
 async def test_audit_page_renders(admin_client):
