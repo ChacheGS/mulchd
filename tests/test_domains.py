@@ -1,6 +1,18 @@
 import pytest
 
-from mulchd.domains import expertise_path, list_domain_names
+from mulchd.domains import _load_domain_descriptions, expertise_path, list_domain_names
+
+
+def test_load_domain_descriptions_logs_on_malformed_yaml(tmp_path, caplog):
+    """A malformed mulch.config.yaml must be visible in logs, not silently
+    treated the same as 'no descriptions configured'."""
+    (tmp_path / "mulch.config.yaml").write_text("not: valid: yaml: [")
+
+    with caplog.at_level("WARNING"):
+        descriptions = _load_domain_descriptions(tmp_path)
+
+    assert descriptions == {}
+    assert "mulch.config.yaml" in caplog.text
 
 
 def test_list_domain_names_returns_stems_without_reading_content(tmp_path, monkeypatch):

@@ -1,3 +1,4 @@
+import logging
 import re
 from pathlib import Path
 
@@ -6,6 +7,7 @@ import yaml
 from .config import settings
 from .records import get_file_mod_time, read_domain_records
 
+_log = logging.getLogger("mulchd")
 _DOMAIN_RE = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 
@@ -38,7 +40,7 @@ def _load_domain_descriptions(m_dir: Path) -> dict[str, str]:
                 elif isinstance(meta, str):
                     descriptions[name] = meta
         except Exception:
-            pass
+            _log.warning("failed to parse %s — domain descriptions will be empty", config_path, exc_info=True)
     return descriptions
 
 
