@@ -1,8 +1,4 @@
-"""
-Tests for _get_record_schema — previously had zero coverage anywhere in the
-suite (found during a coverage audit, 2026-07-29). Pure formatting over the
-static _RECORD_SCHEMAS dict, no ctx/db/ml needed.
-"""
+"""Tests for _get_record_schema."""
 
 
 async def test_get_record_schema_no_filter_lists_all_types():
