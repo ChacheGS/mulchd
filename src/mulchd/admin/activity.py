@@ -3,7 +3,7 @@ from fastapi.responses import Response
 
 from ..instance_events import describe_event
 from ..models import InstanceEvent, InstanceEventCategory, Project, User
-from ._shared import is_admin, redirect_login, templates
+from ._shared import is_admin, parse_project_ref, redirect_login, templates
 
 router = APIRouter()
 
@@ -39,8 +39,9 @@ async def activity_page(
         qs = qs.filter(category=category)
     if actor:
         qs = qs.filter(actor__username=actor)
-    if project and "/" in project:
-        org_slug, project_slug = project.split("/", 1)
+    ref = parse_project_ref(project)
+    if ref:
+        org_slug, project_slug = ref
         qs = qs.filter(project__slug=project_slug, project__org__slug=org_slug)
     raw_events = await qs.order_by("-at").limit(200).all()
 

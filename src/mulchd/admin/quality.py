@@ -4,7 +4,7 @@ from fastapi.responses import Response
 from ..domains import mulch_dir
 from ..models import Project
 from ..mulch import audit_corpus
-from ._shared import is_admin, redirect_login, templates
+from ._shared import is_admin, redirect_login, resolve_project, templates
 
 router = APIRouter()
 
@@ -19,15 +19,10 @@ async def quality_page(request: Request, project: str = "", domain: str = "") ->
     report: dict = {}
     suggestions: list[dict] = []
 
-    if project and "/" in project:
-        org_slug, project_slug = project.split("/", 1)
-        selected_project = (
-            await Project.filter(slug=project_slug, org__slug=org_slug)
-            .prefetch_related("org")
-            .first()
-        )
+    if project:
+        selected_project = await resolve_project(project)
         if selected_project:
-            m_dir = mulch_dir(org_slug, project_slug)
+            m_dir = mulch_dir(selected_project.org.slug, selected_project.slug)
             result = await audit_corpus(m_dir, domain=domain or None)
             report = result.get("report", {})
             suggestions = result.get("suggestions", {}).get("groups", [])

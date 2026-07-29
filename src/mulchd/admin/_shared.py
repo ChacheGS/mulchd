@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..admin_grants import is_superadmin
 from ..connect import _get_connect_user_id
-from ..models import User
+from ..models import Project, User
 
 # Templates live at src/mulchd/templates/, one level above this package.
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -33,3 +33,20 @@ async def is_admin(request: Request) -> bool:
 
 def redirect_login() -> RedirectResponse:
     return RedirectResponse("/connect", status_code=303)
+
+
+def parse_project_ref(project: str) -> tuple[str, str] | None:
+    """Split an "org-slug/project-slug" query param, or None if malformed/empty."""
+    if not project or "/" not in project:
+        return None
+    org_slug, project_slug = project.split("/", 1)
+    return org_slug, project_slug
+
+
+async def resolve_project(project: str) -> Project | None:
+    """Parse and look up an "org-slug/project-slug" query param in one call."""
+    ref = parse_project_ref(project)
+    if ref is None:
+        return None
+    org_slug, project_slug = ref
+    return await Project.filter(slug=project_slug, org__slug=org_slug).prefetch_related("org").first()

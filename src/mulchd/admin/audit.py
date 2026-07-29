@@ -7,7 +7,7 @@ from ..domains import mulch_dir
 from ..models import Project, RecordEdit, RecordEvent, RecordMeta
 from ..mulch import restore_record
 from ..records import read_domain_records
-from ._shared import is_admin, redirect_login, templates
+from ._shared import is_admin, parse_project_ref, redirect_login, resolve_project, templates
 
 router = APIRouter()
 
@@ -64,14 +64,10 @@ async def audit_page(
     archived_domains: list[dict] = []
     selected_project = None
 
-    if project and "/" in project:
-        org_slug, project_slug = project.split("/", 1)
-        selected_project = (
-            await Project.filter(slug=project_slug, org__slug=org_slug)
-            .prefetch_related("org")
-            .first()
-        )
+    if project:
+        selected_project = await resolve_project(project)
         if selected_project:
+            org_slug, project_slug = selected_project.org.slug, selected_project.slug
             qs = RecordEvent.filter(project=selected_project)
             if action:
                 qs = qs.filter(action=action)
@@ -241,8 +237,9 @@ async def restore_record_action(
 ) -> Response:
     if not await is_admin(request):
         return redirect_login()
-    if "/" in project:
-        org_slug, project_slug = project.split("/", 1)
+    ref = parse_project_ref(project)
+    if ref:
+        org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
         await restore_record(m_dir, record_id)
     return RedirectResponse(f"/admin/audit?project={project}", status_code=303)

@@ -5,7 +5,7 @@ from ..domains import mulch_dir
 from ..models import Project
 from ..mulch import delete_record, edit_record
 from ..records import read_domain_records
-from ._shared import is_admin, redirect_login, templates
+from ._shared import is_admin, parse_project_ref, redirect_login, resolve_project, templates
 
 router = APIRouter()
 
@@ -15,8 +15,9 @@ async def records_count(request: Request, project: str = "") -> Response:
     if not await is_admin(request):
         return redirect_login()
     count = 0
-    if project and "/" in project:
-        org_slug, project_slug = project.split("/", 1)
+    ref = parse_project_ref(project)
+    if ref:
+        org_slug, project_slug = ref
         expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
         if expertise_dir.exists():
             for jsonl_file in expertise_dir.glob("*.jsonl"):
@@ -33,8 +34,9 @@ async def delete_record_action(
 ) -> Response:
     if not await is_admin(request):
         return redirect_login()
-    if "/" in project:
-        org_slug, project_slug = project.split("/", 1)
+    ref = parse_project_ref(project)
+    if ref:
+        org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
         await delete_record(m_dir, domain, record_id)
     return RedirectResponse(f"/admin/records?project={project}", status_code=303)
@@ -51,8 +53,9 @@ async def edit_record_action(
 ) -> Response:
     if not await is_admin(request):
         return redirect_login()
-    if "/" in project:
-        org_slug, project_slug = project.split("/", 1)
+    ref = parse_project_ref(project)
+    if ref:
+        org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
         await edit_record(m_dir, domain, record_id, {field: value.strip()})
     return RedirectResponse(f"/admin/records?project={project}", status_code=303)
@@ -68,15 +71,10 @@ async def records_page(request: Request, project: str = "") -> Response:
     domains_data: list[dict] = []
     selected_project = None
 
-    if project and "/" in project:
-        org_slug, project_slug = project.split("/", 1)
-        selected_project = (
-            await Project.filter(slug=project_slug, org__slug=org_slug)
-            .prefetch_related("org")
-            .first()
-        )
+    if project:
+        selected_project = await resolve_project(project)
         if selected_project:
-            expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
+            expertise_dir = mulch_dir(selected_project.org.slug, selected_project.slug) / "expertise"
             if expertise_dir.exists():
                 for jsonl_file in sorted(expertise_dir.glob("*.jsonl")):
                     records = await read_domain_records(jsonl_file)
