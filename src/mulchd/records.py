@@ -10,12 +10,16 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import aiofiles
+
 
 async def read_domain_records(path: Path) -> list[dict]:
     if not path.exists():
         return []
     records = []
-    for line in path.read_text().splitlines():
+    async with aiofiles.open(path) as f:
+        content = await f.read()
+    for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
