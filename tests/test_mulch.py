@@ -123,9 +123,38 @@ class _FakeProc:
         self.returncode = returncode
         self._stdout = stdout
         self._stderr = stderr
+        self.killed = False
 
     async def communicate(self, stdin_bytes):
         return self._stdout, self._stderr
+
+    def kill(self):
+        self.killed = True
+
+    async def wait(self):
+        return self.returncode
+
+
+async def test_run_kills_process_and_raises_on_timeout(monkeypatch, tmp_path):
+    import mulchd.mulch as mulch_module
+    from mulchd.mulch import MulchError, _run
+
+    proc = _FakeProc(0)
+
+    async def _fake_create_subprocess_exec(*args, **kwargs):
+        return proc
+
+    async def _fake_wait_for(coro, timeout):
+        coro.close()
+        raise TimeoutError
+
+    monkeypatch.setattr(mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec)
+    monkeypatch.setattr(mulch_module.asyncio, "wait_for", _fake_wait_for)
+
+    with pytest.raises(MulchError, match="timed out"):
+        await _run(tmp_path, ["search", "query"])
+
+    assert proc.killed
 
 
 async def test_run_raises_mulch_error_with_json_stderr(monkeypatch, tmp_path):

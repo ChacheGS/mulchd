@@ -19,6 +19,9 @@ class MulchError(Exception):
     pass
 
 
+_ML_TIMEOUT_SECONDS = 30
+
+
 async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) -> dict | list:
     env = {**os.environ, "MULCH_DIR": str(mulch_dir)}
     proc = await asyncio.create_subprocess_exec(
@@ -32,7 +35,14 @@ async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) 
         cwd=str(mulch_dir.parent),
     )
     stdin_bytes = stdin_data.encode() if stdin_data is not None else None
-    stdout, stderr = await proc.communicate(stdin_bytes)
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(stdin_bytes), timeout=_ML_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise MulchError(f"ml {' '.join(args)} timed out after {_ML_TIMEOUT_SECONDS}s")
 
     if proc.returncode != 0:
         raw = stderr.decode().strip()
