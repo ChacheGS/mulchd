@@ -140,6 +140,11 @@ _active_sessions: dict[tuple[int, int], tuple[UUID, datetime]] = {}
 def _get_or_create_session(user_id: int, project_id: int) -> UUID:
     key = (user_id, project_id)
     now = datetime.now(timezone.utc)
+    # Sweep expired entries here rather than only overwriting the current key —
+    # otherwise a (user, project) pair that goes idle for good never gets its
+    # entry evicted, and the dict grows for the life of the process.
+    for expired_key in [k for k, (_, exp) in _active_sessions.items() if exp <= now]:
+        del _active_sessions[expired_key]
     entry = _active_sessions.get(key)
     if entry and entry[1] > now:
         return entry[0]
