@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
 from ..instance_events import log_event
 from ..models import InstanceEventCategory, Project, Role, User, UserMembership
-from ._shared import get_admin_user, is_admin, redirect_login, templates
+from ._shared import get_current_admin, require_admin, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 async def _render_memberships(
@@ -33,8 +33,6 @@ async def _render_memberships(
 
 @router.get("/memberships")
 async def memberships_page(request: Request, user: str = "", error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     return await _render_memberships(request, preselect_user=user, error=error)
 
 
@@ -44,10 +42,8 @@ async def add_membership(
     user_id: int = Form(...),
     project_id: int = Form(...),
     role: str = Form(...),
+    admin: User = Depends(get_current_admin),
 ) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
     user = await User.get_or_none(id=user_id)
     project = await Project.get_or_none(id=project_id)
     if user is None or project is None:
@@ -71,10 +67,9 @@ async def add_membership(
 
 
 @router.post("/memberships/{membership_id}/remove")
-async def remove_membership(request: Request, membership_id: int) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
+async def remove_membership(
+    request: Request, membership_id: int, admin: User = Depends(get_current_admin)
+) -> Response:
     membership = (
         await UserMembership.filter(id=membership_id).select_related("user", "project").first()
     )

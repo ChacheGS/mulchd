@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
@@ -18,9 +18,9 @@ from ..models import (
     OAuthIdentity,
     User,
 )
-from ._shared import get_admin_user, is_admin, redirect_login, templates
+from ._shared import get_current_admin, require_admin, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 async def _render_users(request: Request, *, error: str = "", status_code: int = 200) -> Response:
@@ -35,8 +35,6 @@ async def _render_users(request: Request, *, error: str = "", status_code: int =
 
 @router.get("/users")
 async def users_page(request: Request, error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     return await _render_users(request, error=error)
 
 
@@ -46,10 +44,8 @@ async def create_user_route(
     username: str = Form(...),
     display_name: str = Form(...),
     email: str = Form(default=""),
+    admin: User = Depends(get_current_admin),
 ) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
     try:
         user, token = await create_user(
             username.strip(),
@@ -71,8 +67,6 @@ async def create_user_route(
 
 @router.get("/users/created")
 async def user_created_page(request: Request) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     pending = request.session.pop("pending_token", None)
     if pending is None:
         return RedirectResponse("/admin/users", status_code=303)
@@ -90,10 +84,9 @@ async def user_created_page(request: Request) -> Response:
 
 
 @router.post("/users/{user_id}/deactivate")
-async def deactivate_user(request: Request, user_id: int) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
+async def deactivate_user(
+    request: Request, user_id: int, admin: User = Depends(get_current_admin)
+) -> Response:
     user = await User.filter(id=user_id).first()
     if user is None:
         return Response(status_code=404)
@@ -106,16 +99,12 @@ async def deactivate_user(request: Request, user_id: int) -> Response:
 
 @router.post("/users/{user_id}/activate")
 async def activate_user(request: Request, user_id: int) -> RedirectResponse:
-    if not await is_admin(request):
-        return redirect_login()
     await User.filter(id=user_id).update(active=True)
     return RedirectResponse("/admin/users", status_code=303)
 
 
 @router.get("/users/{user_id}")
 async def user_detail(request: Request, user_id: int) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     user = await User.filter(id=user_id).first()
     if user is None:
         return Response(status_code=404)
@@ -134,10 +123,9 @@ async def user_detail(request: Request, user_id: int) -> Response:
 
 
 @router.post("/users/{user_id}/grant-admin")
-async def grant_admin_route(request: Request, user_id: int) -> Response:
-    granter = await get_admin_user(request)
-    if granter is None:
-        return redirect_login()
+async def grant_admin_route(
+    request: Request, user_id: int, granter: User = Depends(get_current_admin)
+) -> Response:
     user = await User.filter(id=user_id).first()
     if user is None:
         return Response(status_code=404)
@@ -146,10 +134,9 @@ async def grant_admin_route(request: Request, user_id: int) -> Response:
 
 
 @router.post("/users/{user_id}/revoke-admin")
-async def revoke_admin_route(request: Request, user_id: int) -> Response:
-    revoker = await get_admin_user(request)
-    if revoker is None:
-        return redirect_login()
+async def revoke_admin_route(
+    request: Request, user_id: int, revoker: User = Depends(get_current_admin)
+) -> Response:
     grant = await AdminGrant.filter(
         user_id=user_id, role=AdminRole.SUPERADMIN, org=None, revoked_at=None
     ).first()
@@ -164,10 +151,9 @@ async def revoke_admin_route(request: Request, user_id: int) -> Response:
 
 
 @router.post("/users/{user_id}/reset-token")
-async def reset_user_token(request: Request, user_id: int) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
+async def reset_user_token(
+    request: Request, user_id: int, admin: User = Depends(get_current_admin)
+) -> Response:
     user = await User.filter(id=user_id).first()
     if user is None:
         return Response(status_code=404)
@@ -184,7 +170,5 @@ async def reset_user_token(request: Request, user_id: int) -> Response:
 
 @router.post("/users/{user_id}/identities/{identity_id}/unlink")
 async def unlink_identity(request: Request, user_id: int, identity_id: int) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     await OAuthIdentity.filter(id=identity_id, user_id=user_id).delete()
     return RedirectResponse(f"/admin/users/{user_id}", status_code=303)
