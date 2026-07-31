@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
@@ -10,10 +10,11 @@ from ..models import (
     Organization,
     Project,
     Role,
+    User,
 )
-from ._shared import get_admin_user, is_admin, redirect_login, templates
+from ._shared import get_current_admin, require_admin, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 async def _render_projects(request: Request, *, error: str = "", status_code: int = 200) -> Response:
@@ -29,15 +30,11 @@ async def _render_projects(request: Request, *, error: str = "", status_code: in
 
 @router.get("/projects")
 async def projects_page(request: Request, error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     return await _render_projects(request, error=error)
 
 
 @router.get("/projects/{project_id}")
 async def project_detail_page(request: Request, project_id: int) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
         return Response(status_code=404)
@@ -77,10 +74,8 @@ async def create_project(
     slug: str = Form(...),
     display_name: str = Form(...),
     knowledge_language: str = Form(""),
+    admin: User = Depends(get_current_admin),
 ) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
     org = await Organization.get_or_none(id=org_id)
     if org is None:
         return RedirectResponse("/admin/projects", status_code=303)
@@ -107,8 +102,6 @@ async def set_project_language(
     project_id: int,
     knowledge_language: str = Form(""),
 ) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     project = await Project.get_or_none(id=project_id)
     if project is None:
         return RedirectResponse("/admin/projects", status_code=303)

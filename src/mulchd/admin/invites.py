@@ -1,14 +1,14 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..instance_events import log_event
 from ..invite import generate_invite_token
-from ..models import InstanceEventCategory, InviteLink, Project, Role
-from ._shared import get_admin_user, redirect_login
+from ..models import InstanceEventCategory, InviteLink, Project, Role, User
+from ._shared import get_current_admin, require_admin
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.post("/projects/{project_id}/invites")
@@ -19,10 +19,8 @@ async def create_invite(
     max_uses: str = Form(""),
     expires_in: str = Form(""),
     allowed_email_domains: str = Form(""),
+    admin: User = Depends(get_current_admin),
 ) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
     project = await Project.get_or_none(id=project_id)
     if project is None:
         return Response(status_code=404)
@@ -53,10 +51,9 @@ async def create_invite(
 
 
 @router.post("/invites/{invite_id}/revoke")
-async def revoke_invite(request: Request, invite_id: int) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
+async def revoke_invite(
+    request: Request, invite_id: int, admin: User = Depends(get_current_admin)
+) -> Response:
     invite = await InviteLink.filter(id=invite_id).select_related("project").first()
     if invite is None:
         return Response(status_code=404)

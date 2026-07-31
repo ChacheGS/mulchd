@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from tortoise.exceptions import IntegrityError
 
 from ..instance_events import log_event
-from ..models import InstanceEventCategory, Organization
-from ._shared import get_admin_user, is_admin, redirect_login, templates
+from ..models import InstanceEventCategory, Organization, User
+from ._shared import get_current_admin, require_admin, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 async def _render_orgs(request: Request, *, error: str = "", status_code: int = 200) -> Response:
@@ -21,8 +21,6 @@ async def _render_orgs(request: Request, *, error: str = "", status_code: int = 
 
 @router.get("/orgs")
 async def orgs_page(request: Request, error: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     return await _render_orgs(request, error=error)
 
 
@@ -31,10 +29,8 @@ async def create_org(
     request: Request,
     slug: str = Form(...),
     display_name: str = Form(...),
+    admin: User = Depends(get_current_admin),
 ) -> Response:
-    admin = await get_admin_user(request)
-    if admin is None:
-        return redirect_login()
     try:
         org = await Organization.create(slug=slug.strip(), display_name=display_name.strip())
     except IntegrityError:
