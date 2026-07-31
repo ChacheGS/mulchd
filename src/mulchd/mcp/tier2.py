@@ -19,7 +19,7 @@ from pydantic import AnyUrl
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, list_domain_names, mulch_dir
-from .project_cache import get_project_records
+from .project_cache import get_archived_ids, get_project_records
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
     OutcomeStatus,
@@ -609,7 +609,7 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
         return
     m_dir = mulch_dir(org_slug, project_slug)
     project_records = await get_project_records(m_dir)
-    archived_ids = await _load_archived_ids(m_dir)
+    archived_ids = await get_archived_ids(m_dir)
     live_by_id = {r["id"]: r for r in project_records if r.get("id")}
 
     # {victim_id: (superseder_id, superseder_domain)}
@@ -659,20 +659,6 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             r["_supersedes_display"] = display
             if displaced_foundational:
                 r["_supersedes_foundational"] = displaced_foundational
-
-
-async def _load_archived_ids(m_dir: Path) -> set[str]:
-    """IDs of soft-deleted (archived) records — stored under archive/, outside
-    the live expertise/ tree read_domain_records normally reads."""
-    archive_dir = m_dir / "archive"
-    if not archive_dir.exists():
-        return set()
-    ids: set[str] = set()
-    for jsonl_file in archive_dir.glob("*.jsonl"):
-        for r in await read_domain_records(jsonl_file):
-            if r.get("id"):
-                ids.add(r["id"])
-    return ids
 
 
 def _validate_references(

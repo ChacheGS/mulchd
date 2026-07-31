@@ -89,3 +89,72 @@ async def test_removed_domain_drops_out_of_result(tmp_path):
     result = await project_cache.get_project_records(tmp_path)
 
     assert {r["id"] for r in result} == {"mx-1"}
+
+
+# ---------------------------------------------------------------------------
+# get_archived_ids — same mtime-cached scan, over archive/ instead of
+# expertise/, returning a set of IDs instead of tagged record dicts.
+# ---------------------------------------------------------------------------
+
+
+async def test_archived_ids_empty_when_archive_dir_missing(tmp_path):
+    result = await project_cache.get_archived_ids(tmp_path)
+    assert result == set()
+
+
+async def test_archived_ids_collected_across_files(tmp_path):
+    archive_dir = tmp_path / "archive"
+    _write_domain(archive_dir, "infra", {"id": "mx-1"}, {"id": "mx-2"})
+    _write_domain(archive_dir, "ops", {"id": "mx-3"})
+
+    result = await project_cache.get_archived_ids(tmp_path)
+
+    assert result == {"mx-1", "mx-2", "mx-3"}
+
+
+async def test_archived_ids_second_call_reuses_cache_when_nothing_changed(tmp_path, monkeypatch):
+    archive_dir = tmp_path / "archive"
+    _write_domain(archive_dir, "infra", {"id": "mx-1"})
+
+    await project_cache.get_archived_ids(tmp_path)
+
+    calls = []
+    original = project_cache.read_domain_records
+
+    async def _counting(path):
+        calls.append(path)
+        return await original(path)
+
+    monkeypatch.setattr(project_cache, "read_domain_records", _counting)
+
+    await project_cache.get_archived_ids(tmp_path)
+
+    assert calls == []
+
+
+async def test_archived_ids_changed_file_is_rescanned(tmp_path):
+    archive_dir = tmp_path / "archive"
+    _write_domain(archive_dir, "infra", {"id": "mx-1"})
+    await project_cache.get_archived_ids(tmp_path)
+
+    path = archive_dir / "infra.jsonl"
+    _write_domain(archive_dir, "infra", {"id": "mx-1"}, {"id": "mx-2"})
+    import os
+
+    new_mtime = path.stat().st_mtime + 2
+    os.utime(path, (new_mtime, new_mtime))
+
+    result = await project_cache.get_archived_ids(tmp_path)
+    assert result == {"mx-1", "mx-2"}
+
+
+async def test_archived_ids_removed_file_drops_its_ids(tmp_path):
+    archive_dir = tmp_path / "archive"
+    _write_domain(archive_dir, "infra", {"id": "mx-1"})
+    _write_domain(archive_dir, "ops", {"id": "mx-2"})
+    await project_cache.get_archived_ids(tmp_path)
+
+    (archive_dir / "ops.jsonl").unlink()
+    result = await project_cache.get_archived_ids(tmp_path)
+
+    assert result == {"mx-1"}

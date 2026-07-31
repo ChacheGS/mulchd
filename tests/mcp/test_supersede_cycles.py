@@ -69,30 +69,6 @@ async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_pa
     assert r["id"] not in alerts
 
 
-async def test_load_archived_ids_reads_archive_directory(team, data_path):
-    """_load_archived_ids returns the IDs of records under archive/, not expertise/."""
-    from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _load_archived_ids
-
-    archive_dir = mulch_dir("acme", "infra") / "archive"
-    archive_dir.mkdir(parents=True)
-    (archive_dir / "api.jsonl").write_text(
-        json.dumps({"id": "mx-deadbeef", "type": "convention"}) + "\n"
-    )
-
-    ids = await _load_archived_ids(mulch_dir("acme", "infra"))
-    assert ids == {"mx-deadbeef"}
-
-
-async def test_load_archived_ids_no_archive_directory(team, data_path):
-    """No archive/ directory yet — returns an empty set, not an error."""
-    from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _load_archived_ids
-
-    ids = await _load_archived_ids(mulch_dir("acme", "infra"))
-    assert ids == set()
-
-
 def test_validate_references_accepts_existing_ids():
     from mulchd.mcp.tier2 import _validate_references
 
