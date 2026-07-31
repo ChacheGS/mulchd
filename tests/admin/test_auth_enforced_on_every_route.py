@@ -1,9 +1,10 @@
 """
-Enumerates every route registered on the admin router and asserts none of
-them return 200 to an unauthenticated request. Per-route "requires auth"
-tests exist for some pages but not all — this test is the safety net that
-catches a forgotten check on any route, including ones added later, without
-anyone having to remember to write a dedicated test for it.
+Enumerates every route registered on the admin router and asserts each one
+enforces auth via the expected mechanism — a 303 redirect for HTML admin
+pages, a 403 for the one JSON API route. Per-route "requires auth" tests
+exist for some pages but not all — this test is the safety net that catches
+a forgotten (or regressed) check on any route, including ones added later,
+without anyone having to remember to write a dedicated test for it.
 """
 
 import pytest
@@ -20,6 +21,8 @@ _PATH_PARAM_PLACEHOLDERS = {
     "invite_id": "1",
     "identity_id": "1",
 }
+
+_JSON_403_PATHS = {"/admin/api/usage/acme/infra"}
 
 
 def _discover_routes() -> list[tuple[str, str]]:
@@ -40,14 +43,38 @@ def _discover_routes() -> list[tuple[str, str]]:
 _ROUTES = _discover_routes()
 
 
+def _expected_status(path: str) -> int:
+    return 403 if path in _JSON_403_PATHS else 303
+
+
 @pytest.mark.parametrize("method,path", _ROUTES, ids=[f"{m} {p}" for m, p in _ROUTES])
 async def test_route_rejects_unauthenticated_request(client, method, path):
     resp = await client.request(method, path, follow_redirects=False)
-    assert resp.status_code != 200, (
-        f"{method} {path} returned 200 to an unauthenticated request — "
-        "every admin route must reject unauthenticated access"
+    expected = _expected_status(path)
+    assert resp.status_code == expected, (
+        f"{method} {path} returned {resp.status_code} for an unauthenticated request, "
+        f"expected {expected}"
     )
-    assert resp.status_code < 500, f"{method} {path} errored ({resp.status_code}) instead of rejecting auth"
+    if expected == 303:
+        assert resp.headers["location"] == "/connect"
+
+
+@pytest.mark.parametrize("method,path", _ROUTES, ids=[f"{m} {p}" for m, p in _ROUTES])
+async def test_route_rejects_authenticated_non_admin_request(client, method, path):
+    from mulchd.auth import create_user
+    from mulchd.connect import _signer
+
+    user, _ = await create_user(f"nonadmin-{abs(hash((method, path)))}", "Non Admin")
+    client.cookies.set("mulchd_connect", _signer().dumps(user.id))
+
+    resp = await client.request(method, path, follow_redirects=False)
+    expected = _expected_status(path)
+    assert resp.status_code == expected, (
+        f"{method} {path} returned {resp.status_code} for an authenticated non-admin request, "
+        f"expected {expected}"
+    )
+    if expected == 303:
+        assert resp.headers["location"] == "/connect"
 
 
 def test_discovered_at_least_the_known_route_count():
