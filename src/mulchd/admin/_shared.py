@@ -1,7 +1,7 @@
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -29,6 +29,30 @@ async def get_admin_user(request: Request) -> User | None:
 
 async def is_admin(request: Request) -> bool:
     return await get_admin_user(request) is not None
+
+
+class AdminRequired(Exception):
+    """Raised by require_admin/get_current_admin when the caller isn't an
+    active superadmin. Caught by the app-level exception handler in main.py,
+    which redirects to /connect — this is what lets a router-level FastAPI
+    dependency reject a request the same way an inline route check used to."""
+
+
+async def require_admin(request: Request) -> None:
+    if not await is_admin(request):
+        raise AdminRequired()
+
+
+async def get_current_admin(request: Request) -> User:
+    admin = await get_admin_user(request)
+    if admin is None:
+        raise AdminRequired()
+    return admin
+
+
+async def require_admin_json(request: Request) -> None:
+    if not await is_admin(request):
+        raise HTTPException(status_code=403)
 
 
 def redirect_login() -> RedirectResponse:

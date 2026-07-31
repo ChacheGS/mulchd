@@ -17,6 +17,7 @@ from starlette.responses import Response
 from tortoise import Tortoise
 
 from .admin import router as admin_router
+from .admin._shared import AdminRequired, redirect_login
 from .api import router as api_router
 from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
@@ -129,6 +130,12 @@ app.include_router(admin_router)
 app.include_router(api_router)
 app.include_router(connect_router)
 app.include_router(invite_router)
+
+
+@app.exception_handler(AdminRequired)
+async def _admin_required_handler(request: Request, exc: AdminRequired) -> Response:
+    return redirect_login()
+
 
 if settings.mcp_oauth_enabled:
     # create_auth_routes validates the issuer URL (RFC 8414 requires HTTPS, with a
