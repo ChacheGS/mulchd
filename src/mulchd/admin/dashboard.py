@@ -1,23 +1,20 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from tortoise.functions import Count
 
 from ..models import Organization, Project, ToolCall, User, UserMembership
-from ._shared import is_admin, redirect_login, templates
+from ._shared import require_admin, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 _WINDOW_DAYS = 30
 
 
 @router.get("/")
 async def dashboard(request: Request) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
-
     since = datetime.now(timezone.utc) - timedelta(days=_WINDOW_DAYS)
 
     projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")

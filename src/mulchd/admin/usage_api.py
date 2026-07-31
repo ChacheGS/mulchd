@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from tortoise import connections
 from tortoise.functions import Count
 
 from ..models import Project, ToolCall
-from ._shared import is_admin
+from ._shared import require_admin_json
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin_json)])
 
 _PERIODS = {
     "day": ("day", 30, "%Y-%m-%d"),
@@ -19,8 +19,6 @@ _PERIODS = {
 
 @router.get("/api/usage/{org}/{project}")
 async def usage_data(request: Request, org: str, project: str, period: str = "week"):
-    if not await is_admin(request):
-        raise HTTPException(status_code=403)
     if period not in _PERIODS:
         raise HTTPException(status_code=400, detail="period must be day, week, or month")
 
