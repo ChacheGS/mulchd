@@ -22,6 +22,10 @@ _PATH_PARAM_PLACEHOLDERS = {
     "identity_id": "1",
 }
 
+# Update this when adding a JSON-style admin route guarded by
+# require_admin_json — otherwise it's silently assumed to redirect like
+# every other admin route, and the test fails on the wrong assumption
+# instead of pointing at the missing entry.
 _JSON_403_PATHS = {"/admin/api/usage/acme/infra"}
 
 
