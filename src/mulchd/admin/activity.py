@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
 from ..instance_events import describe_event
 from ..models import InstanceEvent, InstanceEventCategory, Project, User
-from ._shared import is_admin, parse_project_ref, redirect_login, templates
+from ._shared import parse_project_ref, require_admin, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 _CATEGORY_COLORS = {
     InstanceEventCategory.ADMIN_GRANTED: "background:#dbeafe; color:#1d4ed8",
@@ -31,9 +31,6 @@ async def activity_page(
     actor: str = "",
     project: str = "",
 ) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
-
     qs = InstanceEvent.all().select_related("actor", "subject_user", "project", "project__org")
     if category:
         qs = qs.filter(category=category)

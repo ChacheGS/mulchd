@@ -1,15 +1,15 @@
 from collections import defaultdict, deque
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..domains import mulch_dir
 from ..models import Project, RecordEdit, RecordEvent, RecordMeta
 from ..mulch import restore_record
 from ..records import read_domain_records
-from ._shared import is_admin, parse_project_ref, redirect_login, resolve_project, templates
+from ._shared import parse_project_ref, require_admin, resolve_project, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 from ..mcp.tier2 import Classification
 
@@ -55,9 +55,6 @@ async def audit_page(
     action: str = "",
     domain: str = "",
 ) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
-
     projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")
 
     events: list[dict] = []
@@ -235,8 +232,6 @@ async def restore_record_action(
     project: str = Form(...),
     record_id: str = Form(...),
 ) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     ref = parse_project_ref(project)
     if ref:
         org_slug, project_slug = ref

@@ -1,19 +1,16 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
 from ..domains import mulch_dir
 from ..models import Project
 from ..mulch import audit_corpus
-from ._shared import is_admin, redirect_login, resolve_project, templates
+from ._shared import require_admin, resolve_project, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/quality")
 async def quality_page(request: Request, project: str = "", domain: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
-
     projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")
     selected_project = None
     report: dict = {}

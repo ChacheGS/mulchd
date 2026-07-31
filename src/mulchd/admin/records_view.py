@@ -1,19 +1,17 @@
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from ..domains import mulch_dir
 from ..models import Project
 from ..mulch import delete_record, edit_record
 from ..records import read_domain_records
-from ._shared import is_admin, parse_project_ref, redirect_login, resolve_project, templates
+from ._shared import parse_project_ref, require_admin, resolve_project, templates
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 @router.get("/records/count")
 async def records_count(request: Request, project: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     count = 0
     ref = parse_project_ref(project)
     if ref:
@@ -32,8 +30,6 @@ async def delete_record_action(
     domain: str = Form(...),
     record_id: str = Form(...),
 ) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     ref = parse_project_ref(project)
     if ref:
         org_slug, project_slug = ref
@@ -51,8 +47,6 @@ async def edit_record_action(
     field: str = Form(...),
     value: str = Form(""),
 ) -> Response:
-    if not await is_admin(request):
-        return redirect_login()
     ref = parse_project_ref(project)
     if ref:
         org_slug, project_slug = ref
@@ -63,9 +57,6 @@ async def edit_record_action(
 
 @router.get("/records")
 async def records_page(request: Request, project: str = "") -> Response:
-    if not await is_admin(request):
-        return redirect_login()
-
     projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")
 
     domains_data: list[dict] = []
