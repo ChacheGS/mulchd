@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import difflib
 import json
 import logging
 from collections import Counter, defaultdict, deque
@@ -1216,6 +1217,15 @@ def _fire_notify(domain: str, ctx: AuthContext, action: str, record: dict) -> No
     _t.add_done_callback(_background_tasks.discard)
 
 
+def _find_similar_domain(domain: str, existing: list[str], cutoff: float = 0.8) -> str | None:
+    """Cheap near-duplicate check for a new domain name against existing ones —
+    catches typos like 'architecutre' vs 'architecture' before a write silently
+    fragments the knowledge base into two domains. Non-blocking: the caller is
+    warned, not stopped, since the name might be intentional."""
+    matches = difflib.get_close_matches(domain, existing, n=1, cutoff=cutoff)
+    return matches[0] if matches else None
+
+
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "write records")
     rtype = args["type"]
@@ -1224,6 +1234,10 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     if missing:
         raise ValueError(f"record type '{rtype}' requires: {', '.join(missing)}")
     domain = args["domain"]
+    existing_domains = list_domain_names(ctx.org.slug, ctx.project.slug)
+    similar_domain = (
+        _find_similar_domain(domain, existing_domains) if domain not in existing_domains else None
+    )
     record = {
         "type": rtype,
         "classification": args["classification"],
@@ -1278,6 +1292,8 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         await delete_record(m_dir, domain, written["id"])
         raise
     msg = f"Recorded {written['type']} in {domain} ({written['id']})"
+    if similar_domain:
+        msg += f"\n\n⚠ '{domain}' is a new domain; did you mean the existing domain '{similar_domain}'?"
     alerts = await _supersede_alerts(
         m_dir, list(args.get("supersedes") or []), args["classification"]
     )
