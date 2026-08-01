@@ -371,7 +371,12 @@ TIER2_TOOLS = [
     *_WRITE_TOOLS,
     Tool(
         name="search_records",
-        description="Search records by query, optionally filtered by domain or owner.",
+        description=(
+            "Search records by query, optionally filtered by domain or owner. "
+            "Results are relevance-ranked within each matching domain, capped "
+            "to `limit` per domain — there is no single relevance ranking "
+            "across multiple domains, so this is not a global top-N."
+        ),
         inputSchema={
             "type": "object",
             "properties": {
@@ -384,6 +389,13 @@ TIER2_TOOLS = [
                 "owner": {
                     "type": "string",
                     "description": "Filter to records written by this username.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": (
+                        "Max results per matching domain (not a global total). "
+                        "Defaults to 20."
+                    ),
                 },
             },
             "required": ["query"],
@@ -1274,10 +1286,32 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=msg)]
 
 
+def _cap_per_domain(records: list[dict], limit: int) -> tuple[list[dict], bool]:
+    """Cap each domain's matches to `limit`, preserving mulch's own
+    BM25(+confirmation-boost) rank order within each domain — mulch discards
+    the numeric relevance score before returning JSON, but not the order, so
+    keeping the first `limit` per domain is a real relevance cutoff. There is
+    no merged cross-domain score to rank by, so this caps each matching
+    domain independently rather than picking one global top-N."""
+    counts: dict[str, int] = {}
+    kept: list[dict] = []
+    truncated = False
+    for r in records:
+        domain = r.get("_domain", "")
+        n = counts.get(domain, 0)
+        if n < limit:
+            kept.append(r)
+            counts[domain] = n + 1
+        else:
+            truncated = True
+    return kept, truncated
+
+
 async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     query = args["query"]
     domains: list[str] | None = args.get("domains") or None
     author_filter = args.get("owner")
+    limit = int(args.get("limit", 20))
     available = set(list_domain_names(ctx.org.slug, ctx.project.slug))
     unknown = [d for d in (domains or []) if d not in available]
     warning = ""
@@ -1286,6 +1320,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     results = await search_domains(mulch_dir(ctx.org.slug, ctx.project.slug), query, domains)
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
+    results, truncated = _cap_per_domain(results, limit)
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
     await _annotate_outcome_staleness(results, ctx.project.id)
@@ -1295,7 +1330,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     text = warning + formatted
     return (
         [TextContent(type="text", text=text)],
-        {"records": results, "truncated": False},
+        {"records": results, "truncated": truncated},
     )
 
 
