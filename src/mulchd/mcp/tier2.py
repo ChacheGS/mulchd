@@ -874,20 +874,25 @@ async def _annotate_edits(records: list[dict], project_id: int) -> None:
 
 
 async def _annotate_outcome_staleness(records: list[dict], project_id: int) -> None:
-    """Flag records whose most recent content-field edit postdates their most
-    recent recorded outcome — the accumulated confirmation trust (and the
-    search-ranking boost it earns) no longer describes what's actually there.
+    """Flag records whose most recent content-field edit postdates any
+    outcome that could legitimately confirm the current content — the
+    accumulated confirmation trust (and the search-ranking boost it earns)
+    no longer describes what's actually there.
 
-    Known limitation, deliberate per the design spec (detection, not
-    prevention — ml has no way to clear outcomes on edit, so this can't be a
-    hard gate): record_outcome has no ownership check by design, so whoever
-    just edited a record's content can immediately call record_outcome
-    themselves and clear this flag before anyone else reads it — see
-    test_edit_then_self_confirm_clears_stale_flag. This doesn't defeat the
-    feature's actual goal (an unconfirmed or genuinely-stale record still
-    reads as such to anyone who hasn't self-confirmed it), but it means the
-    flag is not a guarantee against a determined single bad actor, only a
-    passive signal for everyone else reading the record afterward.
+    An outcome only clears staleness if it was recorded after the edit AND
+    wasn't self-confirmed by the same identity that made the edit (the
+    `agent` field, set server-side by _record_outcome from the authenticated
+    caller — never client-controlled, see record_outcome's `agent`
+    parameter). Outcomes with no `agent` field predate this check (mulchd
+    didn't track confirming identity before it existed) and are treated as
+    clearing, same as the original behavior, so existing data isn't
+    retroactively re-flagged.
+
+    This is detection, not prevention — ml has no way to clear outcomes on
+    edit, and a trusted admin running `ml outcome` directly bypasses this
+    check entirely (accepted, see the design doc) — it closes the
+    MCP-mediated single-actor laundering path, not every path to the
+    underlying JSONL.
     """
     target_ids = [r.get("id") for r in records if r.get("outcomes")]
     if not target_ids:
@@ -895,21 +900,25 @@ async def _annotate_outcome_staleness(records: list[dict], project_id: int) -> N
     edit_rows = (
         await RecordEdit.filter(record_id__in=target_ids, project_id=project_id)
         .order_by("-at")
-        .values("record_id", "before_snapshot", "at")
+        .values("record_id", "before_snapshot", "at", "actor__username")
     )
-    last_content_edit: dict[str, datetime] = {}
+    last_content_edit_at: dict[str, datetime] = {}
+    last_content_editor: dict[str, str] = {}
     for row in edit_rows:
         rid = row["record_id"]
-        if rid in last_content_edit:
+        if rid in last_content_edit_at:
             continue  # already have the most recent one, rows are newest-first
         if _CONTENT_FIELD_KEYS & row["before_snapshot"].keys():
-            last_content_edit[rid] = row["at"]
+            last_content_edit_at[rid] = row["at"]
+            last_content_editor[rid] = row["actor__username"]
     for r in records:
         rid = r.get("id")
         outcomes = r.get("outcomes") or []
-        if not outcomes or rid not in last_content_edit:
+        if not outcomes or rid not in last_content_edit_at:
             continue
-        outcome_times: list[datetime] = []
+        edit_at = last_content_edit_at[rid]
+        editor = last_content_editor[rid]
+        cleared = False
         for o in outcomes:
             ts = o.get("recorded_at", "")
             if not ts:
@@ -920,11 +929,13 @@ async def _annotate_outcome_staleness(records: list[dict], project_id: int) -> N
                 continue
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
-            outcome_times.append(parsed)
-        if not outcome_times:
-            continue
-        last_outcome_at = max(outcome_times)
-        if last_content_edit[rid] > last_outcome_at:
+            if parsed <= edit_at:
+                continue
+            agent = o.get("agent")
+            if agent is None or agent != editor:
+                cleared = True
+                break
+        if not cleared:
             r["_outcomes_stale"] = True
 
 
@@ -1572,7 +1583,7 @@ async def _record_outcome(args: dict, ctx: AuthContext) -> list[TextContent]:
     status = OutcomeStatus(args["status"])
     await _get_owned_record(ctx, domain, record_id, "record outcomes", owner_check=False)
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    await record_outcome(m_dir, domain, record_id, status, args.get("notes"))
+    await record_outcome(m_dir, domain, record_id, status, args.get("notes"), agent=ctx.user.username)
     return [TextContent(type="text", text=f"Recorded {status.value} outcome for {record_id}")]
 
 

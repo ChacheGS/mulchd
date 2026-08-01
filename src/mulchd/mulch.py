@@ -196,15 +196,23 @@ async def record_outcome(
     record_id: str,
     status: OutcomeStatus,
     notes: str | None = None,
+    agent: str | None = None,
 ) -> dict:
     """
     Append an outcome to an existing record via `ml outcome`. This feeds the
     confirmation-frequency boost ml's search already applies by default —
     mulchd previously never called this, so that boost had nothing to boost.
+
+    `agent` identifies who confirmed this outcome — always the authenticated
+    caller (see tier2._record_outcome), never a value the calling agent can
+    set itself. Used to detect self-confirmation trust-laundering: someone
+    editing a record's content then immediately confirming their own edit.
     """
     args = ["outcome", domain, record_id, "--status", status.value]
     if notes:
         args += ["--notes", notes]
+    if agent:
+        args += ["--agent", agent]
     return await _run(mulch_dir, args)
 
 

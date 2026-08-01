@@ -430,6 +430,41 @@ async def test_live_record_outcome_appends_to_record(data_path):
     assert '"status":"success"' in on_disk.replace(" ", "") or "success" in on_disk
 
 
+async def test_record_outcome_passes_agent_flag_when_given(monkeypatch, tmp_path):
+    import mulchd.mulch as mulch_module
+    from mulchd.mulch import OutcomeStatus, record_outcome
+
+    captured_args = []
+
+    async def _fake_run(mulch_dir, args, stdin_data=None):
+        captured_args.append(args)
+        return {"success": True}
+
+    monkeypatch.setattr(mulch_module, "_run", _fake_run)
+
+    await record_outcome(tmp_path, "infra", "mx-1", OutcomeStatus.SUCCESS, agent="carlos")
+
+    assert "--agent" in captured_args[0]
+    assert captured_args[0][captured_args[0].index("--agent") + 1] == "carlos"
+
+
+async def test_record_outcome_omits_agent_flag_when_not_given(monkeypatch, tmp_path):
+    import mulchd.mulch as mulch_module
+    from mulchd.mulch import OutcomeStatus, record_outcome
+
+    captured_args = []
+
+    async def _fake_run(mulch_dir, args, stdin_data=None):
+        captured_args.append(args)
+        return {"success": True}
+
+    monkeypatch.setattr(mulch_module, "_run", _fake_run)
+
+    await record_outcome(tmp_path, "infra", "mx-1", OutcomeStatus.SUCCESS)
+
+    assert "--agent" not in captured_args[0]
+
+
 @ml_available
 async def test_live_search_domains_finds_seeded_record(data_path):
     from mulchd.domains import mulch_dir

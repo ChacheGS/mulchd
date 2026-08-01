@@ -25,7 +25,7 @@ async def test_record_outcome_creates_visible_outcome(team, data_path, fake_writ
     records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     record_id = records[1]["records"][0]["id"]
 
-    async def _fake_outcome(m_dir, domain, rid, status, notes=None):
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
         path = m_dir / "expertise" / f"{domain}.jsonl"
         lines = path.read_text().splitlines()
         rewritten = []
@@ -75,7 +75,7 @@ async def test_record_outcome_non_owner_writer_allowed(team, data_path, fake_wri
     record_id = records[1]["records"][0]["id"]
     assert records[1]["records"][0]["owner"] == "carlos"
 
-    async def _fake_outcome(m_dir, domain, rid, status, notes=None):
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
         return {"success": True}
 
     orig = mcp_tier2.record_outcome
@@ -252,13 +252,11 @@ async def test_annotate_outcome_staleness_skips_records_without_outcomes(team, d
     assert records[0].get("_outcomes_stale") is None
 
 
-async def test_edit_then_self_confirm_clears_stale_flag(team, data_path, fake_write_record):
-    """Known, accepted limitation (see _annotate_outcome_staleness's
-    docstring): record_outcome has no ownership check by design, so whoever
-    just edited a record's content can immediately re-confirm it themselves
-    and clear the stale flag before anyone else reads it. This is detection,
-    not prevention — ml gives no way to make it a hard gate — so this test
-    pins the limitation as understood behavior rather than a silent gap."""
+async def test_edit_then_self_confirm_does_not_clear_stale_flag(team, data_path, fake_write_record):
+    """Self-confirmation is real information (it's still recorded) but can't
+    clear staleness on its own — closes the trust-laundering gap: someone who
+    edits a record's content, then immediately confirms their own edit,
+    should not end up with a record that reads as freshly re-validated."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _annotate_outcome_staleness, _edit_record, _record_outcome
 
@@ -282,17 +280,17 @@ async def test_edit_then_self_confirm_clears_stale_flag(team, data_path, fake_wr
     finally:
         mcp_tier2.edit_record = orig_edit
 
-    # Without a fresh confirmation, the edit alone would already flag stale.
     stale_check = r.copy()
     await _annotate_outcome_staleness([stale_check], t.infra.id)
     assert stale_check.get("_outcomes_stale") is True
 
-    async def _fake_outcome(m_dir, domain, rid, status, notes=None):
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
         r["outcomes"].append(
             {
                 "status": status.value,
                 "recorded_at": datetime.now(timezone.utc).isoformat(),
                 "notes": notes,
+                "agent": agent,
             }
         )
         return {"success": True}
@@ -300,6 +298,7 @@ async def test_edit_then_self_confirm_clears_stale_flag(team, data_path, fake_wr
     orig_outcome = mcp_tier2.record_outcome
     mcp_tier2.record_outcome = _fake_outcome
     try:
+        # carlos both made the edit above and is now self-confirming it
         await _record_outcome(
             {"record_id": r["id"], "domain": "api", "status": "success"},
             ctx(t.carlos, t.org, t.infra),
@@ -307,9 +306,87 @@ async def test_edit_then_self_confirm_clears_stale_flag(team, data_path, fake_wr
     finally:
         mcp_tier2.record_outcome = orig_outcome
 
+    still_stale_check = r.copy()
+    await _annotate_outcome_staleness([still_stale_check], t.infra.id)
+    assert still_stale_check.get("_outcomes_stale") is True
+
+
+async def test_edit_then_third_party_confirm_clears_stale_flag(team, data_path, fake_write_record):
+    """A different identity confirming after the edit DOES clear staleness —
+    proves the fix distinguishes self- from third-party confirmation rather
+    than just never clearing at all."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness, _edit_record, _record_outcome
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v1", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
+    )
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        await _edit_record(
+            {"record_id": r["id"], "domain": "api", "content": "v2"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
+        r["outcomes"].append(
+            {
+                "status": status.value,
+                "recorded_at": datetime.now(timezone.utc).isoformat(),
+                "notes": notes,
+                "agent": agent,
+            }
+        )
+        return {"success": True}
+
+    orig_outcome = mcp_tier2.record_outcome
+    mcp_tier2.record_outcome = _fake_outcome
+    try:
+        # jorge, not carlos (the editor), confirms
+        await _record_outcome(
+            {"record_id": r["id"], "domain": "api", "status": "success"},
+            ctx(t.jorge, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.record_outcome = orig_outcome
+
     cleared_check = r.copy()
     await _annotate_outcome_staleness([cleared_check], t.infra.id)
     assert cleared_check.get("_outcomes_stale") is None
+
+
+async def test_outcome_with_no_agent_field_still_clears_stale_flag(team, data_path):
+    """Outcomes recorded before this feature shipped have no agent field at
+    all — treated as clearing staleness (legacy data isn't retroactively
+    re-flagged), matching the original pre-fix behavior."""
+    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.models import RecordEdit
+
+    t = team
+    r = _jot(
+        data_path, "acme", "infra", "api",
+        type="convention", classification="tactical", content="v2", owner="carlos",
+        outcomes=[{"status": "success", "recorded_at": "2026-07-30T00:00:00+00:00"}],  # no "agent" key
+    )
+    await RecordEdit.create(
+        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
+        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        at=datetime(2026, 7, 29, tzinfo=timezone.utc),
+    )
+
+    records = [r.copy()]
+    await _annotate_outcome_staleness(records, t.infra.id)
+    assert records[0].get("_outcomes_stale") is None
 
 
 def test_format_outcomes_tag_stale_suffix():
