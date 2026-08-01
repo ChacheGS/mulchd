@@ -20,7 +20,7 @@ from pydantic import AnyUrl
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, list_domain_names, mulch_dir
-from .project_cache import get_archived_ids, get_project_records
+from .project_cache import get_project_records
 from .schemas import (
     TIER2_TOOLS,
     _WRITE_TOOLS,
