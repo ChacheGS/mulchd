@@ -4,6 +4,7 @@ import difflib
 import json
 import logging
 from collections import defaultdict, deque
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid7
 
@@ -860,8 +861,7 @@ async def _record_tool_call(name: str, ctx: AuthContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-@tier2_server.list_tools()
-async def list_tools() -> list[Tool]:
+async def _list_tools() -> list[Tool]:
     from ..models import Role
 
     ctx = _ctx.get()
@@ -872,8 +872,19 @@ async def list_tools() -> list[Tool]:
     return TIER2_TOOLS
 
 
-@tier2_server.call_tool()
-async def call_tool(name: str, arguments: dict | None) -> list[TextContent] | tuple[list[TextContent], dict]:
+# Server.list_tools()'s decorator parameter type is a union of the zero-arg and
+# one-arg (raw Request) handler shapes; since it returns `func` unchanged rather
+# than narrowing via a TypeVar, applying it inline would widen the decorated
+# name's inferred type to that union, and every direct caller of list_tools()
+# in this codebase (which all use the zero-arg form) would get a spurious
+# "expected 1 more positional argument". Applying the decorator for its
+# registration side effect on the private name, then exposing the original
+# function under an explicit annotation, keeps the public symbol's real type.
+tier2_server.list_tools()(_list_tools)
+list_tools: Callable[[], Awaitable[list[Tool]]] = _list_tools
+
+
+async def _call_tool(name: str, arguments: dict | None) -> list[TextContent] | tuple[list[TextContent], dict]:
     args = arguments or {}
     ctx = _ctx.get()
     if ctx is None:
@@ -918,6 +929,14 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent] | tu
             raise ValueError(f"Unknown tool: {name}")
 
 
+# See list_tools' comment above for why this is registered on a private name
+# and re-exposed with an explicit annotation rather than decorated inline.
+tier2_server.call_tool()(_call_tool)
+call_tool: Callable[[str, dict | None], Awaitable[list[TextContent] | tuple[list[TextContent], dict]]] = (
+    _call_tool
+)
+
+
 @tier2_server.list_resources()
 async def list_resources() -> list[Resource]:
     ctx = _ctx.get()
@@ -947,8 +966,7 @@ async def list_resource_templates() -> list[ResourceTemplate]:
     ]
 
 
-@tier2_server.read_resource()
-async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
+async def _read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
     ctx = _ctx.get()
     if ctx is None:
         raise ValueError("No auth context")
@@ -966,6 +984,12 @@ async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
             text = f"No records in domain '{name}' yet."
         return [ReadResourceContents(content=text, mime_type="text/plain")]
     raise ValueError(f"Unknown resource URI: {uri_str}")
+
+
+# See list_tools' comment above for why this is registered on a private name
+# and re-exposed with an explicit annotation rather than decorated inline.
+tier2_server.read_resource()(_read_resource)
+read_resource: Callable[[AnyUrl], Awaitable[list[ReadResourceContents]]] = _read_resource
 
 
 @tier2_server.subscribe_resource()
