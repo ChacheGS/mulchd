@@ -85,6 +85,7 @@ async def test_write_decision_dispatch_creates_decision_record(team, data_path, 
         )
     finally:
         _ctx.reset(token)
+    assert isinstance(result, list)
     assert "decision" in result[0].text
 
     text_content, _ = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))

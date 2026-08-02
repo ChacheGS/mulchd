@@ -112,6 +112,7 @@ async def test_mcp_revoked_oauth_token_returns_401(client, db):
     provider = MulchdOAuthProvider()
     tokens = await provider._issue_tokens(client_row.client_id, grant, ["mulchd"])
     access_token = await provider.load_access_token(tokens.access_token)
+    assert access_token is not None
     await provider.revoke_token(access_token)
 
     resp = await client.post(

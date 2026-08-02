@@ -96,6 +96,7 @@ async def test_record_outcome_duplicate_status_from_same_agent_rejected(team, da
     orig = mcp_tier2.record_outcome
     mcp_tier2.record_outcome = _fake_outcome
     try:
+        result = None
         for _ in range(3):
             result = await _record_outcome(
                 {"record_id": record_id, "domain": "infra", "status": "success"},
@@ -104,6 +105,7 @@ async def test_record_outcome_duplicate_status_from_same_agent_rejected(team, da
     finally:
         mcp_tier2.record_outcome = orig
 
+    assert result is not None
     assert "already recorded a success outcome" in result[0].text
     records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     assert len(records2[1]["records"][0]["outcomes"]) == 1

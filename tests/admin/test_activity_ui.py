@@ -11,7 +11,7 @@ async def test_activity_page_shows_events(admin_client):
     from mulchd.instance_events import log_event
     from mulchd.models import InstanceEventCategory, Organization, Project, User
 
-    admin = await User.filter(username="admin").first()
+    admin = await User.get(username="admin")
     org = await Organization.create(slug="activityorg", display_name="Activity Org")
     project = await Project.create(slug="activityproj", display_name="Activity Proj", org=org)
     await log_event(
@@ -27,7 +27,7 @@ async def test_activity_page_filters_by_category(admin_client):
     from mulchd.instance_events import log_event
     from mulchd.models import InstanceEventCategory, Organization, User
 
-    admin = await User.filter(username="admin").first()
+    admin = await User.get(username="admin")
     await log_event(InstanceEventCategory.ORG_CREATED, actor=admin, detail={"org_slug": "x"})
     org = await Organization.create(slug="filtertest", display_name="Filter Test")
 

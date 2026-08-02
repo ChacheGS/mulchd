@@ -16,7 +16,7 @@ async def test_create_invite_link(admin_client):
     assert invite.role == "writer"
     assert invite.max_uses == 5
     assert invite.expires_at is not None
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
     assert invite.created_by_id == admin_user.id
 
 

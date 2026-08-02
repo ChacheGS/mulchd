@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
@@ -85,7 +87,7 @@ async def test_oauth_code_hash_unique(db):
     project = await Project.create(slug="demo3", display_name="Demo3", org=org)
     client = await OAuthClient.create(client_id="client-4", client_metadata={})
     grant = await OAuthGrant.create(client=client, user=user, project=project)
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         code_hash="dup-code-hash",
         client_id=client.client_id,
         grant=grant,

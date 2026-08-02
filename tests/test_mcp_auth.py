@@ -39,6 +39,8 @@ async def test_exchange_authorization_code_issues_tokens(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
 
     code_row = await OAuthCode.create(
         code_hash=_hash("raw-code-1"),
@@ -65,7 +67,7 @@ async def test_exchange_authorization_code_issues_tokens(db):
     assert await provider.load_authorization_code(client, "raw-code-1") is None
 
     # regression: OAuthToken.client_id must be the string client_id, not grant's raw FK int
-    issued = await OAuthToken.filter(access_token_hash=_hash(tokens.access_token)).first()
+    issued = await OAuthToken.get(access_token_hash=_hash(tokens.access_token))
     assert issued.client_id == client_row.client_id
 
 
@@ -75,11 +77,14 @@ async def test_load_access_token_carries_project_claim(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
 
     access_token = await provider.load_access_token(tokens.access_token)
     assert access_token is not None
     assert access_token.subject == str(user.id)
+    assert access_token.claims is not None
     assert access_token.claims["project_id"] == project.id
 
 
@@ -89,7 +94,10 @@ async def test_refresh_token_rotation(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+    assert tokens.refresh_token is not None
 
     refresh_token = await provider.load_refresh_token(client, tokens.refresh_token)
     assert refresh_token is not None
@@ -108,9 +116,12 @@ async def test_revoke_token(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
 
     access_token = await provider.load_access_token(tokens.access_token)
+    assert access_token is not None
     await provider.revoke_token(access_token)
 
     assert await provider.load_access_token(tokens.access_token) is None
@@ -124,9 +135,13 @@ async def test_revoke_token_accepts_refresh_token(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+    assert tokens.refresh_token is not None
 
     refresh_token = await provider.load_refresh_token(client, tokens.refresh_token)
+    assert refresh_token is not None
     await provider.revoke_token(refresh_token)
 
     assert await provider.load_refresh_token(client, tokens.refresh_token) is None
@@ -143,7 +158,10 @@ async def test_load_access_token_rejects_expired_token(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+    assert tokens.refresh_token is not None
 
     row = await OAuthToken.get(access_token_hash=_hash(tokens.access_token))
     row.access_expires_at = datetime.now(UTC) - timedelta(minutes=1)
@@ -168,7 +186,10 @@ async def test_load_refresh_token_reports_expiry_but_does_not_self_reject(db):
     user, project, client_row, grant = await _make_client_grant()
     provider = MulchdOAuthProvider()
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+    assert tokens.refresh_token is not None
 
     past_expiry = datetime.now(UTC) - timedelta(minutes=1)
     row = await OAuthToken.get(refresh_token_hash=_hash(tokens.refresh_token))
@@ -181,13 +202,15 @@ async def test_load_refresh_token_reports_expiry_but_does_not_self_reject(db):
 
 
 async def test_register_client_then_get_client_roundtrip(db):
+    from pydantic import AnyUrl
+
     from mcp.shared.auth import OAuthClientMetadata
 
     from mulchd.mcp_auth import MulchdOAuthProvider
 
     provider = MulchdOAuthProvider()
     metadata = OAuthClientMetadata(
-        redirect_uris=["http://localhost:1234/cb"],
+        redirect_uris=[AnyUrl("http://localhost:1234/cb")],
         client_name="Test Client",
         token_endpoint_auth_method="none",
     )
@@ -205,6 +228,7 @@ async def test_register_client_then_get_client_roundtrip(db):
     assert fetched is not None
     assert fetched.client_id == "abc123"
     assert fetched.client_name == "Test Client"
+    assert fetched.redirect_uris is not None
     assert str(fetched.redirect_uris[0]) == "http://localhost:1234/cb"
 
 
@@ -216,6 +240,8 @@ async def test_get_client_unknown_returns_none(db):
 
 
 async def test_authorize_redirects_to_consent_page(db):
+    from pydantic import AnyUrl
+
     from mcp.server.auth.provider import AuthorizationParams
 
     from mulchd.mcp_auth import MulchdOAuthProvider
@@ -233,11 +259,13 @@ async def test_authorize_redirects_to_consent_page(db):
         },
     )
     client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
     params = AuthorizationParams(
         state="xyz",
         scopes=["mulchd"],
         code_challenge="challenge123",
-        redirect_uri="http://localhost:1234/cb",
+        redirect_uri=AnyUrl("http://localhost:1234/cb"),
         redirect_uri_provided_explicitly=True,
     )
     url = await provider.authorize(client, params)

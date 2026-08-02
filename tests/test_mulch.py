@@ -298,6 +298,7 @@ def test_find_written_record_skips_malformed_lines_and_finds_newest_match(tmp_pa
         "not json at all\n"
     )
     result = _find_written_record(jsonl, {"recorded_at": "t1", "owner": "carlos", "type": "convention"})
+    assert result is not None
     assert result["id"] == "mx-target"
 
 

@@ -165,6 +165,7 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
     finally:
         _ctx.reset(token)
     text = contents[0].content
+    assert isinstance(text, str)
     assert "<record_content>" in text
     assert "</record_content>" in text
     assert "Resource-fetched rule" in text
@@ -182,5 +183,6 @@ async def test_read_resource_no_wrapping_when_no_records(team, data_path):
     finally:
         _ctx.reset(token)
     text = contents[0].content
+    assert isinstance(text, str)
     assert "No records in domain" in text
     assert "<record_content>" not in text

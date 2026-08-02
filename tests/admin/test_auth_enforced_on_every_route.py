@@ -8,6 +8,7 @@ without anyone having to remember to write a dedicated test for it.
 """
 
 import pytest
+from starlette.routing import Route
 
 from mulchd.admin import router as admin_router
 
@@ -35,6 +36,7 @@ def _discover_routes() -> list[tuple[str, str]]:
         original = getattr(sub, "original_router", None)
         targets = original.routes if original is not None else [sub]
         for r in targets:
+            assert isinstance(r, Route)
             methods = sorted(m for m in (r.methods or []) if m != "HEAD")
             path = "/admin" + r.path
             for name, value in _PATH_PARAM_PLACEHOLDERS.items():

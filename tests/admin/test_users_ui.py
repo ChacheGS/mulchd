@@ -66,7 +66,7 @@ async def test_deactivate_user(admin_client):
 async def test_deactivate_blocked_for_last_admin(admin_client):
     from mulchd.models import User
 
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
 
     resp = await admin_client.post(
         f"/admin/users/{admin_user.id}/deactivate", follow_redirects=False
@@ -80,7 +80,7 @@ async def test_deactivate_blocked_for_last_admin(admin_client):
 async def test_deactivate_blocked_for_last_admin_does_not_log(admin_client):
     from mulchd.models import InstanceEvent, InstanceEventCategory, User
 
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
 
     resp = await admin_client.post(
         f"/admin/users/{admin_user.id}/deactivate", follow_redirects=False
@@ -97,7 +97,7 @@ async def test_deactivate_allowed_when_other_admin_exists(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import User
 
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
     other, _ = await create_user("secondadmin", "Second Admin")
     await grant_superadmin(other, granted_by=admin_user)
 
@@ -124,7 +124,7 @@ async def test_admin_create_user_with_email(admin_client):
     )
     assert resp.status_code == 303
     from mulchd.models import User
-    user = await User.filter(username="withmail").first()
+    user = await User.get(username="withmail")
     assert user is not None
     assert user.email == "wm@example.com"
 
@@ -170,7 +170,7 @@ async def test_revoke_admin_access(admin_client):
     from mulchd.models import User
 
     target, _ = await create_user("removable", "Removable Admin")
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
     await grant_superadmin(target, granted_by=admin_user)
 
     resp = await admin_client.post(
@@ -185,7 +185,7 @@ async def test_revoke_admin_blocked_as_last_admin(admin_client):
     from mulchd.admin_grants import is_superadmin
     from mulchd.models import User
 
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
 
     resp = await admin_client.post(
         f"/admin/users/{admin_user.id}/revoke-admin", follow_redirects=False
@@ -200,7 +200,7 @@ async def test_admin_can_revoke_own_access_when_others_exist(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import User
 
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
     other, _ = await create_user("otheradmin", "Other Admin")
     await grant_superadmin(other, granted_by=admin_user)
 
@@ -217,7 +217,7 @@ async def test_revoked_admin_loses_access_on_next_request(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import User
 
-    admin_user = await User.filter(username="admin").first()
+    admin_user = await User.get(username="admin")
     other, _ = await create_user("otheradmin2", "Other Admin")
     await grant_superadmin(other, granted_by=admin_user)
 
