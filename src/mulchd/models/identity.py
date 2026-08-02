@@ -51,6 +51,7 @@ class InviteLink(models.Model):
     created_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User", related_name="created_invites", null=True, default=None
     )
+    created_by_id: int | None
     created_at = fields.DatetimeField(auto_now_add=True)
 
     @property

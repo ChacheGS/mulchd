@@ -21,13 +21,16 @@ class AdminGrant(models.Model):
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="admin_grants", on_delete=fields.RESTRICT
     )
+    user_id: int
     role = fields.CharEnumField(AdminRole, max_length=16, default=AdminRole.SUPERADMIN)
     org: fields.ForeignKeyRelation[Organization] | None = fields.ForeignKeyField(
         "models.Organization", related_name="org_admin_grants", null=True, default=None
     )
+    org_id: int | None
     granted_by: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="granted_admin_grants", on_delete=fields.RESTRICT
     )
+    granted_by_id: int
     granted_at = fields.DatetimeField(auto_now_add=True)
     revoked_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User",
@@ -36,6 +39,7 @@ class AdminGrant(models.Model):
         default=None,
         on_delete=fields.RESTRICT,
     )
+    revoked_by_id: int | None
     revoked_at = fields.DatetimeField(null=True, default=None)
 
     class Meta:
@@ -68,6 +72,7 @@ class InstanceEvent(models.Model):
     actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="instance_events_acted", on_delete=fields.RESTRICT
     )
+    actor_id: int
     subject_user: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User",
         related_name="instance_events_about",
@@ -75,9 +80,11 @@ class InstanceEvent(models.Model):
         default=None,
         on_delete=fields.RESTRICT,
     )
+    subject_user_id: int | None
     project: fields.ForeignKeyRelation[Project] | None = fields.ForeignKeyField(
         "models.Project", related_name="instance_events", null=True, default=None, on_delete=fields.RESTRICT
     )
+    project_id: int | None
     detail = fields.JSONField(null=True, default=None)
     at = fields.DatetimeField(auto_now_add=True)
 
