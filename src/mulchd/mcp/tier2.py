@@ -17,6 +17,7 @@ from mcp.types import Resource, ResourceTemplate, TextContent, Tool
 import urllib.parse
 
 from pydantic import AnyUrl
+from tortoise.exceptions import IntegrityError
 
 from ..auth import AuthContext
 from ..domains import expertise_path, list_available_domains, list_domain_names, mulch_dir
@@ -360,8 +361,8 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
+    project_records = await get_project_records(m_dir)
     if args.get("supersedes") or args.get("relates_to"):
-        project_records = await get_project_records(m_dir)
         live_ids = {r["id"] for r in project_records if r.get("id")}
         _validate_references(
             live_ids,
@@ -370,19 +371,26 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         )
     domain_file = expertise_path(ctx.org.slug, ctx.project.slug, domain)
     dedup_field = _DEDUP_FIELD_BY_TYPE[rtype]
-    if domain_file.exists():
-        for existing in await read_domain_records(domain_file):
-            if existing.get("type") == rtype and existing.get(dedup_field) == record.get(dedup_field):
-                return [
-                    TextContent(
-                        type="text",
-                        text=(
-                            f"Not recorded: a {rtype} with the same {dedup_field} already exists "
-                            f"({existing.get('id', '?')}) in {domain}. Use edit_record to update "
-                            f"it, or add supersedes if this is meant to replace it."
-                        ),
-                    )
-                ]
+    # ml's own dedup key and record-ID key are the same field for every built-in
+    # type, and ID generation is content-derived (hash of type + this field) with
+    # no domain in the mix — so a match here in ANY domain, not just this one,
+    # means ml would independently mint the identical record ID there too. ml's
+    # own dedup check only looks within one domain's file and would happily
+    # create it as a second, unrelated record; mulchd can't allow that since
+    # RecordMeta requires record_id to be unique per project.
+    for existing in project_records:
+        if existing.get("type") == rtype and existing.get(dedup_field) == record.get(dedup_field):
+            existing_domain = existing.get("_domain", domain)
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"Not recorded: a {rtype} with the same {dedup_field} already exists "
+                        f"({existing.get('id', '?')}) in {existing_domain}. Use edit_record to "
+                        f"update it, or add supersedes if this is meant to replace it."
+                    ),
+                )
+            ]
     await init_ml_project(m_dir)
     pre_existed = domain_file.exists()
     from ..mulch import MulchError, RecordNotWrittenError
@@ -437,6 +445,25 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
             client=ctx.client,
             session_id=session_id,
         )
+    except IntegrityError:
+        # The pre-check above reads project_records unlocked, then ml runs
+        # separately — a concurrent write to another domain can still slip a
+        # matching record_id in between, so this is the backstop for that race
+        # rather than the primary defense. Confirm it's really the record_id
+        # collision (not some other constraint) before treating it as one.
+        await delete_record(m_dir, domain, written["id"])
+        if await RecordMeta.filter(project=ctx.project, record_id=written["id"]).exists():
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"Not recorded: a {rtype} with the same {dedup_field} was just recorded "
+                        f"in another domain by a concurrent write. Use edit_record to update it, "
+                        f"or add supersedes if this is meant to replace it."
+                    ),
+                )
+            ]
+        raise
     except Exception:
         # The JSONL write already succeeded — without this the record would be
         # visible on disk but invisible to get_record_history/session grouping,

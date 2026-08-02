@@ -7,9 +7,11 @@ from mulchd.mcp.context import _ctx
 from mulchd.mulch import MulchError
 from pathlib import Path
 import json
+import uuid
 import pytest
 from mulchd.models import Role, UserMembership
 from mulchd.mcp.tier2 import _read_expertise, _record_expertise, call_tool
+from mulchd.models import RecordMeta
 from tests.mcp.conftest import _make_fake_delete, ctx, _jot, ml_available
 
 
@@ -269,6 +271,96 @@ async def test_write_decision_duplicate_title_rejected_gracefully(team, data_pat
     assert structured["records"][0]["rationale"] == "v1"
 
 
+async def test_write_convention_same_content_different_domain_rejected_gracefully(
+    team, data_path, fake_write_record
+):
+    """ml's own dedup key and record-ID key are the same field for every
+    built-in type, and ID generation has no notion of domain — so writing the
+    same convention content to a second domain in the same project would make
+    ml independently mint the identical record ID there. ml's own dedup check
+    only looks within one domain's file and would happily create it as a
+    second, unrelated record, but mulchd's RecordMeta requires record_id to be
+    unique per project. This must be caught before ever reaching ml."""
+    t = team
+    await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Always enable S3 versioning",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    result = await _record_expertise(
+        {
+            "domain": "security",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Always enable S3 versioning",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Not recorded" in result[0].text
+    assert "already exists" in result[0].text
+    assert "infra" in result[0].text
+
+    domains = await list_available_domains(t.org.slug, t.infra.slug)
+    assert not any(d["name"] == "security" for d in domains)
+
+
+async def test_write_convention_record_id_collision_rolls_back_on_race(
+    team, data_path, fake_write_record, monkeypatch
+):
+    """Regression test for a reported crash: two near-simultaneous writes to
+    different domains can both pass the pre-check (it reads project state
+    before ml runs) and both succeed at the ml layer, but the second
+    RecordMeta.create() then hits a real Postgres unique constraint violation
+    on (project, record_id). This must roll back the JSONL write and return a
+    graceful message instead of surfacing the raw IntegrityError."""
+    t = team
+    m_dir = data_path / t.org.slug / t.infra.slug / ".mulch"
+    (m_dir / "expertise").mkdir(parents=True, exist_ok=True)
+
+    collided_id = "mx-abc123"
+    await RecordMeta.create(
+        record_id=collided_id,
+        project=t.infra,
+        domain="infra",
+        author=t.carlos,
+        session_id=uuid.uuid4(),
+        client="test",
+    )
+
+    import mulchd.mcp.tier2 as mcp_tier2
+
+    async def _write_colliding(m_dir: Path, domain: str, record: dict) -> dict:
+        expertise_dir = m_dir / "expertise"
+        expertise_dir.mkdir(parents=True, exist_ok=True)
+        result = {"id": collided_id, **record}
+        with (expertise_dir / f"{domain}.jsonl").open("a") as f:
+            f.write(json.dumps(result) + "\n")
+        return result
+
+    monkeypatch.setattr(mcp_tier2, "write_record", _write_colliding)
+    monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(m_dir / "expertise"))
+
+    result = await _record_expertise(
+        {
+            "domain": "networking",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Use private subnets for databases",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Not recorded" in result[0].text
+
+    domain_file = m_dir / "expertise" / "networking.jsonl"
+    assert not domain_file.exists() or domain_file.read_text().strip() == ""
+    assert await RecordMeta.filter(project=t.infra, record_id=collided_id).count() == 1
+
+
 async def test_write_failure_cleans_up_empty_domain(team, data_path, monkeypatch):
     """A write that fails after ml creates the domain file should not leave an orphan."""
     import mulchd.mcp.tier2 as mcp_tier2
@@ -346,35 +438,6 @@ async def test_record_expertise_accepts_valid_cross_domain_supersedes(team, data
     )
     _, structured = await _read_expertise({"domains": ["policies"]}, ctx(t.carlos, t.org, t.infra))
     assert len(structured["records"]) == 1
-
-
-async def test_record_expertise_without_references_skips_project_scan(team, data_path, monkeypatch, fake_write_record):
-    """A write with no supersedes/relates_to at all must not trigger a
-    project-wide scan — get_project_records should not be called."""
-    import mulchd.mcp.tier2 as mcp_tier2
-
-    t = team
-    called = False
-    original = mcp_tier2.get_project_records
-
-    async def _tracking(*a, **kw):
-        nonlocal called
-        called = True
-        return await original(*a, **kw)
-
-    monkeypatch.setattr(mcp_tier2, "get_project_records", _tracking)
-
-    await mcp_tier2._record_expertise(
-        {
-            "type": "decision",
-            "domain": "infra",
-            "classification": "tactical",
-            "title": "Plain decision",
-            "rationale": "No relationships involved",
-        },
-        ctx(t.carlos, t.org, t.infra),
-    )
-    assert called is False
 
 
 async def test_record_expertise_rejects_archived_supersedes_target(team, data_path, fake_write_record):
