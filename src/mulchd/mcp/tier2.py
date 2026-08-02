@@ -679,7 +679,21 @@ async def _record_outcome(args: dict, ctx: AuthContext) -> list[TextContent]:
     record_id = args["record_id"]
     domain = args["domain"]
     status = OutcomeStatus(args["status"])
-    await _get_owned_record(ctx, domain, record_id, "record outcomes", owner_check=False)
+    record = await _get_owned_record(ctx, domain, record_id, "record outcomes", owner_check=False)
+    prior_statuses = {
+        o.get("status") for o in record.get("outcomes") or [] if o.get("agent") == ctx.user.username
+    }
+    if status.value in prior_statuses:
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"You already recorded a {status.value} outcome for {record_id}. "
+                    f"Repeating the same status doesn't add new signal, so it wasn't recorded again. "
+                    f"If your assessment has changed, record the new status instead."
+                ),
+            )
+        ]
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await record_outcome(m_dir, domain, record_id, status, args.get("notes"), agent=ctx.user.username)
     return [TextContent(type="text", text=f"Recorded {status.value} outcome for {record_id}")]

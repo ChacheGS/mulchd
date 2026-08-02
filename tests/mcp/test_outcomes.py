@@ -60,6 +60,150 @@ async def test_record_outcome_creates_visible_outcome(team, data_path, fake_writ
     assert outcomes[0]["notes"] == "worked great"
 
 
+async def test_record_outcome_duplicate_status_from_same_agent_rejected(team, data_path, fake_write_record):
+    """Recording the same status twice from the same agent doesn't append a
+    second outcome — closes the unbounded-boost-spam vector, since ml's
+    confirmation score is an uncapped count of success/partial outcomes."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
+        path = m_dir / "expertise" / f"{domain}.jsonl"
+        lines = path.read_text().splitlines()
+        rewritten = []
+        for line in lines:
+            rec = json.loads(line)
+            if rec.get("id") == rid:
+                rec.setdefault("outcomes", []).append(
+                    {
+                        "status": status.value,
+                        "recorded_at": datetime.now(timezone.utc).isoformat(),
+                        "agent": agent,
+                    }
+                )
+            rewritten.append(json.dumps(rec))
+        path.write_text("\n".join(rewritten) + "\n")
+        return {"success": True}
+
+    orig = mcp_tier2.record_outcome
+    mcp_tier2.record_outcome = _fake_outcome
+    try:
+        for _ in range(3):
+            result = await _record_outcome(
+                {"record_id": record_id, "domain": "infra", "status": "success"},
+                ctx(t.carlos, t.org, t.infra),
+            )
+    finally:
+        mcp_tier2.record_outcome = orig
+
+    assert "already recorded a success outcome" in result[0].text
+    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert len(records2[1]["records"][0]["outcomes"]) == 1
+
+
+async def test_record_outcome_status_change_from_same_agent_allowed(team, data_path, fake_write_record):
+    """A genuinely different status from the same agent (a change of
+    assessment) is still recorded, not blocked as a duplicate."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
+        path = m_dir / "expertise" / f"{domain}.jsonl"
+        lines = path.read_text().splitlines()
+        rewritten = []
+        for line in lines:
+            rec = json.loads(line)
+            if rec.get("id") == rid:
+                rec.setdefault("outcomes", []).append({"status": status.value, "agent": agent})
+            rewritten.append(json.dumps(rec))
+        path.write_text("\n".join(rewritten) + "\n")
+        return {"success": True}
+
+    orig = mcp_tier2.record_outcome
+    mcp_tier2.record_outcome = _fake_outcome
+    try:
+        r1 = await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "success"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+        r2 = await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "failure"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.record_outcome = orig
+
+    assert f"Recorded success outcome for {record_id}" in r1[0].text
+    assert f"Recorded failure outcome for {record_id}" in r2[0].text
+    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    statuses = [o["status"] for o in records2[1]["records"][0]["outcomes"]]
+    assert statuses == ["success", "failure"]
+
+
+async def test_record_outcome_same_status_different_agents_both_allowed(
+    team, data_path, fake_write_record
+):
+    """Dedup is scoped per agent — two different agents both confirming
+    success is genuine independent signal, not spam."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _record_outcome
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "tactical", "content": "v1"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
+        path = m_dir / "expertise" / f"{domain}.jsonl"
+        lines = path.read_text().splitlines()
+        rewritten = []
+        for line in lines:
+            rec = json.loads(line)
+            if rec.get("id") == rid:
+                rec.setdefault("outcomes", []).append({"status": status.value, "agent": agent})
+            rewritten.append(json.dumps(rec))
+        path.write_text("\n".join(rewritten) + "\n")
+        return {"success": True}
+
+    orig = mcp_tier2.record_outcome
+    mcp_tier2.record_outcome = _fake_outcome
+    try:
+        r1 = await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "success"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+        r2 = await _record_outcome(
+            {"record_id": record_id, "domain": "infra", "status": "success"},
+            ctx(t.jorge, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.record_outcome = orig
+
+    assert f"Recorded success outcome for {record_id}" in r1[0].text
+    assert f"Recorded success outcome for {record_id}" in r2[0].text
+    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert len(records2[1]["records"][0]["outcomes"]) == 2
+
+
 async def test_record_outcome_non_owner_writer_allowed(team, data_path, fake_write_record):
     """Unlike edit_record, any WRITER can record an outcome on someone else's
     record — confirming whether guidance worked isn't restricted to its author."""
