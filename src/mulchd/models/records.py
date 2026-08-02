@@ -51,7 +51,7 @@ class RecordEvent(models.Model):
     actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="record_events"
     )
-    action = fields.CharField(max_length=16)  # "write" | "edit" | "delete"
+    action = fields.CharField(max_length=16)  # "write" | "edit" | "delete" | "move"
     client = fields.CharField(max_length=64, default="unknown")
     session_id = fields.UUIDField(null=True)
     at = fields.DatetimeField(auto_now_add=True)

@@ -54,6 +54,7 @@ from ..mulch import (
     delete_record,
     edit_record,
     init_ml_project,
+    move_record,
     record_outcome,
     restore_record,
     search_domains,
@@ -729,6 +730,54 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
 
 
+async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
+    _require_writer(ctx, "move records")
+    record_id = args["record_id"]
+    source_domain = args["domain"]
+    target_domain = args["target_domain"]
+    if target_domain == source_domain:
+        raise ValueError("source and target domain are the same — nothing to move")
+    if target_domain not in list_domain_names(ctx.org.slug, ctx.project.slug):
+        raise ValueError(
+            f"target domain '{target_domain}' does not exist — write_* tools auto-create "
+            f"domains, but move_record requires the target to already exist"
+        )
+    record = await _get_owned_record(ctx, source_domain, record_id, "move")
+    m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
+    result = await move_record(m_dir, source_domain, record_id, target_domain)
+    session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
+    try:
+        await RecordEvent.create(
+            record_id=record_id,
+            project=ctx.project,
+            domain=target_domain,
+            actor=ctx.user,
+            action="move",
+            client=ctx.client,
+            session_id=session_id,
+        )
+        await RecordMeta.filter(record_id=record_id).update(domain=target_domain)
+    except Exception:
+        # The JSONL move already applied — move it back so the whole operation
+        # fails cleanly instead of leaving an untracked location change.
+        await move_record(m_dir, target_domain, record_id, source_domain)
+        raise
+    source_path = expertise_path(ctx.org.slug, ctx.project.slug, source_domain)
+    if source_path.exists() and not await read_domain_records(source_path):
+        source_path.unlink()
+    msg = f"Moved {record_id} from {source_domain} to {target_domain}"
+    incoming_refs = result.get("incomingReferences") or []
+    if incoming_refs:
+        msg += (
+            f"\n\n{len(incoming_refs)} inbound reference(s) found; ID is preserved "
+            f"so existing links still resolve."
+        )
+    moved_record = {**record, "_domain": target_domain}
+    _fire_notify(source_domain, ctx, "move", record)
+    _fire_notify(target_domain, ctx, "move", moved_record)
+    return [TextContent(type="text", text=msg)]
+
+
 async def _record_tool_call(name: str, ctx: AuthContext) -> None:
     await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=ctx.client)
 
@@ -790,6 +839,8 @@ async def call_tool(name: str, arguments: dict | None) -> list[TextContent] | tu
             return await _edit_record(args, ctx)
         case "delete_record":
             return await _delete_record(args, ctx)
+        case "move_record":
+            return await _move_record(args, ctx)
         case _:
             raise ValueError(f"Unknown tool: {name}")
 

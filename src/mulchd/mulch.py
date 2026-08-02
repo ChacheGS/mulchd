@@ -175,6 +175,18 @@ async def restore_record(mulch_dir: Path, record_id: str) -> dict:
     return result if isinstance(result, dict) else {}
 
 
+async def move_record(
+    mulch_dir: Path, source_domain: str, record_id: str, target_domain: str
+) -> dict:
+    """Move a record between domains via `ml move`, preserving its ID. Returns
+    the full response, including `incomingReferences` — other records that
+    point at this ID via relates_to/supersedes, which still resolve after the
+    move since the ID doesn't change. Ownership check is the caller's
+    responsibility."""
+    result = await _run(mulch_dir, ["move", source_domain, record_id, target_domain])
+    return result if isinstance(result, dict) else {}
+
+
 async def init_ml_project(mulch_dir: Path) -> None:
     """Bootstrap a project directory via `ml init` if not yet initialised."""
     mulch_dir.parent.mkdir(parents=True, exist_ok=True)

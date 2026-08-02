@@ -427,6 +427,27 @@ TIER2_TOOLS = [
         },
         annotations=ToolAnnotations(destructiveHint=True),
     ),
+    Tool(
+        name="move_record",
+        description=(
+            "Move a record from one domain to another, preserving its ID — use this "
+            "when a record landed in the wrong domain. "
+            "Writers may only move their own records; admins may move any record. "
+            "The target domain must already exist; this does not auto-create it "
+            "like the write_* tools do. If this was the last record in the source "
+            "domain, the domain is removed automatically."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
+                "domain": {"type": "string", "description": "Current (source) domain"},
+                "target_domain": {"type": "string", "description": "Destination domain"},
+            },
+            "required": ["record_id", "domain", "target_domain"],
+        },
+        annotations=ToolAnnotations(destructiveHint=True),
+    ),
 ]
 
 _RECORD_SCHEMAS: dict[str, dict] = {

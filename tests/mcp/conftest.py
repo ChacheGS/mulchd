@@ -76,6 +76,25 @@ def _make_fake_delete(expertise_dir: Path):
     return _fake
 
 
+def _make_fake_move(expertise_dir: Path, incoming_references: list | None = None):
+    """Return a move_record stand-in that relocates the record line between
+    JSONL files, mirroring what `ml move` does on disk."""
+
+    async def _fake(m_dir, source_domain, rid, target_domain):
+        source_path = expertise_dir / f"{source_domain}.jsonl"
+        lines = source_path.read_text().splitlines()
+        moved = [l for l in lines if rid in l]
+        kept = [l for l in lines if rid not in l]
+        source_path.write_text("\n".join(kept) + ("\n" if kept else ""))
+        target_path = expertise_dir / f"{target_domain}.jsonl"
+        with target_path.open("a") as f:
+            for line in moved:
+                f.write(line + "\n")
+        return {"success": True, "incomingReferences": incoming_references or []}
+
+    return _fake
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manage
 | `write_guide` | Record a how-to guide |
 | `edit_record` | Update an existing record in place |
 | `delete_record` | Soft-delete a record (recoverable from `/admin`) |
+| `move_record` | Move a record to a different (existing) domain |
 | `search_records` | BM25 full-text search across domains |
 | `get_recent` | Surface teammate activity since a given timestamp |
 | `get_record_schema` | Get required and optional fields for a record type |
