@@ -40,6 +40,7 @@
       <option value="write"  {% if filter_action == 'write'  %}selected{% endif %}>write</option>
       <option value="edit"   {% if filter_action == 'edit'   %}selected{% endif %}>edit</option>
       <option value="delete" {% if filter_action == 'delete' %}selected{% endif %}>delete</option>
+      <option value="move"   {% if filter_action == 'move'   %}selected{% endif %}>move</option>
     </select>
     <input type="text" name="domain" value="{{ filter_domain }}" placeholder="domain filter"
       style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; width:140px; outline:none">
@@ -79,7 +80,11 @@
       <span class="badge" style="{{ e.action_color }}">{{ e.action }}</span>
       {% if e.record_type %}<span class="badge" style="background:#f1f5f9; color:#475569">{{ e.record_type }}</span>{% endif %}
       <span class="monospace" style="color:#6d28d9; font-size:11px">{{ e.record_id }}</span>
+      {% if e.action == 'move' %}
+      <span style="color:#475569">{{ e.source_domain }} → {{ e.domain }}</span>
+      {% else %}
       <span style="color:#475569">{{ e.domain }}</span>
+      {% endif %}
       <span style="flex:1"></span>
       {% if e.classification_downgrade %}
       <span class="downgrade-badge">{{ e.downgrade_label if e.downgrade_label else 'classification ↓' }}</span>
@@ -96,6 +101,9 @@
 
     {% elif e.action == 'delete' and e.record_summary %}
     <div class="event-detail" style="color:#991b1b">{{ e.record_summary }}</div>
+
+    {% elif e.action == 'move' and e.record_summary %}
+    <div class="event-detail" style="color:#5b21b6">{{ e.record_summary }}</div>
 
     {% elif e.action == 'edit' and e.before_snap %}
     <div class="field-diff">

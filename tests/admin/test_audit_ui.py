@@ -107,6 +107,40 @@ async def test_audit_page_with_project_shows_events(admin_client, tmp_path, monk
     assert "api" in resp.text
 
 
+async def test_audit_move_event_shows_source_and_target_domain(admin_client, tmp_path, monkeypatch):
+    """A move event renders 'source → target' and is selectable in the action filter,
+    not just a bare badge with no detail (the gap this test guards against)."""
+    org, project, alice, bob = await _setup(tmp_path, monkeypatch)
+    r = _jot(
+        tmp_path,
+        "correct",
+        type="convention",
+        classification="tactical",
+        content="Relocated record",
+        owner="alice",
+    )
+    await RecordEvent.create(
+        record_id=r["id"],
+        project=project,
+        domain="correct",
+        source_domain="scratch",
+        actor=alice,
+        action="move",
+        client="test",
+        session_id=uuid.uuid4(),
+    )
+
+    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    assert resp.status_code == 200
+    assert "move" in resp.text
+    assert "scratch → correct" in resp.text
+    assert "Relocated record" in resp.text
+
+    filtered = await admin_client.get("/admin/audit?project=acme/platform&action=move")
+    assert filtered.status_code == 200
+    assert r["id"] in filtered.text
+
+
 # ---------------------------------------------------------------------------
 # F3 — cross-owner detection
 # ---------------------------------------------------------------------------

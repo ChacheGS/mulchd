@@ -17,6 +17,7 @@ _ACTION_COLORS = {
     "write": "background:#d1fae5; color:#065f46",
     "edit": "background:#dbeafe; color:#1d4ed8",
     "delete": "background:#fee2e2; color:#991b1b",
+    "move": "background:#ede9fe; color:#5b21b6",
 }
 
 _CONTENT_KEYS = ("content", "title", "name", "description", "resolution", "rationale")
@@ -77,6 +78,7 @@ async def audit_page(
                     "id",
                     "record_id",
                     "domain",
+                    "source_domain",
                     "action",
                     "client",
                     "at",
@@ -185,6 +187,7 @@ async def audit_page(
                     {
                         "record_id": r["record_id"],
                         "domain": r["domain"],
+                        "source_domain": r["source_domain"],
                         "action": r["action"],
                         "action_color": _ACTION_COLORS.get(
                             r["action"], "background:#f1f5f9; color:#475569"

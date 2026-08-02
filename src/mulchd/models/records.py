@@ -54,7 +54,8 @@ class RecordEvent(models.Model):
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
         "models.Project", related_name="record_events"
     )
-    domain = fields.CharField(max_length=64)
+    domain = fields.CharField(max_length=64)  # for "move", the target domain
+    source_domain = fields.CharField(max_length=64, null=True, default=None)  # "move" only
     actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="record_events"
     )

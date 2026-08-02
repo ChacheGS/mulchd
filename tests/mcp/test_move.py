@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from mulchd.models import Role
+from mulchd.models import RecordEvent, Role
 from tests.mcp.conftest import ctx, _jot, _make_fake_move
 
 
@@ -37,6 +37,34 @@ async def test_move_relocates_record_between_domains(team, data_path, monkeypatc
     assert f"Moved {record['id']} from scratch to correct" in result[0].text
     target_lines = (expertise / "correct.jsonl").read_text().splitlines()
     assert any(record["id"] in line for line in target_lines)
+
+
+async def test_move_records_source_domain_on_the_event(team, data_path, monkeypatch):
+    """The RecordEvent audit row captures where the record moved from, not just
+    where it ended up — needed for the admin audit page to render the move."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _move_record
+
+    t = team
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    record = _jot(
+        data_path, "acme", "infra", "scratch", type="convention",
+        classification="foundational", content="misplaced", owner="carlos",
+    )
+    _jot(
+        data_path, "acme", "infra", "correct", type="convention",
+        classification="foundational", content="existing target record", owner="carlos",
+    )
+    monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
+
+    await _move_record(
+        {"record_id": record["id"], "domain": "scratch", "target_domain": "correct"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    event = await RecordEvent.get(record_id=record["id"], action="move")
+    assert event.source_domain == "scratch"
+    assert event.domain == "correct"
 
 
 async def test_move_last_record_removes_source_domain(team, data_path, monkeypatch):

@@ -751,6 +751,7 @@ async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             record_id=record_id,
             project=ctx.project,
             domain=target_domain,
+            source_domain=source_domain,
             actor=ctx.user,
             action="move",
             client=ctx.client,
