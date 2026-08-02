@@ -33,9 +33,11 @@ class OAuthGrant(models.Model):
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="oauth_grants", on_delete=fields.CASCADE
     )
+    user_id: int
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
         "models.Project", related_name="oauth_grants", on_delete=fields.CASCADE
     )
+    project_id: int
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

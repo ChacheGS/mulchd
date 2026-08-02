@@ -751,7 +751,7 @@ async def list_tools() -> list[Tool]:
 
 
 @tier2_server.call_tool()
-async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict | None) -> list[TextContent] | tuple[list[TextContent], dict]:
     args = arguments or {}
     ctx = _ctx.get()
     if ctx is None:

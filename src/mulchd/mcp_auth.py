@@ -3,6 +3,8 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
+from pydantic import AnyUrl
+
 from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
@@ -60,6 +62,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> AuthorizationCode | None:
+        assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthCode.filter(code_hash=_hash(authorization_code), client_id=client.client_id, used=False)
             .select_related("grant")
@@ -76,7 +79,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
             expires_at=expires_at.timestamp(),
             client_id=client.client_id,
             code_challenge=row.code_challenge,
-            redirect_uri=row.redirect_uri,
+            redirect_uri=AnyUrl(row.redirect_uri),
             redirect_uri_provided_explicitly=True,
             subject=str(row.grant.user_id),
         )
@@ -84,6 +87,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> SdkOAuthToken:
+        assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthCode.filter(code_hash=_hash(authorization_code.code), client_id=client.client_id)
             .select_related("grant")
@@ -103,6 +107,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> RefreshToken | None:
+        assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthToken.filter(
                 refresh_token_hash=_hash(refresh_token), client_id=client.client_id, revoked=False
@@ -128,6 +133,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> SdkOAuthToken:
+        assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthToken.filter(
                 refresh_token_hash=_hash(refresh_token.token), client_id=client.client_id, revoked=False

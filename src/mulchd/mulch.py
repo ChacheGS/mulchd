@@ -213,7 +213,8 @@ async def record_outcome(
         args += ["--notes", notes]
     if agent:
         args += ["--agent", agent]
-    return await _run(mulch_dir, args)
+    result = await _run(mulch_dir, args)
+    return result if isinstance(result, dict) else {}
 
 
 async def audit_corpus(mulch_dir: Path, domain: str | None = None) -> dict:
@@ -223,4 +224,5 @@ async def audit_corpus(mulch_dir: Path, domain: str | None = None) -> dict:
     args = ["audit", "--suggest"]
     if domain:
         args += ["--domain", domain]
-    return await _run(mulch_dir, args)
+    result = await _run(mulch_dir, args)
+    return result if isinstance(result, dict) else {}

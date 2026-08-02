@@ -11,7 +11,7 @@ class ToolCall(models.Model):
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
         "models.Project", related_name="tool_calls"
     )
-    author: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+    author: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User", related_name="tool_calls", null=True
     )
     tool = fields.CharField(max_length=64)

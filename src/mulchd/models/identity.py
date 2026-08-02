@@ -41,6 +41,7 @@ class InviteLink(models.Model):
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
         "models.Project", related_name="invite_links"
     )
+    project_id: int
     role = fields.CharEnumField(Role, max_length=16, default=Role.WRITER)
     max_uses = fields.IntField(null=True, default=None)
     use_count = fields.IntField(default=0)
@@ -75,6 +76,7 @@ class InviteUse(models.Model):
     invite: fields.ForeignKeyRelation[InviteLink] = fields.ForeignKeyField(
         "models.InviteLink", related_name="uses"
     )
+    invite_id: int
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="invite_uses"
     )

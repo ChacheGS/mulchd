@@ -105,6 +105,6 @@ async def set_project_language(
     project = await Project.get_or_none(id=project_id)
     if project is None:
         return RedirectResponse("/admin/projects", status_code=303)
-    project.knowledge_language = knowledge_language.strip() or None
+    project.knowledge_language = knowledge_language.strip() or None  # type: ignore[assignment] — tortoise's CharField stub isn't null-aware
     await project.save(update_fields=["knowledge_language"])
     return RedirectResponse("/admin/projects", status_code=303)

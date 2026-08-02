@@ -112,8 +112,8 @@ async def lifespan(_: FastAPI):
     await Tortoise.init(config=TORTOISE_ORM)
     await Tortoise.generate_schemas()
     async with (
-        tier_managers["tier1"].run(),
-        tier_managers["tier2"].run(),
+        tier_managers[McpTier.TIER1].run(),
+        tier_managers[McpTier.TIER2].run(),
     ):
         yield
     await Tortoise.close_connections()
