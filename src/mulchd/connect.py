@@ -407,10 +407,14 @@ async def oauth_callback(request: Request, provider: str):
             (e["email"] for e in emails if e.get("primary") and e.get("verified")),
             None,
         )
+        username = user_resp.json().get("login", "")
+        display_name = user_resp.json().get("name") or username
     else:  # oidc
         userinfo = token.get("userinfo", {})
         sub = userinfo.get("sub", "")
         email = userinfo.get("email")
+        username = userinfo.get("preferred_username") or (email or "").split("@")[0]
+        display_name = userinfo.get("name") or username
 
     if not sub or not email:
         return templates.TemplateResponse(
@@ -443,13 +447,7 @@ async def oauth_callback(request: Request, provider: str):
                     {"error": "Your email is not authorized for this invite.", "providers": get_configured_providers()},
                     status_code=403,
                 )
-            # Derive username and display_name from provider
-            if provider == "github":
-                username = user_resp.json().get("login", "")
-                display_name = user_resp.json().get("name") or username
-            else:
-                username = userinfo.get("preferred_username") or email.split("@")[0]
-                display_name = userinfo.get("name") or username
+            # username/display_name derived from provider profile data above
             user = await create_user_from_oauth(provider, sub, email, username, display_name)
         else:
             return templates.TemplateResponse(
