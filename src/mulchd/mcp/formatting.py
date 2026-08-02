@@ -153,6 +153,10 @@ def _decorate_header(header: str, r: dict) -> str:
             header += f" • supersedes {', '.join(r['_supersedes_display'])}"
         if r.get("_supersedes_foundational"):
             header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
+    if r.get("_relates_to_display"):
+        header += f" • relates to {', '.join(r['_relates_to_display'])}"
+    if r.get("_related_by"):
+        header += f" • referenced by {', '.join(r['_related_by'])}"
     if r.get("_edited"):
         n = r.get("_edit_count", "")
         editor = r.get("_last_edited_by", "")

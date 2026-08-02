@@ -178,11 +178,15 @@ async def restore_record(mulch_dir: Path, record_id: str) -> dict:
 async def move_record(
     mulch_dir: Path, source_domain: str, record_id: str, target_domain: str
 ) -> dict:
-    """Move a record between domains via `ml move`, preserving its ID. Returns
-    the full response, including `incomingReferences` — other records that
-    point at this ID via relates_to/supersedes, which still resolve after the
-    move since the ID doesn't change. Ownership check is the caller's
-    responsibility."""
+    """Move a record between domains via `ml move`, preserving its ID.
+
+    Ignore this result's `incomingReferences` field — mulch 0.10.7's own
+    computation of it skips the entire source-domain file (not just the
+    moved record's line), so it misses same-domain references. Callers
+    should compute inbound references themselves (see
+    supersession._find_incoming_references) before calling this.
+
+    Ownership check is the caller's responsibility."""
     result = await _run(mulch_dir, ["move", source_domain, record_id, target_domain])
     return result if isinstance(result, dict) else {}
 

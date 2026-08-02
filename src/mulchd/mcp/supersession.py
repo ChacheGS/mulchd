@@ -83,6 +83,71 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
                 r["_supersedes_foundational"] = displaced_foundational
 
 
+async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str) -> None:
+    """Tag each record with incoming/outgoing relates_to links.
+
+    Mirrors _mark_superseded's scan-the-whole-project approach, but
+    relates_to is a plain, non-exclusive association rather than a
+    hierarchical one — a target can be referenced by any number of other
+    records (unlike _superseded_by, which keeps only the latest superseder),
+    so incoming links are collected as a list, not a single winner.
+    """
+    if not records:
+        return
+    m_dir = mulch_dir(org_slug, project_slug)
+    project_records = await get_project_records(m_dir)
+    archived_ids = await get_archived_ids(m_dir)
+    live_ids = {r["id"] for r in project_records if r.get("id")}
+
+    related_by: dict[str, list[str]] = {}
+    for stored in project_records:
+        sid = stored.get("id", "")
+        if not sid:
+            continue
+        for tid in stored.get("relates_to") or []:
+            related_by.setdefault(tid, []).append(sid)
+
+    for r in records:
+        rid = r.get("id")
+        if rid in related_by:
+            r["_related_by"] = related_by[rid]
+
+        outgoing = r.get("relates_to") or []
+        if outgoing:
+            display: list[str] = []
+            for tid in outgoing:
+                if tid in live_ids:
+                    display.append(tid)
+                elif tid in archived_ids:
+                    display.append(f"{tid} (deleted)")
+                else:
+                    display.append(f"{tid} (missing)")
+            r["_relates_to_display"] = display
+
+
+async def _find_incoming_references(m_dir: Path, record_id: str) -> list[dict]:
+    """Every other live record whose relates_to or supersedes points at record_id.
+
+    Computed independently of `ml move`'s own incomingReferences — that scan
+    (mulch 0.10.7's findIncomingReferences) skips the entire source-domain
+    file, not just the moved record's own line, so it structurally misses
+    same-domain references. mulchd already has the project-wide record set
+    cached for _mark_related_to/_mark_superseded, so it's cheaper and more
+    correct to answer this directly than to trust ml's result.
+    """
+    project_records = await get_project_records(m_dir)
+    hits: list[dict] = []
+    for r in project_records:
+        rid = r.get("id")
+        if not rid or rid == record_id:
+            continue
+        if record_id in (r.get("relates_to") or []):
+            hits.append({"domain": r.get("_domain", ""), "id": rid, "field": "relates_to"})
+        if record_id in (r.get("supersedes") or []):
+            hits.append({"domain": r.get("_domain", ""), "id": rid, "field": "supersedes"})
+    return hits
+
+
 def _validate_references(
     live_ids: set[str],
     supersedes: list[str],

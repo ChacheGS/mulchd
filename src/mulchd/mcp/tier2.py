@@ -32,6 +32,8 @@ from .schemas import (
 from .supersession import (
     Classification,
     _mark_superseded,
+    _mark_related_to,
+    _find_incoming_references,
     _validate_references,
     _find_cycles,
     _supersede_alerts,
@@ -241,6 +243,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         else None
     )
     await _mark_superseded(page, ctx.org.slug, ctx.project.slug)
+    await _mark_related_to(page, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(page, ctx.project.id)
     await _annotate_outcome_staleness(page, ctx.project.id)
     cross_domain_hints = [
@@ -448,6 +451,7 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
         results = [r for r in results if r.get("owner") == author_filter]
     results, truncated = _cap_per_domain(results, limit)
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
+    await _mark_related_to(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
     await _annotate_outcome_staleness(results, ctx.project.id)
     formatted = _format_records(results)
@@ -525,6 +529,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     )
     meta_by_id = {m["record_id"]: m for m in meta_rows}
     await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
+    await _mark_related_to(results, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(results, ctx.project.id)
     await _annotate_outcome_staleness(results, ctx.project.id)
     formatted = _format_recent(results, meta_by_id)
@@ -744,7 +749,8 @@ async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         )
     record = await _get_owned_record(ctx, source_domain, record_id, "move")
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    result = await move_record(m_dir, source_domain, record_id, target_domain)
+    incoming_refs = await _find_incoming_references(m_dir, record_id)
+    await move_record(m_dir, source_domain, record_id, target_domain)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     try:
         await RecordEvent.create(
@@ -767,7 +773,6 @@ async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     if source_path.exists() and not await read_domain_records(source_path):
         source_path.unlink()
     msg = f"Moved {record_id} from {source_domain} to {target_domain}"
-    incoming_refs = result.get("incomingReferences") or []
     if incoming_refs:
         msg += (
             f"\n\n{len(incoming_refs)} inbound reference(s) found; ID is preserved "
@@ -887,6 +892,7 @@ async def read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
         for r in records:
             r["_domain"] = name
         await _mark_superseded(records, ctx.org.slug, ctx.project.slug)
+        await _mark_related_to(records, ctx.org.slug, ctx.project.slug)
         if records:
             text = _wrap_untrusted(_format_records(records))
         else:

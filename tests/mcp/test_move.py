@@ -216,9 +216,12 @@ async def test_move_reader_role_rejected(team, data_path):
         )
 
 
-async def test_move_reports_incoming_references(team, data_path, monkeypatch):
-    """The response surfaces inbound relates_to/supersedes references from
-    ml's move output, since the ID is preserved and those links still resolve."""
+async def test_move_reports_incoming_references_same_domain(team, data_path, monkeypatch):
+    """The response surfaces inbound relates_to/supersedes references, computed
+    directly from the project's records rather than trusted from ml's move
+    output — ml 0.10.7's own incomingReferences skips the entire source-domain
+    file, so a referencer living in the *same* domain as the moved record
+    (the case this test covers) would otherwise be silently missed."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _move_record
 
@@ -229,16 +232,15 @@ async def test_move_reports_incoming_references(team, data_path, monkeypatch):
         classification="foundational", content="v1", owner="carlos",
     )
     _jot(
+        data_path, "acme", "infra", "scratch", type="decision",
+        classification="tactical", title="refers to v1", rationale="see v1",
+        relates_to=[record["id"]], owner="carlos",
+    )
+    _jot(
         data_path, "acme", "infra", "correct", type="convention",
         classification="foundational", content="existing target record", owner="carlos",
     )
-    monkeypatch.setattr(
-        mcp_tier2,
-        "move_record",
-        _make_fake_move(
-            expertise, incoming_references=[{"domain": "other", "id": "mx-x", "field": "relates_to"}]
-        ),
-    )
+    monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
     result = await _move_record(
         {"record_id": record["id"], "domain": "scratch", "target_domain": "correct"},
