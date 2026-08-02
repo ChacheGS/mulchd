@@ -397,10 +397,10 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
                 TextContent(
                     type="text",
                     text=(
-                        f"⚠ Not recorded as a new record: this write matched an existing {rtype} "
-                        f"by {dedup_field}, and ml silently overwrote it in place before mulchd's "
-                        f"duplicate check could prevent it (a race with a concurrent write). Flag "
-                        f"this to the user — the record's prior content may have been lost."
+                        f"⚠ This write matched an existing {rtype} by {dedup_field} and, due to a "
+                        f"race with a concurrent write, overwrote it in place instead of being "
+                        f"rejected as a duplicate. Flag this to the user — the record's prior "
+                        f"content may have been lost."
                     ),
                 )
             ]
