@@ -2,8 +2,10 @@
 get_recent timestamp-filtering tests.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from mulchd.mcp.tier2 import _get_recent
+from mulchd.models import RecordMeta
 from tests.mcp.conftest import ctx, _jot
 
 
@@ -79,3 +81,54 @@ async def test_get_recent_multiple_domains(team, data_path):
     text = result[0].text
     assert "Infra domain record" in text
     assert "Governance domain record" in text
+
+
+async def test_get_recent_does_not_leak_attribution_across_projects_with_same_record_id(
+    team, data_path
+):
+    """ml's record IDs are content-derived, not random, so two different
+    projects can legitimately produce the same record_id (see RecordMeta's
+    (project, record_id) unique_together). get_recent for one project must
+    only ever see that project's RecordMeta row, never the other's author."""
+    t = team
+    dupe_id = "mx-dupe123"
+    now = datetime.now(timezone.utc)
+
+    # A RecordMeta row for the *other* project, same record_id, different author.
+    await RecordMeta.create(
+        record_id=dupe_id,
+        project=t.data,
+        domain="pipelines",
+        author=t.ana,
+        session_id=uuid.uuid4(),
+        client="test",
+    )
+    # The row that actually belongs to the project under test.
+    await RecordMeta.create(
+        record_id=dupe_id,
+        project=t.infra,
+        domain="infra",
+        author=t.carlos,
+        session_id=uuid.uuid4(),
+        client="test",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        id=dupe_id,
+        type="decision",
+        classification="foundational",
+        content="Infra's record sharing an ID with a data-platform record",
+        owner="carlos",
+        recorded_at=now,
+    )
+
+    result = await _get_recent(
+        {"since": (now - timedelta(seconds=1)).isoformat(), "domains": ["infra"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    text = result[0].text
+    assert "Carlos G." in text
+    assert "Ana R." not in text

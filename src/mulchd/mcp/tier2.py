@@ -516,7 +516,7 @@ async def _get_recent(args: dict, ctx: AuthContext) -> list[TextContent]:
     record_ids = [r["id"] for r in results if r.get("id")]
     meta_rows = (
         (
-            await RecordMeta.filter(record_id__in=record_ids)
+            await RecordMeta.filter(record_id__in=record_ids, project=ctx.project)
             .prefetch_related("author")
             .values("record_id", "session_id", "author__username", "author__display_name")
         )
@@ -756,7 +756,7 @@ async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             client=ctx.client,
             session_id=session_id,
         )
-        await RecordMeta.filter(record_id=record_id).update(domain=target_domain)
+        await RecordMeta.filter(record_id=record_id, project=ctx.project).update(domain=target_domain)
     except Exception:
         # The JSONL move already applied — move it back so the whole operation
         # fails cleanly instead of leaving an untracked location change.

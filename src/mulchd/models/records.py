@@ -23,7 +23,13 @@ class ToolCall(models.Model):
 
 
 class RecordMeta(models.Model):
-    record_id = fields.CharField(max_length=32, primary_key=True)  # mx-xxxxxx
+    """`ml`'s record IDs are content-derived (a short hash of type + an
+    identifying field, not random — see mulch's generateRecordId), so two
+    different projects can legitimately produce the same record_id. Uniqueness
+    is per (project, record_id), not on record_id alone."""
+
+    id = fields.IntField(primary_key=True)
+    record_id = fields.CharField(max_length=32)  # mx-xxxxxx
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
         "models.Project", related_name="records"
     )
@@ -37,6 +43,7 @@ class RecordMeta(models.Model):
 
     class Meta:
         table = "record_meta"
+        unique_together = (("project", "record_id"),)
 
 
 class RecordEvent(models.Model):

@@ -91,9 +91,9 @@ async def audit_page(
             all_record_ids = [r["record_id"] for r in rows]
             meta_rows = (
                 (
-                    await RecordMeta.filter(record_id__in=all_record_ids).values(
-                        "record_id", "author__username", "author__display_name"
-                    )
+                    await RecordMeta.filter(
+                        record_id__in=all_record_ids, project=selected_project
+                    ).values("record_id", "author__username", "author__display_name")
                 )
                 if all_record_ids
                 else []
