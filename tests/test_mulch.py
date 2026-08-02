@@ -374,6 +374,66 @@ async def test_write_record_raises_when_fallback_lookup_also_fails(monkeypatch, 
         await write_record(tmp_path, "infra", {"type": "convention", "content": "x"})
 
 
+async def test_write_record_raises_record_not_written_error_on_skip(monkeypatch, tmp_path):
+    """ml skips a duplicate for anonymous types (convention/failure) —
+    created=0, updated=0. write_record must raise RecordNotWrittenError,
+    not MulchError, carrying ml's summary so the caller can react gracefully
+    instead of treating this as a call failure."""
+    import mulchd.mulch as mulch_module
+    from mulchd.mulch import RecordNotWrittenError, write_record
+
+    summary = {
+        "success": True,
+        "command": "record",
+        "action": "stdin",
+        "domain": "infra",
+        "created": 0,
+        "updated": 0,
+        "skipped": 1,
+        "errors": [],
+        "warnings": [],
+    }
+
+    async def _fake_run(mulch_dir, args, stdin_data=None):
+        return summary
+
+    monkeypatch.setattr(mulch_module, "_run", _fake_run)
+
+    with pytest.raises(RecordNotWrittenError) as exc_info:
+        await write_record(tmp_path, "infra", {"type": "convention", "content": "x"})
+    assert exc_info.value.summary == summary
+
+
+async def test_write_record_raises_record_not_written_error_on_update(monkeypatch, tmp_path):
+    """ml upserts a duplicate for named types (decision/pattern/reference/
+    guide) — created=0, updated=1. Same RecordNotWrittenError as the skip
+    case, since mulchd never wants either to be reported as a successful
+    new write."""
+    import mulchd.mulch as mulch_module
+    from mulchd.mulch import RecordNotWrittenError, write_record
+
+    summary = {
+        "success": True,
+        "command": "record",
+        "action": "stdin",
+        "domain": "infra",
+        "created": 0,
+        "updated": 1,
+        "skipped": 0,
+        "errors": [],
+        "warnings": [],
+    }
+
+    async def _fake_run(mulch_dir, args, stdin_data=None):
+        return summary
+
+    monkeypatch.setattr(mulch_module, "_run", _fake_run)
+
+    with pytest.raises(RecordNotWrittenError) as exc_info:
+        await write_record(tmp_path, "infra", {"type": "decision", "title": "x", "rationale": "y"})
+    assert exc_info.value.summary == summary
+
+
 @ml_available
 async def test_live_delete_record_archives_it(data_path):
     from mulchd.domains import mulch_dir

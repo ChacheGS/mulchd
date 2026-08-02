@@ -154,6 +154,121 @@ async def test_live_write_record_decision_succeeds(team, data_path):
     assert "decision" in result[0].text
 
 
+@ml_available
+async def test_live_write_convention_duplicate_does_not_crash(team, data_path):
+    """Regression test for the reported crash: writing a convention whose
+    content exactly matches an existing one used to raise MulchError('ml
+    record returned no record object') because ml skips the duplicate
+    (created=0) and the old wrapper only ever checked created>0. Runs
+    against the real ml binary, not a mock, since the bug was in how
+    mulchd interpreted ml's actual response shape."""
+    t = team
+    args = {
+        "domain": "live-dup-test",
+        "type": "convention",
+        "classification": "tactical",
+        "content": "Always enable S3 versioning on all buckets",
+    }
+    await _record_expertise(args, ctx(t.carlos, t.org, t.infra))
+
+    result = await _record_expertise(dict(args), ctx(t.carlos, t.org, t.infra))
+    assert "Not recorded" in result[0].text
+
+
+@ml_available
+async def test_live_write_decision_duplicate_title_does_not_crash(team, data_path):
+    """Same regression, for the 'updated' (upsert) branch that write_decision/
+    write_pattern/write_reference/write_guide hit instead of 'skipped' —
+    ml silently overwrites the existing record (updated=0 -> created stays 0),
+    which the old wrapper also didn't handle."""
+    t = team
+    await _record_expertise(
+        {
+            "domain": "live-dup-test2",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "Use Aurora Serverless",
+            "rationale": "v1",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    result = await _record_expertise(
+        {
+            "domain": "live-dup-test2",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "Use Aurora Serverless",
+            "rationale": "v2 attempted overwrite",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Not recorded" in result[0].text
+
+
+async def test_write_convention_exact_duplicate_content_rejected_gracefully(
+    team, data_path, fake_write_record
+):
+    """Writing a convention with content matching an existing one returns a
+    plain rejection message instead of crashing — ml's own dedup logic
+    silently skips convention/failure duplicates rather than creating them,
+    and the old wrapper unconditionally assumed a new record was created."""
+    t = team
+    args = {
+        "domain": "infra",
+        "type": "convention",
+        "classification": "tactical",
+        "content": "Always enable S3 versioning",
+    }
+    await _record_expertise(args, ctx(t.carlos, t.org, t.infra))
+
+    result = await _record_expertise(dict(args), ctx(t.carlos, t.org, t.infra))
+    assert "Not recorded" in result[0].text
+    assert "already exists" in result[0].text
+
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert len(structured["records"]) == 1
+
+
+async def test_write_decision_duplicate_title_rejected_gracefully(team, data_path, fake_write_record):
+    """Writing a decision with a title matching an existing one is also
+    rejected — ml's own dedup logic would silently overwrite (upsert) the
+    existing decision in place rather than skip, which is worse than a
+    no-op, so this must never be allowed to reach ml at all."""
+    t = team
+    await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "Use Postgres",
+            "rationale": "v1",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    result = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "Use Postgres",
+            "rationale": "v2 — this must not silently overwrite v1",
+        },
+        ctx(t.jorge, t.org, t.infra),
+    )
+    assert "Not recorded" in result[0].text
+    assert "already exists" in result[0].text
+
+    text_content, structured = await _read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert len(structured["records"]) == 1
+    assert structured["records"][0]["rationale"] == "v1"
+
+
 async def test_write_failure_cleans_up_empty_domain(team, data_path, monkeypatch):
     """A write that fails after ml creates the domain file should not leave an orphan."""
     import mulchd.mcp.tier2 as mcp_tier2

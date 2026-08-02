@@ -28,6 +28,7 @@ from .schemas import (
     _CLASSIFICATION_PROPERTY,
     _RELATED_RECORD_PROPERTIES,
     _RECORD_FIELD_KEYS,
+    _DEDUP_FIELD_BY_TYPE,
 )
 from .supersession import (
     Classification,
@@ -367,13 +368,52 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
             list(args.get("supersedes") or []),
             list(args.get("relates_to") or []),
         )
-    await init_ml_project(m_dir)
     domain_file = expertise_path(ctx.org.slug, ctx.project.slug, domain)
+    dedup_field = _DEDUP_FIELD_BY_TYPE[rtype]
+    if domain_file.exists():
+        for existing in await read_domain_records(domain_file):
+            if existing.get("type") == rtype and existing.get(dedup_field) == record.get(dedup_field):
+                return [
+                    TextContent(
+                        type="text",
+                        text=(
+                            f"Not recorded: a {rtype} with the same {dedup_field} already exists "
+                            f"({existing.get('id', '?')}) in {domain}. Use edit_record to update "
+                            f"it, or add supersedes if this is meant to replace it."
+                        ),
+                    )
+                ]
+    await init_ml_project(m_dir)
     pre_existed = domain_file.exists()
-    from ..mulch import MulchError
+    from ..mulch import MulchError, RecordNotWrittenError
 
     try:
         written = await write_record(m_dir, domain, record)
+    except RecordNotWrittenError as exc:
+        if not pre_existed and domain_file.exists() and domain_file.stat().st_size == 0:
+            domain_file.unlink()
+        if exc.summary.get("updated", 0) > 0:
+            return [
+                TextContent(
+                    type="text",
+                    text=(
+                        f"⚠ Not recorded as a new record: this write matched an existing {rtype} "
+                        f"by {dedup_field}, and ml silently overwrote it in place before mulchd's "
+                        f"duplicate check could prevent it (a race with a concurrent write). Flag "
+                        f"this to the user — the record's prior content may have been lost."
+                    ),
+                )
+            ]
+        return [
+            TextContent(
+                type="text",
+                text=(
+                    f"Not recorded: a {rtype} with the same {dedup_field} already exists in "
+                    f"{domain}. Use edit_record to update it, or add supersedes if this is "
+                    f"meant to replace it."
+                ),
+            )
+        ]
     except MulchError:
         if not pre_existed and domain_file.exists() and domain_file.stat().st_size == 0:
             domain_file.unlink()

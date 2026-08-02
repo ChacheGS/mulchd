@@ -19,6 +19,21 @@ class MulchError(Exception):
     pass
 
 
+class RecordNotWrittenError(MulchError):
+    """Raised by write_record when ml's own dedup logic skipped a duplicate
+    or silently upserted an existing record in place, rather than creating a
+    new one — not a failure of the `ml` call itself, but there's no new
+    record object to return. Carries ml's raw summary dict so the caller can
+    tell skipped (nothing changed) apart from updated (an existing record was
+    just overwritten). See schemas._DEDUP_FIELD_BY_TYPE for which case each
+    record type hits.
+    """
+
+    def __init__(self, summary: dict):
+        self.summary = summary
+        super().__init__(f"ml record did not create a new record: {summary}")
+
+
 _ML_TIMEOUT_SECONDS = 30
 
 
@@ -62,14 +77,24 @@ async def write_record(mulch_dir: Path, domain: str, record: dict) -> dict:
     """
     Pipe `record` to `ml record {domain} --stdin --json`.
     Returns the written record dict (with id populated by mulch).
+
+    Raises RecordNotWrittenError, not MulchError, when ml's dedup logic
+    skipped or upserted instead of creating — that's ml behaving correctly,
+    not a call failure. Callers should pre-check for a duplicate before
+    calling this (see tier2._record_expertise); this exception is the
+    backstop for the narrow race window between that check and this call.
     """
     validate_domain(domain)
     result = await _run(mulch_dir, ["record", domain, "--stdin"], stdin_data=json.dumps(record))
+    if not isinstance(result, dict):
+        raise MulchError(f"ml record returned an unexpected response: {result!r}")
+    if result.get("created", 0) == 0:
+        raise RecordNotWrittenError(result)
     # ml's --stdin mode returns a summary {success, created, ...} without the record object.
     # Fall back to reading the JSONL and matching on the fields we set.
-    written = result.get("record") if isinstance(result, dict) else None
-    if written is None and isinstance(result, dict) and result.get("created", 0) > 0:
-        written = _find_written_record(mulch_dir / "expertise" / f"{domain}.jsonl", record)
+    written = result.get("record") or _find_written_record(
+        mulch_dir / "expertise" / f"{domain}.jsonl", record
+    )
     if written is None:
         raise MulchError(f"ml record returned no record object: {result}")
     return written

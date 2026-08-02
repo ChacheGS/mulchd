@@ -467,3 +467,19 @@ _RECORD_SCHEMAS: dict[str, dict] = {
     },
     "guide": {"required": {"name": "string", "description": "string"}, "optional": {}},
 }
+
+# ml's own dedup key per type (mulch-cli 0.10.7 registry/builtins.ts). ml
+# treats a new record matching an existing one of the same type on this field
+# as a duplicate: convention/failure are "anonymous" (silently skipped, not
+# written); decision/pattern/reference/guide are "named" (silently upserted
+# in place, overwriting the existing record's other fields). Both outcomes
+# omit the record object from ml's --stdin JSON response, which is what the
+# duplicate pre-check in _record_expertise exists to avoid triggering.
+_DEDUP_FIELD_BY_TYPE: dict[str, str] = {
+    "convention": "content",
+    "decision": "title",
+    "failure": "description",
+    "pattern": "name",
+    "reference": "name",
+    "guide": "name",
+}
