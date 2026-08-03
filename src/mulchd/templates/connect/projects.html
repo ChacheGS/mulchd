@@ -2,6 +2,7 @@
 {% block page_title %}projects{% endblock %}
 {% block topbar_right %}<a href="/connect/logout" class="btn-link" style="margin-left:auto;font-size:13px;">Sign out</a>{% endblock %}
 {% block content %}
+{% if invite_error %}<div class="alert alert-warning">{{ invite_error }}</div>{% endif %}
 <div class="page-title" style="font-size:17px;font-weight:600;margin-bottom:20px;">Your projects</div>
 {% if memberships %}
 <div class="card">

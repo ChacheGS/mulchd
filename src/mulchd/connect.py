@@ -270,8 +270,14 @@ async def connect_login(
     return response
 
 
+_INVITE_ERROR_MESSAGES = {
+    "invalid": "Your invite link is no longer valid (it may have been revoked, expired, or already used up), so the membership it would have granted wasn't added.",
+    "domain_denied": "Your account's email isn't authorized for that invite link's allowed domains, so the membership it would have granted wasn't added.",
+}
+
+
 @router.get("/projects", response_class=HTMLResponse)
-async def connect_projects(request: Request):
+async def connect_projects(request: Request, invite_error: str | None = None):
     user = await _require_user(request)
     if user is None:
         return RedirectResponse("/connect", status_code=303)
@@ -281,7 +287,14 @@ async def connect_projects(request: Request):
     return templates.TemplateResponse(
         request,
         "connect/projects.html",
-        {"user": user, "memberships": memberships, "grants": grants},
+        {
+            "user": user,
+            "memberships": memberships,
+            "grants": grants,
+            # Only a known outcome gets a message — never reflect an arbitrary
+            # query value back into the page.
+            "invite_error": _INVITE_ERROR_MESSAGES.get(invite_error or ""),
+        },
     )
 
 

@@ -23,6 +23,42 @@ async def test_connect_projects_lists_memberships(client, alice_and_project):
     assert "demo" in resp.text
 
 
+async def test_connect_projects_shows_invalid_invite_error(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects", params={"invite_error": "invalid"})
+    assert resp.status_code == 200
+    assert "invite link" in resp.text.lower()
+    assert "no longer valid" in resp.text.lower()
+
+
+async def test_connect_projects_shows_domain_denied_invite_error(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects", params={"invite_error": "domain_denied"})
+    assert resp.status_code == 200
+    assert "email" in resp.text.lower()
+    assert "authorized" in resp.text.lower()
+
+
+async def test_connect_projects_ignores_unrecognized_invite_error(client, alice_and_project):
+    """An unrecognized/tampered invite_error value must not be reflected back
+    into the page verbatim — only known outcomes get a message."""
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects", params={"invite_error": "<script>evil</script>"})
+    assert resp.status_code == 200
+    assert "<script>evil</script>" not in resp.text
+
+
+async def test_connect_projects_no_invite_error_banner_without_param(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects")
+    assert resp.status_code == 200
+    assert 'class="alert alert-warning"' not in resp.text
+
+
 # ── project page ────────────────────────────────────────────────────────────
 
 
