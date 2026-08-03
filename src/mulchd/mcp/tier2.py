@@ -266,17 +266,22 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         for r in records:
             r["_domain"] = domain
         all_records.extend(records)
-    rtype = args.get("type")
+    type_filter = args.get("type")
     classification = args.get("classification")
     file_filter = args.get("file")
     outcome_status = args.get("outcome_status")
-    if rtype or classification or file_filter or outcome_status:
+    if (
+        type_filter is not None
+        or classification is not None
+        or file_filter is not None
+        or outcome_status is not None
+    ):
         all_records = [
             r
             for r in all_records
             if _matches_filters(
                 r,
-                rtype=rtype,
+                rtype=type_filter,
                 classification=classification,
                 file=file_filter,
                 outcome_status=outcome_status,

@@ -235,6 +235,7 @@ async def test_cross_domain_hints_in_read_records(team, data_path):
 
 
 async def test_read_records_filters_by_type(team, data_path):
+    """type filters to an exact record-type match, excluding others."""
     t = team
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c1", owner="carlos")
@@ -250,6 +251,7 @@ async def test_read_records_filters_by_type(team, data_path):
 
 
 async def test_read_records_filters_by_classification(team, data_path):
+    """classification filters to an exact classification match, excluding others."""
     t = team
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c1", owner="carlos")
@@ -265,6 +267,7 @@ async def test_read_records_filters_by_classification(team, data_path):
 
 
 async def test_read_records_filters_by_file_case_insensitive_substring(team, data_path):
+    """file matches case-insensitively against any entry in a record's files list."""
     t = team
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c1", owner="carlos", files=["src/mulchd/Auth.py"])
@@ -285,7 +288,7 @@ async def test_read_records_filters_by_outcome_status_any_match(team, data_path)
     t = team
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c1", owner="carlos",
-         outcomes=[{"status": "failure"}, {"status": "success"}])
+         outcomes=[{"status": "success"}, {"status": "failure"}])
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c2", owner="carlos",
          outcomes=[{"status": "failure"}])
@@ -299,6 +302,7 @@ async def test_read_records_filters_by_outcome_status_any_match(team, data_path)
 
 
 async def test_read_records_combined_filters_narrow_further(team, data_path):
+    """Two filters together narrow further than either alone (independent ANDs)."""
     t = team
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c1", owner="carlos")
@@ -317,6 +321,7 @@ async def test_read_records_combined_filters_narrow_further(team, data_path):
 
 
 async def test_read_records_filter_with_no_matches_returns_empty(team, data_path):
+    """A filter matching nothing returns an empty list, not an error or all records."""
     t = team
     _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
          content="c1", owner="carlos")
@@ -326,3 +331,23 @@ async def test_read_records_filter_with_no_matches_returns_empty(team, data_path
     )
 
     assert structured["records"] == []
+
+
+async def test_read_records_file_and_outcome_status_filters_skip_records_without_the_field(
+    team, data_path
+):
+    """A record with no files/outcomes key at all (not just an empty list) must be
+    excluded by the file/outcome_status filters, not raise or match by accident."""
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="no files or outcomes here", owner="carlos")
+
+    _, by_file = await _read_expertise(
+        {"domains": ["infra"], "file": "anything.py"}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert by_file["records"] == []
+
+    _, by_outcome = await _read_expertise(
+        {"domains": ["infra"], "outcome_status": "success"}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert by_outcome["records"] == []

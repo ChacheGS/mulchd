@@ -249,7 +249,10 @@ TIER2_TOOLS = [
                     "enum": ["convention", "decision", "failure", "pattern", "reference", "guide"],
                     "description": "Only return records of this type.",
                 },
-                "classification": _CLASSIFICATION_PROPERTY,
+                "classification": {
+                    **_CLASSIFICATION_PROPERTY,
+                    "description": "Only return records with this classification.",
+                },
                 "file": {
                     "type": "string",
                     "description": "Only return records whose related files include this path (case-insensitive substring match).",
