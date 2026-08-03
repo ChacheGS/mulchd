@@ -15,6 +15,19 @@ class Role(StrEnum):
     ADMIN = "admin"
 
 
+_ROLE_RANK: dict[Role, int] = {Role.READER: 0, Role.WRITER: 1, Role.ADMIN: 2}
+
+
+def min_role(a: Role, b: Role) -> Role:
+    """The more restrictive of two roles, by rank (READER < WRITER < ADMIN)."""
+    return a if _ROLE_RANK[a] <= _ROLE_RANK[b] else b
+
+
+def roles_up_to(ceiling: Role) -> list[Role]:
+    """All roles at or below `ceiling`, ordered from most to least privileged."""
+    return [r for r in (Role.ADMIN, Role.WRITER, Role.READER) if _ROLE_RANK[r] <= _ROLE_RANK[ceiling]]
+
+
 class Organization(models.Model):
     id = fields.IntField(primary_key=True)
     slug = fields.CharField(max_length=64, unique=True)
