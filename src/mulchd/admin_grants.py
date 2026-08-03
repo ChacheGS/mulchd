@@ -37,7 +37,9 @@ async def grant_superadmin(user: User, granted_by: User) -> AdminGrant:
     check-then-create — two concurrent calls for the same user can both pass
     the "not superadmin yet" read, but only one INSERT wins; the loser
     catches IntegrityError and re-fetches instead of racing to create a
-    duplicate row.
+    duplicate row. Assumes autocommit (no caller wraps this in an outer
+    transaction) — under an outer transaction, Postgres would abort it on
+    the integrity violation and the re-fetch below would fail too.
     """
     existing = await AdminGrant.filter(user=user, role=AdminRole.SUPERADMIN, org=None).first()
     if existing is not None:
@@ -76,7 +78,7 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
     """
     Revoke an active grant (deletes the row — InstanceEvent is the audit
     trail now, so there's nothing left to soft-revoke). Returns False
-    (no-op) if already revoked, or if it's the last active SUPERADMIN
+    (no-op) if the grant no longer exists, or if it's the last active SUPERADMIN
     grant — never leave zero admins.
 
     Re-fetches the grant under a row lock (like invite._claim_invite) so two
