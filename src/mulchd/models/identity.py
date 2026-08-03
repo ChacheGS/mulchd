@@ -26,7 +26,9 @@ class OAuthIdentity(models.Model):
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="oauth_identities"
     )
-    provider = fields.CharField(max_length=32)   # "github" | "oidc_<provider-slug>", e.g. "oidc_google"
+    provider = fields.CharField(max_length=64)   # "github" | "oidc_<provider-slug>", e.g. "oidc_google" —
+    # 64 (not 32) because the slug is now operator-chosen from an env var name and can be long;
+    # matches OAuthClient.client_id's max_length=64 precedent for similar operator-controlled strings.
     sub = fields.CharField(max_length=255)        # provider's immutable user ID
     created_at = fields.DatetimeField(auto_now_add=True)
 
