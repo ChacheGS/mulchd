@@ -232,3 +232,97 @@ async def test_cross_domain_hints_in_read_records(team, data_path):
     assert len(hints) == 1
     assert hints[0]["record_id"] == victim["id"]
     assert hints[0]["in_domain"] == "policies"
+
+
+async def test_read_records_filters_by_type(team, data_path):
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c1", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra", type="decision", classification="tactical",
+         title="d1", rationale="r1", owner="carlos")
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "type": "decision"}, ctx(t.carlos, t.org, t.infra)
+    )
+
+    assert len(structured["records"]) == 1
+    assert structured["records"][0]["type"] == "decision"
+
+
+async def test_read_records_filters_by_classification(team, data_path):
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c1", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="foundational",
+         content="c2", owner="carlos")
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "classification": "foundational"}, ctx(t.carlos, t.org, t.infra)
+    )
+
+    assert len(structured["records"]) == 1
+    assert structured["records"][0]["classification"] == "foundational"
+
+
+async def test_read_records_filters_by_file_case_insensitive_substring(team, data_path):
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c1", owner="carlos", files=["src/mulchd/Auth.py"])
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c2", owner="carlos", files=["src/mulchd/connect.py"])
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "file": "auth.py"}, ctx(t.carlos, t.org, t.infra)
+    )
+
+    assert len(structured["records"]) == 1
+    assert structured["records"][0]["content"] == "c1"
+
+
+async def test_read_records_filters_by_outcome_status_any_match(team, data_path):
+    """outcome_status matches if ANY outcome on the record has that status,
+    not just the most recent one."""
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c1", owner="carlos",
+         outcomes=[{"status": "failure"}, {"status": "success"}])
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c2", owner="carlos",
+         outcomes=[{"status": "failure"}])
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "outcome_status": "success"}, ctx(t.carlos, t.org, t.infra)
+    )
+
+    assert len(structured["records"]) == 1
+    assert structured["records"][0]["content"] == "c1"
+
+
+async def test_read_records_combined_filters_narrow_further(team, data_path):
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c1", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="foundational",
+         content="c2", owner="carlos")
+    _jot(data_path, "acme", "infra", "infra", type="decision", classification="tactical",
+         title="d1", rationale="r1", owner="carlos")
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "type": "convention", "classification": "tactical"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    assert len(structured["records"]) == 1
+    assert structured["records"][0]["content"] == "c1"
+
+
+async def test_read_records_filter_with_no_matches_returns_empty(team, data_path):
+    t = team
+    _jot(data_path, "acme", "infra", "infra", type="convention", classification="tactical",
+         content="c1", owner="carlos")
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "type": "decision"}, ctx(t.carlos, t.org, t.infra)
+    )
+
+    assert structured["records"] == []

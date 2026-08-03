@@ -228,6 +228,28 @@ def _recorded_at(r: dict) -> datetime:
     return recorded_at
 
 
+def _matches_filters(
+    r: dict,
+    *,
+    rtype: str | None,
+    classification: str | None,
+    file: str | None,
+    outcome_status: str | None,
+) -> bool:
+    if rtype is not None and r.get("type") != rtype:
+        return False
+    if classification is not None and r.get("classification") != classification:
+        return False
+    if file is not None:
+        file_lower = file.lower()
+        if not any(file_lower in f.lower() for f in r.get("files") or []):
+            return False
+    if outcome_status is not None:
+        if not any(o.get("status") == outcome_status for o in r.get("outcomes") or []):
+            return False
+    return True
+
+
 async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
     since = _parse_since(args["since"]) if args.get("since") else None
     domains = args.get("domains") or list_domain_names(ctx.org.slug, ctx.project.slug)
@@ -244,6 +266,22 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         for r in records:
             r["_domain"] = domain
         all_records.extend(records)
+    rtype = args.get("type")
+    classification = args.get("classification")
+    file_filter = args.get("file")
+    outcome_status = args.get("outcome_status")
+    if rtype or classification or file_filter or outcome_status:
+        all_records = [
+            r
+            for r in all_records
+            if _matches_filters(
+                r,
+                rtype=rtype,
+                classification=classification,
+                file=file_filter,
+                outcome_status=outcome_status,
+            )
+        ]
     if since is not None:
         all_records = [r for r in all_records if _recorded_at(r) >= since]
     all_records.sort(key=lambda r: (r.get("recorded_at", ""), r.get("id", "")), reverse=since is not None)

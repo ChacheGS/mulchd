@@ -244,6 +244,21 @@ TIER2_TOOLS = [
                     "type": "string",
                     "description": "Pass next_cursor from the previous response verbatim. Omit for the first page.",
                 },
+                "type": {
+                    "type": "string",
+                    "enum": ["convention", "decision", "failure", "pattern", "reference", "guide"],
+                    "description": "Only return records of this type.",
+                },
+                "classification": _CLASSIFICATION_PROPERTY,
+                "file": {
+                    "type": "string",
+                    "description": "Only return records whose related files include this path (case-insensitive substring match).",
+                },
+                "outcome_status": {
+                    "type": "string",
+                    "enum": ["success", "failure", "partial"],
+                    "description": "Only return records with at least one outcome of this status.",
+                },
             },
         },
         outputSchema={
