@@ -97,3 +97,45 @@ async def test_token_login_second_time_does_not_relog(client, db):
 
     count = await InstanceEvent.filter(category=InstanceEventCategory.FIRST_LOGIN).count()
     assert count == 1
+
+
+async def test_connect_entry_page_shows_github_logo_when_configured(client, monkeypatch):
+    from mulchd.config import settings
+
+    monkeypatch.setattr(settings, "github_client_id", "id123")
+    monkeypatch.setattr(settings, "github_client_secret", "secret456")
+
+    resp = await client.get("/connect")
+    assert resp.status_code == 200
+    assert "GitHub logo" in resp.text
+    assert "<svg" in resp.text
+
+
+async def test_connect_entry_page_shows_configured_oidc_logo(client, monkeypatch):
+    monkeypatch.setenv(
+        "MULCHD_OIDC_GOOGLE_DISCOVERY_URL",
+        "https://accounts.google.com/.well-known/openid-configuration",
+    )
+    monkeypatch.setenv("MULCHD_OIDC_GOOGLE_CLIENT_ID", "cid")
+    monkeypatch.setenv("MULCHD_OIDC_GOOGLE_CLIENT_SECRET", "csec")
+    monkeypatch.setenv("MULCHD_OIDC_GOOGLE_DISPLAY_NAME", "Google")
+    monkeypatch.setenv("MULCHD_OIDC_GOOGLE_LOGO_URL", "https://example.com/google-logo.svg")
+
+    resp = await client.get("/connect")
+    assert resp.status_code == 200
+    assert 'src="https://example.com/google-logo.svg"' in resp.text
+    assert "Google logo" in resp.text
+
+
+async def test_connect_entry_page_falls_back_to_generic_icon_without_logo_url(client, monkeypatch):
+    monkeypatch.setenv(
+        "MULCHD_OIDC_OKTA_DISCOVERY_URL", "https://okta.example.com/.well-known/openid-configuration"
+    )
+    monkeypatch.setenv("MULCHD_OIDC_OKTA_CLIENT_ID", "cid")
+    monkeypatch.setenv("MULCHD_OIDC_OKTA_CLIENT_SECRET", "csec")
+
+    resp = await client.get("/connect")
+    assert resp.status_code == 200
+    assert "Okta logo" in resp.text
+    assert "<img" not in resp.text
+    assert "<svg" in resp.text
