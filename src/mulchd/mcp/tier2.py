@@ -213,6 +213,14 @@ async def _get_owned_record(
     return record
 
 
+def _normalize_evidence(evidence: dict) -> dict:
+    """ml's own evidence schema only accepts a single string per field
+    (additionalProperties: false, no array types) — join any array mulchd's
+    more permissive tool schema allowed into one comma-separated string
+    before the record is handed to ml."""
+    return {k: ", ".join(v) if isinstance(v, list) else v for k, v in evidence.items()}
+
+
 def _parse_since(raw: str) -> datetime:
     since = datetime.fromisoformat(raw)
     if since.tzinfo is None:
@@ -397,6 +405,8 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         "owner": ctx.user.username,
         **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
     }
+    if "evidence" in record:
+        record["evidence"] = _normalize_evidence(record["evidence"])
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     project_records = await get_project_records(m_dir)
     if args.get("supersedes") or args.get("relates_to"):

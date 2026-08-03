@@ -19,6 +19,7 @@ _RECORD_FIELD_KEYS = frozenset(
         "relates_to",
         "supersedes",
         "date",
+        "evidence",
     }
 )
 
@@ -26,6 +27,13 @@ _CLASSIFICATION_PROPERTY = {
     "type": "string",
     "enum": ["foundational", "tactical", "observational"],
     "description": "foundational: core conventions/decisions that rarely change; tactical: current approach, may evolve; observational: useful context, specific to a situation or moment",
+}
+
+_EVIDENCE_STRING_OR_ARRAY = {
+    "oneOf": [
+        {"type": "string"},
+        {"type": "array", "items": {"type": "string"}},
+    ],
 }
 
 _RELATED_RECORD_PROPERTIES = {
@@ -43,6 +51,25 @@ _RELATED_RECORD_PROPERTIES = {
         "type": "array",
         "items": {"type": "string"},
         "description": "Record IDs this record replaces",
+    },
+    "evidence": {
+        "type": "object",
+        "description": (
+            "Supporting evidence for this record. All fields optional — set "
+            "only what applies. Each field accepts either a single value or "
+            "an array of values (e.g. multiple PRs or tickets); arrays are "
+            "joined into one string before being persisted."
+        ),
+        "properties": {
+            "commit": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Git commit hash(es)"},
+            "date": {"type": "string", "description": "ISO 8601 date the evidence applies to"},
+            "issue": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Generic issue reference(s)"},
+            "file": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Specific file path(s) this evidence points to"},
+            "bead": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Bead tracker ID(s)"},
+            "seeds": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Seeds tracker issue ID(s)"},
+            "gh": {**_EVIDENCE_STRING_OR_ARRAY, "description": "GitHub issue or PR reference(s)"},
+            "linear": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Linear ticket reference(s)"},
+        },
     },
 }
 

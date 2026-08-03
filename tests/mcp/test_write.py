@@ -68,6 +68,75 @@ async def test_writer_record_returns_confirmation(team, data_path, fake_write_re
     assert "infra" in result[0].text
 
 
+async def test_write_convention_with_evidence(team, data_path, fake_write_record):
+    """evidence (commit hash, issue/PR reference, etc.) must flow through into
+    the written record, not get silently dropped."""
+    t = team
+    await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Use IMDSv2 on all EC2 instances",
+            "evidence": {"commit": "abc1234", "gh": "org/repo#42"},
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+
+    record = structured["records"][0]
+    assert record["evidence"] == {"commit": "abc1234", "gh": "org/repo#42"}
+
+
+async def test_write_convention_with_evidence_array_values_joined(team, data_path, fake_write_record):
+    """mulchd accepts multiple PRs/tickets/etc per evidence field (an ergonomic
+    mulchd extends beyond ml's own scalar-only evidence schema), but ml itself
+    only accepts a single string per field — so arrays must be joined into one
+    string before the record is handed to ml."""
+    t = team
+    await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "Rotate creds quarterly",
+            "evidence": {
+                "gh": ["org/repo#42", "org/repo#43"],
+                "linear": ["TKT-1", "TKT-2", "TKT-3"],
+            },
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+
+    record = structured["records"][0]
+    assert record["evidence"] == {
+        "gh": "org/repo#42, org/repo#43",
+        "linear": "TKT-1, TKT-2, TKT-3",
+    }
+
+
+async def test_write_record_evidence_is_optional(team, data_path, fake_write_record):
+    """Omitting evidence entirely must not break the write (existing behavior,
+    guards against the new field becoming accidentally required)."""
+    t = team
+    result = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "No evidence here",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert len(result) == 1
+
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert "evidence" not in structured["records"][0]
+
+
 async def test_write_decision_dispatch_creates_decision_record(team, data_path, fake_write_record):
     """The write_decision tool call must inject type='decision' before reaching
     _record_expertise, without the caller having to pass type explicitly."""
