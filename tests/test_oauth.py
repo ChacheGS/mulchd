@@ -1,8 +1,3 @@
-import pytest
-
-pytestmark = pytest.mark.no_db
-
-
 def test_no_providers_configured():
     from mulchd.oauth import get_configured_providers
 
@@ -79,3 +74,6 @@ def test_multiple_oidc_providers_configured_simultaneously(monkeypatch):
 
     keys = {p.key for p in get_configured_providers()}
     assert {"oidc_google", "oidc_okta"} <= keys
+
+    oidc_keys = [p.key for p in get_configured_providers() if p.key.startswith("oidc_")]
+    assert oidc_keys == ["oidc_google", "oidc_okta"]
