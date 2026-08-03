@@ -170,8 +170,10 @@ TIER2_TOOLS = [
     Tool(
         name="read_records",
         description=(
-            "Load team records for context injection at session start. "
-            "Call this at the beginning of a session with domains relevant to the current task."
+            "Load team records. Omit `since` at session start to load context for "
+            "the current task (oldest first). Pass `since` to see what changed — at "
+            "session end, or when a notification suggests a domain moved — and results "
+            "come back newest first, grouped by the session that wrote them."
         ),
         inputSchema={
             "type": "object",
@@ -179,7 +181,14 @@ TIER2_TOOLS = [
                 "domains": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Domain names to read from.",
+                    "description": "Domain names to read from. Defaults to all domains.",
+                },
+                "since": {
+                    "type": "string",
+                    "description": (
+                        "ISO 8601 timestamp. Returns only records recorded after this "
+                        "time, newest first. Omit to load records oldest first instead."
+                    ),
                 },
                 "limit": {
                     "type": "integer",
@@ -191,7 +200,6 @@ TIER2_TOOLS = [
                     "description": "Pass next_cursor from the previous response verbatim. Omit for the first page.",
                 },
             },
-            "required": ["domains"],
         },
         outputSchema={
             "type": "object",
@@ -267,9 +275,9 @@ TIER2_TOOLS = [
             "type": "object",
             "properties": {
                 "server_time": {"type": "string"},
-                "get_recent_hint": {
+                "recent_hint": {
                     "type": "string",
-                    "description": "Reminder to call get_recent(since=server_time) at session end.",
+                    "description": "Reminder to call read_records(since=server_time) at session end.",
                 },
                 "language": {
                     "type": "string",
@@ -293,29 +301,6 @@ TIER2_TOOLS = [
                 },
             },
             "required": ["server_time", "domains"],
-        },
-        annotations=ToolAnnotations(readOnlyHint=True),
-    ),
-    Tool(
-        name="get_recent",
-        description=(
-            "Get records written since a given timestamp. "
-            "Call at session end to surface changes made by teammates while you were working."
-        ),
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "since": {
-                    "type": "string",
-                    "description": "ISO 8601 timestamp. Returns records recorded after this time.",
-                },
-                "domains": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Limit to these domains. Defaults to all domains.",
-                },
-            },
-            "required": ["since"],
         },
         annotations=ToolAnnotations(readOnlyHint=True),
     ),

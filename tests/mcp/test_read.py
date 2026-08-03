@@ -111,6 +111,42 @@ async def test_read_records_cursor_tiebreak_on_id(team, data_path):
     assert contents == {"twin a", "twin b"}
 
 
+async def test_read_records_since_paginates_newest_first(team, data_path):
+    """Passing `since` sorts newest-first instead of oldest-first, and cursor
+    pagination still walks forward through that order without skipping or
+    repeating a record."""
+    t = team
+    since = datetime(2025, 12, 31, tzinfo=timezone.utc)
+    for i in range(3):
+        _jot(
+            data_path,
+            "acme",
+            "infra",
+            "infra",
+            type="convention",
+            classification="tactical",
+            content=f"record {i}",
+            owner="carlos",
+            recorded_at=datetime(2026, 1, 1, i, 0, 0, tzinfo=timezone.utc),
+        )
+
+    _, s1 = await _read_expertise(
+        {"since": since.isoformat(), "domains": ["infra"], "limit": 2},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert s1["truncated"] is True
+    assert s1["records"][0]["content"] == "record 2"
+    assert s1["records"][1]["content"] == "record 1"
+
+    _, s2 = await _read_expertise(
+        {"since": since.isoformat(), "domains": ["infra"], "limit": 2, "cursor": s1["next_cursor"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert s2["truncated"] is False
+    assert s2["next_cursor"] is None
+    assert [r["content"] for r in s2["records"]] == ["record 0"]
+
+
 async def test_read_records_structured_truncation_flag(team, data_path):
     """read_records sets truncated=True when limit is hit."""
     t = team

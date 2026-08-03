@@ -3,7 +3,7 @@ Cross-project / cross-user isolation tests.
 """
 
 from datetime import datetime, timedelta, timezone
-from mulchd.mcp.tier2 import _get_recent, _read_expertise
+from mulchd.mcp.tier2 import _read_expertise
 from tests.mcp.conftest import ctx, _jot
 
 
@@ -35,8 +35,9 @@ async def test_read_isolation_different_projects(team, data_path):
     assert "No records found" in text_content[0].text
 
 
-async def test_get_recent_isolation_different_projects(team, data_path):
-    """get_recent respects project boundaries even when both projects share an org."""
+async def test_read_records_since_isolation_different_projects(team, data_path):
+    """read_records(since=...) respects project boundaries even when both
+    projects share an org."""
     t = team
     since = datetime.now(timezone.utc) - timedelta(seconds=1)
 
@@ -51,18 +52,18 @@ async def test_get_recent_isolation_different_projects(team, data_path):
         owner="carlos",
     )
 
-    result = await _get_recent(
+    text_content, structured = await _read_expertise(
         {"since": since.isoformat(), "domains": ["infra"]},
         ctx(t.jorge, t.org, t.infra),
     )
-    assert "VPCs use /16 CIDR blocks" in result[0].text
+    assert "VPCs use /16 CIDR blocks" in text_content[0].text
 
-    result = await _get_recent(
+    text_content, structured = await _read_expertise(
         {"since": since.isoformat(), "domains": ["infra"]},
         ctx(t.jorge, t.org, t.data),
     )
-    assert "VPCs use /16 CIDR blocks" not in result[0].text
-    assert "No records" in result[0].text
+    assert "VPCs use /16 CIDR blocks" not in text_content[0].text
+    assert "No records" in text_content[0].text
 
 
 async def test_cross_user_read_sees_all_project_records(team, data_path):

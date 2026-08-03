@@ -2,8 +2,9 @@
 Read expertise records directly from JSONL files.
 
 Writes and search go through server.mulch (ml CLI subprocess).
-Direct reads are used for read_expertise and get_recent, where we load
-all records for a domain without ranking — no BM25 needed there.
+Direct reads are used for read_expertise (both the plain load and the
+since-filtered "what changed" mode), where we load all records for a
+domain without ranking — no BM25 needed there.
 """
 
 import json

@@ -1,5 +1,6 @@
 """Record annotation and rendering for tier2: staleness/edit tagging and the
-text formatting shared by read_records, search_records, and get_recent.
+text formatting shared by read_records (both its plain and since-filtered
+modes) and search_records.
 
 Depends only on RecordEdit (models) and OutcomeStatus (mulch) — no
 dependency on the supersession group, confirmed by reading every

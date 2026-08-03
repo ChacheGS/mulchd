@@ -79,7 +79,7 @@ async def test_tier1_get_setup_instructions_includes_contact(monkeypatch):
 
 
 @pytest.mark.no_db
-def test_tier2_tool_list_has_sixteen_knowledge_tools():
+def test_tier2_tool_list_has_fifteen_knowledge_tools():
     from mulchd.mcp.tier2 import TIER2_TOOLS
 
     names = {t.name for t in TIER2_TOOLS}
@@ -93,7 +93,6 @@ def test_tier2_tool_list_has_sixteen_knowledge_tools():
         "write_guide",
         "search_records",
         "list_domains",
-        "get_recent",
         "get_record_schema",
         "get_record_history",
         "record_outcome",

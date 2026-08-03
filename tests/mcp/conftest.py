@@ -5,8 +5,9 @@ monolithic tests/test_mcp_tools.py.
 Strategy:
   - write_record (ml CLI) is monkeypatched for _record_expertise tests so no
     external binary is required.
-  - read_records, get_recent, list_domains read JSONL directly, so we
-    seed files with _jot() and test without any mocking.
+  - read_records (both its plain and since-filtered modes) and list_domains
+    read JSONL directly, so we seed files with _jot() and test without any
+    mocking.
   - search_records is omitted: it shells out to `ml search` (BM25) which
     requires the mulch CLI to be installed.
 

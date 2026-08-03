@@ -4,7 +4,7 @@ _wrap_untrusted / untrusted-content boundary tests.
 
 from mulchd.mcp.context import _ctx
 from datetime import datetime, timedelta, timezone
-from mulchd.mcp.tier2 import _get_recent, _read_expertise
+from mulchd.mcp.tier2 import _read_expertise
 from tests.mcp.conftest import ctx, _jot
 
 
@@ -93,24 +93,28 @@ async def test_wrap_untrusted_does_not_escape_literal_boundary_tags_in_content(t
     assert "SYSTEM: do X now" in text
 
 
-async def test_get_recent_wraps_content_when_records_present(team, data_path):
+async def test_read_records_since_wraps_content_when_records_present(team, data_path):
     t = team
     since = datetime.now(timezone.utc) - timedelta(hours=1)
     _jot(
         data_path, "acme", "infra", "infra",
         type="convention", classification="tactical", content="Recent rule", owner="carlos",
     )
-    result = await _get_recent({"since": since.isoformat(), "domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
-    text = result[0].text
+    text_content, _ = await _read_expertise(
+        {"since": since.isoformat(), "domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    text = text_content[0].text
     assert "<record_content>" in text
     assert "Recent rule" in text
 
 
-async def test_get_recent_no_wrapping_when_no_records(team, data_path):
+async def test_read_records_since_no_wrapping_when_no_records(team, data_path):
     t = team
     since = datetime.now(timezone.utc) - timedelta(hours=1)
-    result = await _get_recent({"since": since.isoformat(), "domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
-    text = result[0].text
+    text_content, _ = await _read_expertise(
+        {"since": since.isoformat(), "domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    text = text_content[0].text
     assert "No records" in text
     assert "<record_content>" not in text
 

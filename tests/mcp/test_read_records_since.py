@@ -1,15 +1,15 @@
 """
-get_recent timestamp-filtering tests.
+read_records(since=...) timestamp-filtering tests.
 """
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from mulchd.mcp.tier2 import _get_recent
+from mulchd.mcp.tier2 import _read_expertise
 from mulchd.models import RecordMeta
 from tests.mcp.conftest import ctx, _jot
 
 
-async def test_get_recent_excludes_old_records(team, data_path):
+async def test_read_records_since_excludes_old_records(team, data_path):
     """Records written before `since` are excluded; newer ones appear."""
     t = team
     old_ts = datetime.now(timezone.utc) - timedelta(hours=2)
@@ -39,17 +39,17 @@ async def test_get_recent_excludes_old_records(team, data_path):
         recorded_at=new_ts,
     )
 
-    result = await _get_recent(
+    text_content, _ = await _read_expertise(
         {"since": cutoff.isoformat(), "domains": ["infra"]},
         ctx(t.jorge, t.org, t.infra),
     )
-    text = result[0].text
+    text = text_content[0].text
     assert "New decision post-migration" in text
     assert "Old practice" not in text
 
 
-async def test_get_recent_multiple_domains(team, data_path):
-    """get_recent aggregates across domains when multiple are specified."""
+async def test_read_records_since_multiple_domains(team, data_path):
+    """read_records(since=...) aggregates across domains when multiple are specified."""
     t = team
     since = datetime.now(timezone.utc) - timedelta(seconds=1)
 
@@ -74,22 +74,47 @@ async def test_get_recent_multiple_domains(team, data_path):
         owner="jorge",
     )
 
-    result = await _get_recent(
+    text_content, _ = await _read_expertise(
         {"since": since.isoformat(), "domains": ["infra", "governance"]},
         ctx(t.carlos, t.org, t.infra),
     )
-    text = result[0].text
+    text = text_content[0].text
     assert "Infra domain record" in text
     assert "Governance domain record" in text
 
 
-async def test_get_recent_does_not_leak_attribution_across_projects_with_same_record_id(
+async def test_read_records_since_defaults_to_all_domains(team, data_path):
+    """Omitting `domains` while passing `since` scans every domain in the project,
+    matching the old get_recent default."""
+    t = team
+    since = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "governance",
+        type="convention",
+        classification="foundational",
+        content="Governance domain record",
+        owner="jorge",
+    )
+
+    text_content, _ = await _read_expertise(
+        {"since": since.isoformat()},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Governance domain record" in text_content[0].text
+
+
+async def test_read_records_since_does_not_leak_attribution_across_projects_with_same_record_id(
     team, data_path
 ):
     """ml's record IDs are content-derived, not random, so two different
     projects can legitimately produce the same record_id (see RecordMeta's
-    (project, record_id) unique_together). get_recent for one project must
-    only ever see that project's RecordMeta row, never the other's author."""
+    (project, record_id) unique_together). read_records(since=...) for one
+    project must only ever see that project's RecordMeta row, never the
+    other's author."""
     t = team
     dupe_id = "mx-dupe123"
     now = datetime.now(timezone.utc)
@@ -125,10 +150,10 @@ async def test_get_recent_does_not_leak_attribution_across_projects_with_same_re
         recorded_at=now,
     )
 
-    result = await _get_recent(
+    text_content, _ = await _read_expertise(
         {"since": (now - timedelta(seconds=1)).isoformat(), "domains": ["infra"]},
         ctx(t.carlos, t.org, t.infra),
     )
-    text = result[0].text
+    text = text_content[0].text
     assert "Carlos G." in text
     assert "Ana R." not in text

@@ -64,14 +64,14 @@ async def test_list_domains_counts_match_written_records(team, data_path):
     assert "3 records" in text_content[0].text
 
 
-async def test_list_domains_structured_includes_get_recent_hint(team, data_path):
-    """list_domains structured output should carry the get_recent hint so clients
+async def test_list_domains_structured_includes_recent_hint(team, data_path):
+    """list_domains structured output should carry the recent-activity hint so clients
     consuming structured content don't lose the session-start instruction."""
     t = team
     _, structured = await _list_domains(ctx(t.carlos, t.org, t.infra))
     assert (
-        "get_recent_hint" in structured or "hint" in structured
-    ), "structured output must include the get_recent timestamp hint"
+        "recent_hint" in structured or "hint" in structured
+    ), "structured output must include the read_records(since=...) hint"
 
 
 async def test_list_domains_structured_includes_domain_uri(team, data_path, fake_write_record):

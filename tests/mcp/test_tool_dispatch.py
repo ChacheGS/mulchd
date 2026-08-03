@@ -24,7 +24,6 @@ async def test_list_tools_hides_mutating_tools_from_reader(team, data_path):
         "read_records",
         "search_records",
         "list_domains",
-        "get_recent",
         "get_record_schema",
         "get_record_history",
     }

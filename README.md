@@ -6,7 +6,7 @@ mulchd is a self-hosted MCP server that stores and serves structured team knowle
 
 ## How it works
 
-mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk, and wraps it with an HTTP server exposing MCP tools (`write_decision`, `search_records`, `get_recent`, and more — see [docs/mcp-tools.md](docs/mcp-tools.md)) over Streamable HTTP and legacy SSE.
+mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manages structured knowledge as JSONL records on disk, and wraps it with an HTTP server exposing MCP tools (`write_decision`, `search_records`, `read_records`, and more — see [docs/mcp-tools.md](docs/mcp-tools.md)) over Streamable HTTP and legacy SSE.
 
 Knowledge is organized into domains (e.g. `architecture`, `conventions`, `ops`). Records carry attribution, classification (`foundational` / `tactical` / `observational`), and optional supersession links so the team can track how thinking evolves.
 

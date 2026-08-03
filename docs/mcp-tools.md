@@ -5,7 +5,7 @@ mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manage
 | Tool | Description |
 |---|---|
 | `list_domains` | List all knowledge domains and the current server timestamp |
-| `read_records` | Load records from one or more domains |
+| `read_records` | Load records from one or more domains; pass `since` to surface teammate activity instead |
 | `write_decision` | Record a decision that's been made or confirmed |
 | `write_convention` | Record a convention that's been established or corrected |
 | `write_failure` | Record something that broke and how it got fixed |
@@ -16,7 +16,6 @@ mulchd builds on [mulch](https://github.com/jayminwest/mulch), a CLI that manage
 | `delete_record` | Soft-delete a record (recoverable from `/admin`) |
 | `move_record` | Move a record to a different (existing) domain |
 | `search_records` | BM25 full-text search across domains |
-| `get_recent` | Surface teammate activity since a given timestamp |
 | `get_record_schema` | Get required and optional fields for a record type |
 | `get_record_history` | Show the write/edit/delete timeline for a record, including who changed what |
 | `record_outcome` | Record whether a record's guidance worked — improves search ranking |
