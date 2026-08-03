@@ -222,3 +222,68 @@ def test_mcp_oauth_disabled_omits_well_known_routes():
     )
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert "DISABLED_OK" in result.stdout
+
+
+async def test_resolve_mcp_tier_clamps_role_to_grant_ceiling(db):
+    """A WRITER member who authorized the client as READER must get READER
+    access, even though their own membership role is more privileged."""
+    from mulchd.auth import create_user
+    from mulchd.main import resolve_mcp_tier
+    from mulchd.mcp import McpTier
+    from mulchd.mcp_auth import MulchdOAuthProvider
+    from mulchd.models import OAuthClient, OAuthGrant, Organization, Project, Role, UserMembership
+    from starlette.requests import Request
+
+    user, _ = await create_user("gina", "Gina")
+    org = await Organization.create(slug="acme8", display_name="Acme8")
+    project = await Project.create(slug="demo8", display_name="Demo8", org=org)
+    await UserMembership.create(user=user, project=project, role=Role.WRITER)
+    client_row = await OAuthClient.create(client_id="cli-clamp", client_metadata={"client_id": "cli-clamp"})
+    grant = await OAuthGrant.create(client=client_row, user=user, project=project, granted_role=Role.READER)
+
+    provider = MulchdOAuthProvider()
+    tokens = await provider._issue_tokens(client_row.client_id, grant, ["mulchd"])
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"authorization", f"Bearer {tokens.access_token}".encode())],
+    }
+    request = Request(scope)
+    tier, ctx = await resolve_mcp_tier(request)
+    assert tier == McpTier.TIER2
+    assert ctx is not None
+    assert ctx.role == Role.READER
+
+
+async def test_resolve_mcp_tier_membership_demotion_still_wins_even_with_admin_grant(db):
+    """A grant's ceiling can only restrict, never restore, access the membership
+    itself no longer has — min_role must take the live membership role too."""
+    from mulchd.auth import create_user
+    from mulchd.main import resolve_mcp_tier
+    from mulchd.mcp import McpTier
+    from mulchd.mcp_auth import MulchdOAuthProvider
+    from mulchd.models import OAuthClient, OAuthGrant, Organization, Project, Role, UserMembership
+    from starlette.requests import Request
+
+    user, _ = await create_user("harold", "Harold")
+    org = await Organization.create(slug="acme9", display_name="Acme9")
+    project = await Project.create(slug="demo9", display_name="Demo9", org=org)
+    await UserMembership.create(user=user, project=project, role=Role.READER)
+    client_row = await OAuthClient.create(client_id="cli-demote", client_metadata={"client_id": "cli-demote"})
+    # granted as ADMIN back when the user was an admin member; membership has since
+    # been demoted to READER without the grant being revisited.
+    grant = await OAuthGrant.create(client=client_row, user=user, project=project, granted_role=Role.ADMIN)
+
+    provider = MulchdOAuthProvider()
+    tokens = await provider._issue_tokens(client_row.client_id, grant, ["mulchd"])
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "headers": [(b"authorization", f"Bearer {tokens.access_token}".encode())],
+    }
+    request = Request(scope)
+    _, ctx = await resolve_mcp_tier(request)
+    assert ctx is not None
+    assert ctx.role == Role.READER

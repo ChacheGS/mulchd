@@ -26,7 +26,7 @@ from .invite import router as invite_router
 from .mcp import McpTier, tier_managers, tier_servers
 from .mcp.context import _ctx
 from .mcp_auth import MulchdOAuthProvider, is_known_oauth_token
-from .models import Project, User, UserMembership
+from .models import Project, Role, User, UserMembership, min_role
 
 sse = SseServerTransport("/messages/")
 _log = logging.getLogger("mulchd.main")
@@ -44,14 +44,16 @@ async def _auth_context_from_access_token(access_token) -> AuthContext | None:
     user = await User.filter(id=int(access_token.subject), active=True).first()
     if user is None:
         return None
-    project_id = (access_token.claims or {}).get("project_id")
+    claims = access_token.claims or {}
+    project_id = claims.get("project_id")
     project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
         return None
     membership = await UserMembership.filter(user=user, project=project).first()
     if membership is None:
         return None
-    return AuthContext(user=user, project=project, org=project.org, role=membership.role)
+    granted_role = Role(claims["granted_role"]) if claims.get("granted_role") else membership.role
+    return AuthContext(user=user, project=project, org=project.org, role=min_role(membership.role, granted_role))
 
 
 async def resolve_mcp_tier(request: Request) -> tuple[McpTier, AuthContext | None]:
