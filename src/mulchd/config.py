@@ -24,11 +24,6 @@ class Settings(BaseSettings):
     github_client_id: str | None = None
     github_client_secret: str | None = None
 
-    # OAuth — Generic OIDC
-    oidc_discovery_url: str | None = None
-    oidc_client_id: str | None = None
-    oidc_client_secret: str | None = None
-    oidc_display_name: str = "SSO"
     mcp_oauth_enabled: bool = True  # MULCHD_MCP_OAUTH_ENABLED — gates the OAuth
     # authorization-server routes (.well-known, /register, /authorize, /token, /revoke)
     # for MCP clients. Defaults on: it's a strict UX improvement even for token-only

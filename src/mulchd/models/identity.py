@@ -26,7 +26,7 @@ class OAuthIdentity(models.Model):
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="oauth_identities"
     )
-    provider = fields.CharField(max_length=32)   # "github" | "oidc"
+    provider = fields.CharField(max_length=32)   # "github" | "oidc_<provider-slug>", e.g. "oidc_google"
     sub = fields.CharField(max_length=255)        # provider's immutable user ID
     created_at = fields.DatetimeField(auto_now_add=True)
 
