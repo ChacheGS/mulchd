@@ -3,7 +3,7 @@ from __future__ import annotations
 from tortoise import fields, models
 
 from .identity import User
-from .tenancy import Project
+from .tenancy import Project, Role
 
 
 class OAuthClient(models.Model):
@@ -38,6 +38,12 @@ class OAuthGrant(models.Model):
         "models.Project", related_name="oauth_grants", on_delete=fields.CASCADE
     )
     project_id: int
+    # Ceiling on the role this client is authorized as, chosen at consent time and
+    # capped server-side to the granting user's own membership role. Defaults to
+    # ADMIN (the rank ceiling) so grants created before this field existed, and any
+    # created without specifying it, keep prior behavior: no ceiling beyond the
+    # live membership role checked at request time (see min_role in tenancy.py).
+    granted_role = fields.CharEnumField(Role, max_length=16, default=Role.ADMIN)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

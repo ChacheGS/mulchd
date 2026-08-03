@@ -150,3 +150,32 @@ async def test_oauth_token_hashes_unique(db):
             access_expires_at=now + timedelta(hours=1),
             refresh_expires_at=now + timedelta(days=30),
         )
+
+
+async def test_oauth_grant_granted_role_defaults_to_admin(db):
+    """Pre-existing/no-op grant creation must keep today's behavior (no ceiling),
+    so the default has to be the top of the rank, not WRITER or READER."""
+    from mulchd.auth import create_user
+    from mulchd.models import OAuthClient, OAuthGrant, Organization, Project, Role
+
+    user, _ = await create_user("erin", "Erin")
+    org = await Organization.create(slug="acme6", display_name="Acme6")
+    project = await Project.create(slug="demo6", display_name="Demo6", org=org)
+    client = await OAuthClient.create(client_id="client-6", client_metadata={})
+
+    grant = await OAuthGrant.create(client=client, user=user, project=project)
+    assert grant.granted_role == Role.ADMIN
+
+
+async def test_oauth_grant_granted_role_explicit_value_roundtrips(db):
+    from mulchd.auth import create_user
+    from mulchd.models import OAuthClient, OAuthGrant, Organization, Project, Role
+
+    user, _ = await create_user("frank", "Frank")
+    org = await Organization.create(slug="acme7", display_name="Acme7")
+    project = await Project.create(slug="demo7", display_name="Demo7", org=org)
+    client = await OAuthClient.create(client_id="client-7", client_metadata={})
+
+    grant = await OAuthGrant.create(client=client, user=user, project=project, granted_role=Role.READER)
+    fetched = await OAuthGrant.get(id=grant.id)
+    assert fetched.granted_role == Role.READER
