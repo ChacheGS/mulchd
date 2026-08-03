@@ -101,3 +101,23 @@ async def test_oauth_login_bootstraps_matching_admin_email(db, monkeypatch):
     await maybe_bootstrap_admin(user)
 
     assert await is_superadmin(user) is True
+
+
+async def test_oauth_start_still_404s_for_unconfigured_provider(client, monkeypatch):
+    """Regression test for the actual bug: with >=1 real provider configured,
+    the old `dict(get_configured_providers())` chokes on 3-element ProviderInfo
+    tuples (`ValueError: dictionary update sequence element #0 has length 3; 2
+    is required`) before it ever reaches the 404 check — so this 500s pre-fix
+    and only returns a clean 404 once the membership check is a set. Configuring
+    zero providers would make `dict([])` a no-op that doesn't exercise the bug
+    at all, so the google provider below isn't incidental — it's required to
+    make the old code actually crash."""
+    monkeypatch.setenv(
+        "MULCHD_OIDC_GOOGLE_DISCOVERY_URL",
+        "https://accounts.google.com/.well-known/openid-configuration",
+    )
+    monkeypatch.setenv("MULCHD_OIDC_GOOGLE_CLIENT_ID", "gid")
+    monkeypatch.setenv("MULCHD_OIDC_GOOGLE_CLIENT_SECRET", "gsec")
+
+    resp = await client.get("/connect/auth/oidc_nonexistent/start", follow_redirects=False)
+    assert resp.status_code == 404

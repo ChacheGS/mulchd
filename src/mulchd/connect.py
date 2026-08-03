@@ -356,7 +356,7 @@ async def connect_revoke_token(
 
 @router.get("/auth/{provider}/start")
 async def oauth_start(request: Request, provider: str):
-    configured = dict(get_configured_providers())
+    configured = {p.key for p in get_configured_providers()}
     if provider not in configured:
         raise HTTPException(status_code=404)
     redirect_uri = f"{settings.resolved_base_url}/connect/auth/{provider}/callback"
@@ -365,7 +365,7 @@ async def oauth_start(request: Request, provider: str):
 
 @router.get("/auth/{provider}/callback")
 async def oauth_callback(request: Request, provider: str):
-    configured = dict(get_configured_providers())
+    configured = {p.key for p in get_configured_providers()}
     if provider not in configured:
         raise HTTPException(status_code=404)
 
@@ -412,7 +412,7 @@ async def oauth_callback(request: Request, provider: str):
         )
         username = user_resp.json().get("login", "")
         display_name = user_resp.json().get("name") or username
-    else:  # oidc
+    else:  # any non-github OIDC provider — all speak standard userinfo claims
         userinfo = token.get("userinfo", {})
         sub = userinfo.get("sub", "")
         email = userinfo.get("email")
