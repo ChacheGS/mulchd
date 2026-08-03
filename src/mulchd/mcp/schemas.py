@@ -58,7 +58,7 @@ _RELATED_RECORD_PROPERTIES = {
 # later via edit_record — so this is spread only into the six write_* tool
 # schemas below, never into _RELATED_RECORD_PROPERTIES (which edit_record also
 # uses).
-_EVIDENCE_PROPERTY = {
+_EVIDENCE_PROPERTIES = {
     "evidence": {
         "type": "object",
         "description": (
@@ -77,6 +77,11 @@ _EVIDENCE_PROPERTY = {
             "gh": {**_EVIDENCE_STRING_OR_ARRAY, "description": "GitHub issue or PR reference(s)"},
             "linear": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Linear ticket reference(s)"},
         },
+        # ml's own evidence schema is additionalProperties: false — match that
+        # here so an unrecognized key is rejected by the MCP SDK's jsonschema
+        # validation (which runs before the handler, see call_tool's default
+        # validate_input=True) instead of surfacing later as an ml write failure.
+        "additionalProperties": False,
     },
 }
 
@@ -94,7 +99,7 @@ _WRITE_TOOLS = [
                 "classification": _CLASSIFICATION_PROPERTY,
                 "content": {"type": "string", "description": "Body text of the convention."},
                 **_RELATED_RECORD_PROPERTIES,
-                **_EVIDENCE_PROPERTY,
+                **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "content"],
         },
@@ -118,7 +123,7 @@ _WRITE_TOOLS = [
                     "description": "Date the decision was made (ISO 8601); defaults to recorded_at.",
                 },
                 **_RELATED_RECORD_PROPERTIES,
-                **_EVIDENCE_PROPERTY,
+                **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "title", "rationale"],
         },
@@ -138,7 +143,7 @@ _WRITE_TOOLS = [
                 "description": {"type": "string", "description": "What broke."},
                 "resolution": {"type": "string", "description": "How it was fixed."},
                 **_RELATED_RECORD_PROPERTIES,
-                **_EVIDENCE_PROPERTY,
+                **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "description", "resolution"],
         },
@@ -158,7 +163,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the pattern."},
                 "description": {"type": "string", "description": "What the pattern is and how to use it."},
                 **_RELATED_RECORD_PROPERTIES,
-                **_EVIDENCE_PROPERTY,
+                **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "name", "description"],
         },
@@ -178,7 +183,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the reference."},
                 "description": {"type": "string", "description": "What it points to and why it matters."},
                 **_RELATED_RECORD_PROPERTIES,
-                **_EVIDENCE_PROPERTY,
+                **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "name", "description"],
         },
@@ -198,7 +203,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the guide."},
                 "description": {"type": "string", "description": "The guide's steps or content."},
                 **_RELATED_RECORD_PROPERTIES,
-                **_EVIDENCE_PROPERTY,
+                **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "name", "description"],
         },

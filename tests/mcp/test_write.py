@@ -40,6 +40,27 @@ def test_write_tools_schemas_advertise_evidence():
         assert "evidence" in tool.inputSchema["properties"], name
 
 
+def test_write_convention_schema_rejects_unknown_evidence_field():
+    """evidence's additionalProperties: false must reject unrecognized keys —
+    ml's own evidence schema is equally closed, so an unknown key should be
+    caught by the MCP SDK's schema validation (which runs before dispatch,
+    see call_tool's default validate_input=True) rather than surfacing later
+    as an ml write failure."""
+    import jsonschema
+
+    tool = _tool_by_name("write_convention")
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(
+            instance={
+                "domain": "infra",
+                "classification": "tactical",
+                "content": "x",
+                "evidence": {"not_a_real_field": "oops"},
+            },
+            schema=tool.inputSchema,
+        )
+
+
 async def test_cross_user_record_then_read(team, data_path, fake_write_record):
     """jorge writes via _record_expertise; carlos (same project) reads it back."""
     t = team

@@ -213,14 +213,6 @@ async def _get_owned_record(
     return record
 
 
-def _normalize_evidence(evidence: dict) -> dict:
-    """ml's own evidence schema only accepts a single string per field
-    (additionalProperties: false, no array types) — join any array mulchd's
-    more permissive tool schema allowed into one comma-separated string
-    before the record is handed to ml."""
-    return {k: ", ".join(v) if isinstance(v, list) else v for k, v in evidence.items()}
-
-
 def _parse_since(raw: str) -> datetime:
     since = datetime.fromisoformat(raw)
     if since.tzinfo is None:
@@ -384,6 +376,14 @@ def _find_similar_domain(domain: str, existing: list[str], cutoff: float = 0.8) 
     warned, not stopped, since the name might be intentional."""
     matches = difflib.get_close_matches(domain, existing, n=1, cutoff=cutoff)
     return matches[0] if matches else None
+
+
+def _normalize_evidence(evidence: dict) -> dict:
+    """ml's own evidence schema only accepts a single string per field
+    (additionalProperties: false, no array types) — join any array mulchd's
+    more permissive tool schema allowed into one comma-separated string
+    before the record is handed to ml."""
+    return {k: ", ".join(v) if isinstance(v, list) else v for k, v in evidence.items()}
 
 
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
