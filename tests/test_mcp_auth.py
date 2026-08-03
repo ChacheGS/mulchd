@@ -273,3 +273,23 @@ async def test_authorize_redirects_to_consent_page(db):
     assert "client_id=client-9" in url
     assert "code_challenge=challenge123" in url
     assert "state=xyz" in url
+
+
+async def test_load_access_token_carries_granted_role_claim(db):
+    from mulchd.mcp_auth import MulchdOAuthProvider
+    from mulchd.models import Role
+
+    user, project, client_row, grant = await _make_client_grant()
+    grant.granted_role = Role.READER
+    await grant.save()
+
+    provider = MulchdOAuthProvider()
+    client = await provider.get_client(client_row.client_id)
+    assert client is not None
+    assert client.client_id is not None
+    tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
+
+    access_token = await provider.load_access_token(tokens.access_token)
+    assert access_token is not None
+    assert access_token.claims is not None
+    assert access_token.claims["granted_role"] == "reader"

@@ -165,7 +165,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
             scopes=row.scope.split() if row.scope else [],
             expires_at=int(expires_at.timestamp()),
             subject=str(row.grant.user_id),
-            claims={"project_id": row.grant.project_id},
+            claims={"project_id": row.grant.project_id, "granted_role": str(row.grant.granted_role)},
         )
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
