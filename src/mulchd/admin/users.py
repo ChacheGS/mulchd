@@ -138,7 +138,7 @@ async def revoke_admin_route(
     request: Request, user_id: int, revoker: User = Depends(get_current_admin)
 ) -> Response:
     grant = await AdminGrant.filter(
-        user_id=user_id, role=AdminRole.SUPERADMIN, org=None, revoked_at=None
+        user_id=user_id, role=AdminRole.SUPERADMIN, org=None
     ).first()
     if grant is None:
         return Response(status_code=404)

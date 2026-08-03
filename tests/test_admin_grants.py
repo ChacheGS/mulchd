@@ -8,8 +8,6 @@ async def test_admin_grant_create(db):
     assert grant.role == AdminRole.SUPERADMIN
     assert grant.org_id is None
     assert grant.granted_by_id == user.id
-    assert grant.revoked_at is None
-    assert grant.revoked_by_id is None
 
 
 async def test_admin_grant_self_referential_granted_by(db):
@@ -44,16 +42,15 @@ async def test_is_superadmin_false_without_grant(db):
 
 
 async def test_is_superadmin_false_after_revoke(db):
-    from mulchd.admin_grants import is_superadmin
+    from mulchd.admin_grants import grant_superadmin, is_superadmin, revoke_superadmin
     from mulchd.auth import create_user
-    from mulchd.models import AdminGrant
 
     user, _ = await create_user("erin", "Erin")
-    grant = await AdminGrant.create(user=user, granted_by=user)
-    grant.revoked_by = user
-    from datetime import UTC, datetime
-    grant.revoked_at = datetime.now(UTC)
-    await grant.save()
+    other, _ = await create_user("erin2", "Erin's colleague")
+    await grant_superadmin(other, granted_by=user)
+    grant = await grant_superadmin(user, granted_by=user)
+
+    await revoke_superadmin(grant, revoked_by=user)
 
     assert await is_superadmin(user) is False
 
@@ -104,6 +101,7 @@ async def test_grant_superadmin(db):
 async def test_revoke_superadmin_succeeds_when_others_remain(db):
     from mulchd.admin_grants import grant_superadmin, is_superadmin, revoke_superadmin
     from mulchd.auth import create_user
+    from mulchd.models import AdminGrant
 
     alice, _ = await create_user("alice5", "Alice")
     bob, _ = await create_user("bob5", "Bob")
@@ -114,9 +112,7 @@ async def test_revoke_superadmin_succeeds_when_others_remain(db):
 
     assert ok is True
     assert await is_superadmin(bob) is False
-    await bob_grant.refresh_from_db()
-    assert bob_grant.revoked_by_id == alice.id
-    assert bob_grant.revoked_at is not None
+    assert await AdminGrant.filter(id=bob_grant.id).exists() is False
 
 
 async def test_revoke_superadmin_blocked_as_last_admin(db):
@@ -261,3 +257,27 @@ async def test_revoke_superadmin_logs_event(db):
     event = await InstanceEvent.get(category=InstanceEventCategory.ADMIN_REVOKED)
     assert event.actor_id == alice.id
     assert event.subject_user_id == bob.id
+
+
+async def test_grant_superadmin_concurrent_calls_create_only_one_grant(db):
+    """Two concurrent grants for the same user must not both pass the
+    existence check and both insert — the (user, role) unique constraint
+    should let only one INSERT win, with the other returning that same row."""
+    import asyncio
+
+    from mulchd.admin_grants import active_superadmin_count, grant_superadmin
+    from mulchd.auth import create_user
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
+    alice, _ = await create_user("raceadmin", "Alice")
+    bob, _ = await create_user("racetarget", "Bob")
+
+    first, second = await asyncio.gather(
+        grant_superadmin(bob, granted_by=alice),
+        grant_superadmin(bob, granted_by=alice),
+    )
+
+    assert first.id == second.id
+    assert await active_superadmin_count() == 1
+    count = await InstanceEvent.filter(category=InstanceEventCategory.ADMIN_GRANTED).count()
+    assert count == 1

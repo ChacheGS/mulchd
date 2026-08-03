@@ -32,18 +32,13 @@ class AdminGrant(models.Model):
     )
     granted_by_id: int
     granted_at = fields.DatetimeField(auto_now_add=True)
-    revoked_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
-        "models.User",
-        related_name="revoked_admin_grants",
-        null=True,
-        default=None,
-        on_delete=fields.RESTRICT,
-    )
-    revoked_by_id: int | None
-    revoked_at = fields.DatetimeField(null=True, default=None)
 
     class Meta:
         table = "admin_grants"
+        # org excluded: every grant today is instance-wide (org=None), so a
+        # plain (user, role) constraint already guarantees at most one row
+        # per user per role. Revisit if org-scoped grants are ever added.
+        unique_together = (("user", "role"),)
 
 
 class InstanceEventCategory(StrEnum):
