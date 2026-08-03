@@ -594,6 +594,10 @@ async def oauth_consent_submit(
         try:
             requested_role = Role(raw_role)
         except ValueError:
+            # Intentionally silent, unlike admin/memberships.py and admin/invites.py's
+            # unguarded Role(role) (which 500s on bad input): this form is submitted by
+            # an untrusted, user-tamperable client, so falling back to the membership
+            # role is the correct behavior here, not a gap to align with the admin forms.
             pass
     granted_role = min_role(membership.role, requested_role)
 
@@ -601,6 +605,10 @@ async def oauth_consent_submit(
     if grant is None:
         grant = await OAuthGrant.create(client=oauth_client, user=user, project=project, granted_role=granted_role)
     elif grant.project_id != project.id:
+        # Re-consenting for a different project only; if project_id is unchanged, an
+        # updated role selection is NOT persisted here. This mirrors the pre-existing
+        # project-reassignment gate and is an accepted, documented gap (see plan's
+        # "Deferred / explicitly out of scope"), not something to couple/decouple later.
         grant.project = project
         grant.granted_role = granted_role
         await grant.save()
