@@ -35,8 +35,11 @@ from .models import (
     Organization,
     Project,
     ProjectToken,
+    Role,
     User,
     UserMembership,
+    min_role,
+    roles_up_to,
 )
 from .oauth import get_configured_providers, oauth
 
@@ -542,6 +545,7 @@ async def oauth_consent_page(
             "user": user,
             "client_name": oauth_client.client_metadata.get("client_name") or client_id,
             "memberships": memberships,
+            "role_options": {m.project.id: roles_up_to(m.role) for m in memberships},
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "code_challenge": code_challenge,

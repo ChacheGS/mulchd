@@ -320,3 +320,32 @@ def test_safe_return_to_rejects_literal_scheme_but_allows_encoded_redirect_uri()
 
     literal = "/connect/oauth-consent?redirect_uri=http://localhost/cb"
     assert _safe_return_to(literal) is None
+
+
+async def test_oauth_consent_page_offers_only_roles_up_to_membership(client, alice_and_project):
+    """A WRITER member must be offered writer/reader, never admin, in the
+    per-project role picker — the option simply must not exist in the markup,
+    since the POST handler also clamps server-side as defense in depth."""
+    from mulchd.models import OAuthClient, Role, UserMembership
+
+    user, token, org, project = alice_and_project
+    await UserMembership.filter(user=user, project=project).update(role=Role.WRITER)
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-roles",
+        client_metadata={"client_id": "cli-roles", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli Roles"},
+    )
+    resp = await client.get(
+        "/connect/oauth-consent",
+        params={
+            "client_id": "cli-roles",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st-roles",
+        },
+    )
+    assert resp.status_code == 200
+    assert f'name="role_{project.id}"' in resp.text
+    assert '<option value="writer"' in resp.text
+    assert '<option value="reader"' in resp.text
+    assert '<option value="admin"' not in resp.text
