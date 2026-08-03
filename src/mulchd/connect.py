@@ -583,14 +583,26 @@ async def oauth_consent_submit(
         )
 
     project = await Project.filter(id=project_id).first()
-    if project is None or not await UserMembership.filter(user=user, project=project).exists():
+    membership = await UserMembership.filter(user=user, project=project).first() if project else None
+    if project is None or membership is None:
         return Response(status_code=403)
+
+    form = await request.form()
+    raw_role = form.get(f"role_{project_id}")
+    requested_role = membership.role
+    if isinstance(raw_role, str):
+        try:
+            requested_role = Role(raw_role)
+        except ValueError:
+            pass
+    granted_role = min_role(membership.role, requested_role)
 
     grant = await OAuthGrant.filter(client=oauth_client, user=user).first()
     if grant is None:
-        grant = await OAuthGrant.create(client=oauth_client, user=user, project=project)
+        grant = await OAuthGrant.create(client=oauth_client, user=user, project=project, granted_role=granted_role)
     elif grant.project_id != project.id:
         grant.project = project
+        grant.granted_role = granted_role
         await grant.save()
 
     return await _issue_oauth_code(grant, oauth_client.client_id, redirect_uri, code_challenge, scope, state)

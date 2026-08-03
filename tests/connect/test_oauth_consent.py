@@ -349,3 +349,91 @@ async def test_oauth_consent_page_offers_only_roles_up_to_membership(client, ali
     assert '<option value="writer"' in resp.text
     assert '<option value="reader"' in resp.text
     assert '<option value="admin"' not in resp.text
+
+
+async def test_oauth_consent_allow_stores_chosen_role(client, alice_and_project):
+    from mulchd.models import OAuthClient, OAuthGrant, Role
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-store-role",
+        client_metadata={"client_id": "cli-store-role", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli Role"},
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-store-role",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st-role",
+            "scope": "",
+            "project_id": project.id,
+            f"role_{project.id}": "reader",
+            "decision": "allow",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    grant = await OAuthGrant.get(user=user, project=project)
+    assert grant.granted_role == Role.READER
+
+
+async def test_oauth_consent_allow_ignores_role_above_membership(client, alice_and_project):
+    """WRITER member submitting role_<id>=admin (e.g. a tampered form) must be
+    clamped to writer, not granted admin."""
+    from mulchd.models import OAuthClient, OAuthGrant, Role, UserMembership
+
+    user, token, org, project = alice_and_project
+    await UserMembership.filter(user=user, project=project).update(role=Role.WRITER)
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-tamper",
+        client_metadata={"client_id": "cli-tamper", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli Tamper"},
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-tamper",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st-tamper",
+            "scope": "",
+            "project_id": project.id,
+            f"role_{project.id}": "admin",
+            "decision": "allow",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    grant = await OAuthGrant.get(user=user, project=project)
+    assert grant.granted_role == Role.WRITER
+
+
+async def test_oauth_consent_allow_missing_role_field_defaults_to_membership_role(client, alice_and_project):
+    """Omitting role_<id> entirely (e.g. an older cached form) must not blow up —
+    it should fall back to the membership's own role, same as pre-feature behavior."""
+    from mulchd.models import OAuthClient, OAuthGrant, Role
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    await OAuthClient.create(
+        client_id="cli-no-role-field",
+        client_metadata={"client_id": "cli-no-role-field", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli NoRole"},
+    )
+    resp = await client.post(
+        "/connect/oauth-consent",
+        data={
+            "client_id": "cli-no-role-field",
+            "redirect_uri": "http://localhost/cb",
+            "code_challenge": "chal",
+            "state": "st-no-role",
+            "scope": "",
+            "project_id": project.id,
+            "decision": "allow",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+    grant = await OAuthGrant.get(user=user, project=project)
+    assert grant.granted_role == Role.WRITER  # alice_and_project's default membership role
