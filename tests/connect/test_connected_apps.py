@@ -109,3 +109,19 @@ async def test_connected_apps_revoke_forces_full_reconsent(client, alice_and_pro
     assert resp.status_code == 200
     assert "Cli Reconsent" in resp.text
     assert not await OAuthGrant.filter(client=oc, user=user).exists()
+
+
+async def test_connected_apps_shows_granted_role(client, alice_and_project):
+    from mulchd.models import OAuthClient, OAuthGrant, Role
+
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    oc = await OAuthClient.create(
+        client_id="cli-role-badge",
+        client_metadata={"client_id": "cli-role-badge", "client_name": "Cli RoleBadge", "redirect_uris": ["http://localhost/cb"]},
+    )
+    await OAuthGrant.create(client=oc, user=user, project=project, granted_role=Role.READER)
+
+    resp = await client.get("/connect/projects")
+    assert resp.status_code == 200
+    assert "badge-reader" in resp.text
