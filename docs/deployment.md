@@ -44,7 +44,7 @@ Log in to `/admin` and create an account for each team member. Each user gets a 
 
 ## 5. Configure SSO (optional)
 
-To enable GitHub or OIDC sign-in on the `/connect` portal, uncomment and fill in the relevant OAuth vars in `deploy/mulchd.env` (see `mulchd.env.example`). Users must have their email set in the admin before their first SSO login — the server matches the provider's verified email to `User.email` to link the identity automatically.
+To enable GitHub or OIDC sign-in on the `/connect` portal, uncomment and fill in the relevant OAuth vars in `deploy/mulchd.env` (see `mulchd.env.example`). Any number of OIDC providers can be configured at once — each gets its own `MULCHD_OIDC_<PROVIDER>_*` env var prefix. Users must have their email set in the admin before their first SSO login — the server matches the provider's verified email to `User.email` to link the identity automatically.
 
 ## 6. MCP OAuth for clients (on by default)
 
