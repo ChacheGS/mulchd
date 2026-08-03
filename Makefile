@@ -3,6 +3,7 @@
 COMPOSE     = docker compose -f deploy/docker-compose.yml
 COMPOSE_DEV = $(COMPOSE) -f deploy/docker-compose.local.yml
 BACKUP_DIR ?= backups
+DEV_DB_ENV  = MULCHD_SECRET_KEY=dev MULCHD_DB_URL="asyncpg://mulchd:devpassword@localhost:5433/mulchd"
 
 # ---------------------------------------------------------------------------
 # Dev
@@ -20,15 +21,16 @@ dev-down:
 dev-logs:
 	$(COMPOSE_DEV) logs -f mulchd postgres
 
-# Generate a new aerich migration after model changes.
-# Requires the dev postgres to be running (make migrate-up first).
+# Starts the dev postgres and applies any pending aerich migrations, so the
+# schema is never stale after a `git pull` that added new migration files.
 migrate-up:
-	$(COMPOSE_DEV) up -d postgres
+	$(COMPOSE_DEV) up -d --wait postgres
+	$(DEV_DB_ENV) uv run aerich upgrade
 
+# Generate a new aerich migration after model changes.
+# Requires the dev postgres to be running and current (make migrate-up first).
 migrate:
-	MULCHD_SECRET_KEY=dev \
-	MULCHD_DB_URL="asyncpg://mulchd:devpassword@localhost:5433/mulchd" \
-	uv run aerich migrate
+	$(DEV_DB_ENV) uv run aerich migrate
 
 format:
 	uv run isort src/ tests/
