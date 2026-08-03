@@ -11,8 +11,33 @@ import uuid
 import pytest
 from mulchd.models import Role, UserMembership
 from mulchd.mcp.tier2 import _read_expertise, _record_expertise, call_tool
+from mulchd.mcp.schemas import TIER2_TOOLS
 from mulchd.models import RecordMeta
 from tests.mcp.conftest import _make_fake_delete, ctx, _jot, ml_available
+
+
+def _tool_by_name(name):
+    return next(t for t in TIER2_TOOLS if t.name == name)
+
+
+def test_edit_record_schema_does_not_advertise_evidence():
+    """evidence is write-only (set at record creation, not editable later) —
+    edit_record's schema must not promise a field its handler silently drops."""
+    edit_record = _tool_by_name("edit_record")
+    assert "evidence" not in edit_record.inputSchema["properties"]
+
+
+def test_write_tools_schemas_advertise_evidence():
+    for name in (
+        "write_convention",
+        "write_decision",
+        "write_failure",
+        "write_pattern",
+        "write_reference",
+        "write_guide",
+    ):
+        tool = _tool_by_name(name)
+        assert "evidence" in tool.inputSchema["properties"], name
 
 
 async def test_cross_user_record_then_read(team, data_path, fake_write_record):

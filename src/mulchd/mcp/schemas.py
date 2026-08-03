@@ -52,6 +52,13 @@ _RELATED_RECORD_PROPERTIES = {
         "items": {"type": "string"},
         "description": "Record IDs this record replaces",
     },
+}
+
+# Evidence can only be set at record-creation time via write_* — not editable
+# later via edit_record — so this is spread only into the six write_* tool
+# schemas below, never into _RELATED_RECORD_PROPERTIES (which edit_record also
+# uses).
+_EVIDENCE_PROPERTY = {
     "evidence": {
         "type": "object",
         "description": (
@@ -87,6 +94,7 @@ _WRITE_TOOLS = [
                 "classification": _CLASSIFICATION_PROPERTY,
                 "content": {"type": "string", "description": "Body text of the convention."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_EVIDENCE_PROPERTY,
             },
             "required": ["domain", "classification", "content"],
         },
@@ -110,6 +118,7 @@ _WRITE_TOOLS = [
                     "description": "Date the decision was made (ISO 8601); defaults to recorded_at.",
                 },
                 **_RELATED_RECORD_PROPERTIES,
+                **_EVIDENCE_PROPERTY,
             },
             "required": ["domain", "classification", "title", "rationale"],
         },
@@ -129,6 +138,7 @@ _WRITE_TOOLS = [
                 "description": {"type": "string", "description": "What broke."},
                 "resolution": {"type": "string", "description": "How it was fixed."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_EVIDENCE_PROPERTY,
             },
             "required": ["domain", "classification", "description", "resolution"],
         },
@@ -148,6 +158,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the pattern."},
                 "description": {"type": "string", "description": "What the pattern is and how to use it."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_EVIDENCE_PROPERTY,
             },
             "required": ["domain", "classification", "name", "description"],
         },
@@ -167,6 +178,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the reference."},
                 "description": {"type": "string", "description": "What it points to and why it matters."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_EVIDENCE_PROPERTY,
             },
             "required": ["domain", "classification", "name", "description"],
         },
@@ -186,6 +198,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the guide."},
                 "description": {"type": "string", "description": "The guide's steps or content."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_EVIDENCE_PROPERTY,
             },
             "required": ["domain", "classification", "name", "description"],
         },
