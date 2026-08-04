@@ -1,10 +1,12 @@
+import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from ..domains import mulch_dir
-from ..mulch import delete_record, edit_record
+from ..mulch import MulchError, delete_record, edit_record
 from ..records import read_domain_records
 from ._shared import (
     parse_project_ref,
@@ -13,6 +15,8 @@ from ._shared import (
     set_last_project_cookie,
     templates,
 )
+
+_log = logging.getLogger("mulchd")
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -55,6 +59,7 @@ async def bulk_delete_records_action(
     if ref:
         org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
+        pairs: list[tuple[str, str]] = []
         for item in items:
             try:
                 parsed = json.loads(item)
@@ -66,7 +71,25 @@ async def bulk_delete_records_action(
             record_id = parsed.get("id")
             if not isinstance(domain, str) or not domain or not isinstance(record_id, str) or not record_id:
                 continue
-            await delete_record(m_dir, domain, record_id)
+            pairs.append((domain, record_id))
+
+        # ml archive is safe under concurrent writes to the same domain file
+        # (verified directly against the live binary — concurrent archive
+        # calls on the same file each correctly touch only their own record,
+        # no corruption or lost writes). Run the batch concurrently rather
+        # than one ml subprocess spawn at a time, and let one bad record
+        # (e.g. already deleted) fail without blocking the rest of the batch.
+        results = await asyncio.gather(
+            *(delete_record(m_dir, domain, record_id) for domain, record_id in pairs),
+            return_exceptions=True,
+        )
+        for (domain, record_id), result in zip(pairs, results):
+            if isinstance(result, MulchError):
+                _log.warning(
+                    "bulk delete failed for %s/%s: %s", domain, record_id, result
+                )
+            elif isinstance(result, BaseException):
+                raise result
     return RedirectResponse(f"/admin/p/{project}/records", status_code=303)
 
 

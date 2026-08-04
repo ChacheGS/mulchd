@@ -230,3 +230,41 @@ async def test_bulk_delete_records_action_skips_malformed_items(admin_client, tm
     )
     assert resp.status_code == 303
     assert calls == [("ops::weird", "mx-ccc"), ("architecture", "mx-aaa")]
+
+
+async def test_bulk_delete_records_action_continues_after_one_failure(
+    admin_client, tmp_path, monkeypatch
+):
+    """One record failing to delete (e.g. already gone) must not 500 the
+    whole request or block the rest of the batch from being deleted."""
+    import json
+
+    import mulchd.admin.records_view as records_view
+    from mulchd.config import settings
+    from mulchd.mulch import MulchError
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    calls = []
+
+    async def _fake_delete(m_dir, domain, record_id):
+        if record_id == "mx-bad":
+            raise MulchError("boom")
+        calls.append((domain, record_id))
+
+    monkeypatch.setattr(records_view, "delete_record", _fake_delete)
+
+    resp = await admin_client.post(
+        "/admin/records/bulk-delete",
+        data={
+            "project": "acme/demo",
+            "items": [
+                json.dumps({"domain": "architecture", "id": "mx-aaa"}),
+                json.dumps({"domain": "architecture", "id": "mx-bad"}),
+                json.dumps({"domain": "ops", "id": "mx-bbb"}),
+            ],
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "/admin/p/acme/demo/records" in resp.headers["location"]
+    assert sorted(calls) == [("architecture", "mx-aaa"), ("ops", "mx-bbb")]
