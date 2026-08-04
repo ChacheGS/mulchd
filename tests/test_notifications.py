@@ -186,7 +186,7 @@ async def test_write_record_dispatches_notify(notify_data_path, monkeypatch, db)
                                                 "content": "x", "recorded_at": "2026-07-07T00:00:00Z"}))
     monkeypatch.setattr(tier2_module, "init_ml_project", AsyncMock())
     monkeypatch.setattr(tier2_module, "_get_or_create_session", MagicMock(return_value="s1"))
-    monkeypatch.setattr(tier2_module, "_supersede_alerts", AsyncMock(return_value={}))
+    monkeypatch.setattr(tier2_module, "supersede_alerts", AsyncMock(return_value={}))
     monkeypatch.setattr("mulchd.models.RecordMeta.create", AsyncMock())
     monkeypatch.setattr("mulchd.models.RecordEvent.create", AsyncMock())
 

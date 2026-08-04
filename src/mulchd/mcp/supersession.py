@@ -8,13 +8,14 @@ with tier2.py re-exporting these names back for its own use.
 
 from enum import IntEnum
 from pathlib import Path
+from typing import cast
 
 from ..domains import mulch_dir
-from ..records import read_domain_records
+from ..records import Record, read_domain_records
 from .project_cache import get_archived_ids, get_project_records
 
 
-async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str) -> None:
+async def mark_superseded(records: list[Record], org_slug: str, project_slug: str) -> None:
     """Tag each record with incoming/outgoing supersede relationships and
     cycle membership.
 
@@ -30,9 +31,9 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
-    project_records = await get_project_records(m_dir)
+    project_records = cast("list[Record]", await get_project_records(m_dir))
     archived_ids = await get_archived_ids(m_dir)
-    live_by_id = {r["id"]: r for r in project_records if r.get("id")}
+    live_by_id: dict[str, Record] = {r["id"]: r for r in project_records if r.get("id")}
 
     # {victim_id: (superseder_id, superseder_domain)}
     superseded_by: dict[str, tuple[str, str]] = {}
@@ -42,7 +43,8 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
     superseders: dict[str, list[str]] = {}
     for stored in project_records:
         sid = stored.get("id", "")
-        for vid in stored.get("supersedes") or []:
+        stored_supersedes: list[str] = stored.get("supersedes") or []
+        for vid in stored_supersedes:
             if sid:
                 superseded_by[vid] = (sid, stored.get("_domain", ""))
                 superseders.setdefault(vid, []).append(sid)
@@ -85,7 +87,7 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
                 if tip_domain and tip_domain != r.get("_domain", ""):
                     r["_superseded_tip_domain"] = tip_domain
 
-        outgoing = r.get("supersedes") or []
+        outgoing: list[str] = r.get("supersedes") or []
         if outgoing:
             display: list[str] = []
             displaced_foundational: list[str] = []
@@ -152,7 +154,7 @@ def _resolve_tips(
     return ordered, tips[ordered[0]] if len(ordered) == 1 else 0
 
 
-def _cross_domain_supersede_hints(records: list[dict]) -> list[dict]:
+def cross_domain_supersede_hints(records: list[Record]) -> list[dict]:
     """Structured "read this domain next" pointers for records superseded from
     outside their own domain.
 
@@ -163,7 +165,7 @@ def _cross_domain_supersede_hints(records: list[dict]) -> list[dict]:
     exists to prevent. Forks emit one pointer per out-of-domain branch, since
     no single one of them is the answer.
 
-    Records must already be annotated by _mark_superseded.
+    Records must already be annotated by mark_superseded.
     """
     hints: list[dict] = []
     for r in records:
@@ -192,10 +194,10 @@ def _cross_domain_supersede_hints(records: list[dict]) -> list[dict]:
     return hints
 
 
-async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str) -> None:
+async def mark_related_to(records: list[Record], org_slug: str, project_slug: str) -> None:
     """Tag each record with incoming/outgoing relates_to links.
 
-    Mirrors _mark_superseded's scan-the-whole-project approach, but
+    Mirrors mark_superseded's scan-the-whole-project approach, but
     relates_to is a plain, non-exclusive association rather than a
     hierarchical one — a target can be referenced by any number of other
     records (unlike _superseded_by, which keeps whichever superseder happened
@@ -205,16 +207,17 @@ async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
-    project_records = await get_project_records(m_dir)
+    project_records = cast("list[Record]", await get_project_records(m_dir))
     archived_ids = await get_archived_ids(m_dir)
-    live_ids = {r["id"] for r in project_records if r.get("id")}
+    live_ids: set[str] = {r["id"] for r in project_records if r.get("id")}
 
     related_by: dict[str, list[str]] = {}
     for stored in project_records:
         sid = stored.get("id", "")
         if not sid:
             continue
-        for tid in stored.get("relates_to") or []:
+        stored_relates_to: list[str] = stored.get("relates_to") or []
+        for tid in stored_relates_to:
             related_by.setdefault(tid, []).append(sid)
 
     for r in records:
@@ -222,7 +225,7 @@ async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str
         if rid in related_by:
             r["_related_by"] = related_by[rid]
 
-        outgoing = r.get("relates_to") or []
+        outgoing: list[str] = r.get("relates_to") or []
         if outgoing:
             display: list[str] = []
             for tid in outgoing:
@@ -235,18 +238,18 @@ async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str
             r["_relates_to_display"] = display
 
 
-async def _find_incoming_references(m_dir: Path, record_id: str) -> list[dict]:
+async def find_incoming_references(m_dir: Path, record_id: str) -> list[Record]:
     """Every other live record whose relates_to or supersedes points at record_id.
 
     Computed independently of `ml move`'s own incomingReferences — that scan
     (mulch 0.10.7's findIncomingReferences) skips the entire source-domain
     file, not just the moved record's own line, so it structurally misses
     same-domain references. mulchd already has the project-wide record set
-    cached for _mark_related_to/_mark_superseded, so it's cheaper and more
+    cached for mark_related_to/mark_superseded, so it's cheaper and more
     correct to answer this directly than to trust ml's result.
     """
-    project_records = await get_project_records(m_dir)
-    hits: list[dict] = []
+    project_records = cast("list[Record]", await get_project_records(m_dir))
+    hits: list[Record] = []
     for r in project_records:
         rid = r.get("id")
         if not rid or rid == record_id:
@@ -258,7 +261,7 @@ async def _find_incoming_references(m_dir: Path, record_id: str) -> list[dict]:
     return hits
 
 
-def _validate_references(
+def validate_references(
     live_ids: set[str],
     supersedes: list[str],
     relates_to: list[str],
@@ -283,7 +286,7 @@ def _validate_references(
         raise ValueError("\n".join(errors))
 
 
-def _find_cycles(project_records: list[dict]) -> dict[str, list[str]]:
+def _find_cycles(project_records: list[Record]) -> dict[str, list[str]]:
     """Tarjan's strongly-connected-components algorithm over the supersedes
     graph. Returns {record_id: [other ids in its cycle]} for every record
     whose component has more than one member (a genuine cycle) — records not
@@ -300,7 +303,8 @@ def _find_cycles(project_records: list[dict]) -> dict[str, list[str]]:
         rid = r.get("id")
         if not rid:
             continue
-        graph[rid] = [t for t in (r.get("supersedes") or []) if t in ids_present]
+        r_supersedes: list[str] = r.get("supersedes") or []
+        graph[rid] = [t for t in r_supersedes if t in ids_present]
 
     index_counter = 0
     stack: list[str] = []
@@ -377,7 +381,7 @@ class Classification(IntEnum):
             return cls.observational
 
 
-async def _supersede_alerts(
+async def supersede_alerts(
     m_dir: Path, supersedes: list[str], new_classification: str
 ) -> dict[str, str]:
     """Return {id: old_classification} for superseded records that need a warning.
@@ -405,7 +409,7 @@ async def _supersede_alerts(
     return alerts
 
 
-def _format_supersession_alerts(alerts: dict[str, str], new_classification: str) -> str:
+def format_supersession_alerts(alerts: dict[str, str], new_classification: str) -> str:
     """Render the ⚠ SUPERSESSION WARNING block for a set of alerted supersede
     targets, or "" if there are none. Shared by _record_expertise (write) and
     _edit_record (adding a supersedes reference to an existing record)."""

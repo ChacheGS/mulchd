@@ -1,5 +1,5 @@
 """
-Supersession, reference validation, and cycle-detection tests (_mark_superseded, _find_cycles, _validate_references).
+Supersession, reference validation, and cycle-detection tests (mark_superseded, _find_cycles, validate_references).
 """
 
 import json
@@ -9,9 +9,9 @@ from tests.mcp.conftest import ctx, _jot
 
 
 async def test_supersede_alerts_foundational_same_tier(team, data_path):
-    """_supersede_alerts fires when a foundational record is superseded, even at the same tier."""
+    """supersede_alerts fires when a foundational record is superseded, even at the same tier."""
     from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _supersede_alerts
+    from mulchd.mcp.tier2 import supersede_alerts
 
     t = team
     r = _jot(
@@ -24,15 +24,15 @@ async def test_supersede_alerts_foundational_same_tier(team, data_path):
         content="Guardrail",
         owner="carlos",
     )
-    alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "foundational")
+    alerts = await supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "foundational")
     assert r["id"] in alerts
     assert alerts[r["id"]] == "foundational"
 
 
 async def test_supersede_alerts_tier_downgrade(team, data_path):
-    """_supersede_alerts fires when a lower tier supersedes a higher one."""
+    """supersede_alerts fires when a lower tier supersedes a higher one."""
     from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _supersede_alerts
+    from mulchd.mcp.tier2 import supersede_alerts
 
     t = team
     r = _jot(
@@ -45,14 +45,14 @@ async def test_supersede_alerts_tier_downgrade(team, data_path):
         content="Tactical rule",
         owner="carlos",
     )
-    alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "observational")
+    alerts = await supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "observational")
     assert r["id"] in alerts
 
 
 async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_path):
-    """_supersede_alerts does not fire when tactical supersedes tactical."""
+    """supersede_alerts does not fire when tactical supersedes tactical."""
     from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _supersede_alerts
+    from mulchd.mcp.tier2 import supersede_alerts
 
     t = team
     r = _jot(
@@ -65,57 +65,57 @@ async def test_supersede_alerts_no_alert_same_nonfoundational_tier(team, data_pa
         content="Tactical rule",
         owner="carlos",
     )
-    alerts = await _supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "tactical")
+    alerts = await supersede_alerts(mulch_dir("acme", "infra"), [r["id"]], "tactical")
     assert r["id"] not in alerts
 
 
 def test_validate_references_accepts_existing_ids():
-    from mulchd.mcp.tier2 import _validate_references
+    from mulchd.mcp.tier2 import validate_references
 
     # Should not raise
-    _validate_references({"mx-a", "mx-b"}, ["mx-a"], ["mx-b"])
+    validate_references({"mx-a", "mx-b"}, ["mx-a"], ["mx-b"])
 
 
 def test_validate_references_rejects_fabricated_supersedes_id():
-    from mulchd.mcp.tier2 import _validate_references
+    from mulchd.mcp.tier2 import validate_references
 
     with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
-        _validate_references({"mx-a"}, ["mx-ghost"], [])
+        validate_references({"mx-a"}, ["mx-ghost"], [])
 
 
 def test_validate_references_rejects_fabricated_relates_to_id():
-    from mulchd.mcp.tier2 import _validate_references
+    from mulchd.mcp.tier2 import validate_references
 
     with pytest.raises(ValueError, match="relates_to references records that don't exist: mx-ghost"):
-        _validate_references({"mx-a"}, [], ["mx-ghost"])
+        validate_references({"mx-a"}, [], ["mx-ghost"])
 
 
 def test_validate_references_lists_multiple_bad_ids_in_one_error():
-    from mulchd.mcp.tier2 import _validate_references
+    from mulchd.mcp.tier2 import validate_references
 
     with pytest.raises(ValueError, match="mx-ghost1, mx-ghost2"):
-        _validate_references(set(), ["mx-ghost1", "mx-ghost2"], [])
+        validate_references(set(), ["mx-ghost1", "mx-ghost2"], [])
 
 
 def test_validate_references_rejects_self_reference():
-    from mulchd.mcp.tier2 import _validate_references
+    from mulchd.mcp.tier2 import validate_references
 
     with pytest.raises(ValueError, match="supersedes cannot reference the record's own id: mx-a"):
-        _validate_references({"mx-a"}, ["mx-a"], [], self_id="mx-a")
+        validate_references({"mx-a"}, ["mx-a"], [], self_id="mx-a")
 
 
 def test_validate_references_no_self_id_means_no_self_check():
-    from mulchd.mcp.tier2 import _validate_references
+    from mulchd.mcp.tier2 import validate_references
 
     # A brand-new write has no self_id yet (the record doesn't have an ID
     # until after write_record runs) — self_id=None must not raise just
     # because some coincidental ID appears in the live set.
-    _validate_references({"mx-a"}, ["mx-a"], [])
+    validate_references({"mx-a"}, ["mx-a"], [])
 
 
 async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
-    """_mark_superseded annotates _supersedes_foundational on the superseding record."""
-    from mulchd.mcp.tier2 import _mark_superseded
+    """mark_superseded annotates _supersedes_foundational on the superseding record."""
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     original = _jot(
@@ -143,17 +143,17 @@ async def test_supersedes_foundational_annotated_on_superseder(team, data_path):
     superseder["_domain"] = "api"
 
     records = [original, superseder]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert records[0].get("_superseded") is True
     assert records[1].get("_supersedes_foundational") == [original["id"]]
 
 
 async def test_mark_superseded_tags_foundational_victim(team, data_path):
-    """_mark_superseded sets _foundational_superseded on a foundational record
+    """mark_superseded sets _foundational_superseded on a foundational record
     that has since been superseded — not on the superseder, and not on a
     foundational record that hasn't been superseded."""
-    from mulchd.mcp.tier2 import _mark_superseded
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     original = _jot(
@@ -173,7 +173,7 @@ async def test_mark_superseded_tags_foundational_victim(team, data_path):
         r["_domain"] = "api"
 
     records = [original, superseder, untouched]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert original.get("_foundational_superseded") is True
     assert superseder.get("_foundational_superseded") is None
@@ -181,9 +181,9 @@ async def test_mark_superseded_tags_foundational_victim(team, data_path):
 
 
 async def test_format_records_renders_foundational_superseded_banner(team, data_path):
-    """_format_records renders the loud banner instead of the plain line when
+    """format_records renders the loud banner instead of the plain line when
     _foundational_superseded is set, and keeps the plain line otherwise."""
-    from mulchd.mcp.tier2 import _format_records, _mark_superseded
+    from mulchd.mcp.tier2 import format_records, mark_superseded
 
     t = team
     original = _jot(
@@ -208,8 +208,8 @@ async def test_format_records_renders_foundational_superseded_banner(team, data_
         r["_domain"] = "api"
 
     records = [original, tactical_old]
-    await _mark_superseded(records, "acme", "infra")
-    text = _format_records(records)
+    await mark_superseded(records, "acme", "infra")
+    text = format_records(records)
 
     assert f"FOUNDATIONAL POLICY SUPERSEDED by {superseder['id']}" in text
     assert f"get_record_history('{original['id']}')" in text
@@ -221,7 +221,7 @@ async def test_format_records_foundational_banner_includes_cross_domain_hint(tea
     """The foundational-superseded banner carries the same (in <domain>) suffix
     the plain 'superseded by' line shows — losing it would hide where the
     replacement actually lives, which defeats the banner's purpose."""
-    from mulchd.mcp.tier2 import _format_records, _mark_superseded
+    from mulchd.mcp.tier2 import format_records, mark_superseded
 
     t = team
     original = _jot(
@@ -237,8 +237,8 @@ async def test_format_records_foundational_banner_includes_cross_domain_hint(tea
     superseder["_domain"] = "policies"
 
     records = [original]
-    await _mark_superseded(records, "acme", "infra")
-    text = _format_records(records)
+    await mark_superseded(records, "acme", "infra")
+    text = format_records(records)
 
     assert f"FOUNDATIONAL POLICY SUPERSEDED by {superseder['id']} (in policies)" in text
 
@@ -247,7 +247,7 @@ async def test_mark_superseded_foundational_target_not_double_rendered(team, dat
     """A foundational supersede target must appear only in _supersedes_foundational,
     not also in the generic _supersedes_display — otherwise the id renders twice
     back-to-back in the formatted text (once per tag)."""
-    from mulchd.mcp.tier2 import _mark_superseded
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     old = _jot(
@@ -262,7 +262,7 @@ async def test_mark_superseded_foundational_target_not_double_rendered(team, dat
     old["_domain"] = "infra"
     new["_domain"] = "infra"
     records = [old, new]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert new.get("_supersedes_display") in (None, [])
     assert new["_supersedes_foundational"] == [old["id"]]
@@ -271,7 +271,7 @@ async def test_mark_superseded_foundational_target_not_double_rendered(team, dat
 async def test_mark_superseded_sets_generic_outgoing_tag(team, data_path):
     """A non-foundational outgoing supersedes relationship now gets a display
     tag too — today only the foundational-specific tag exists."""
-    from mulchd.mcp.tier2 import _mark_superseded
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     old = _jot(
@@ -286,7 +286,7 @@ async def test_mark_superseded_sets_generic_outgoing_tag(team, data_path):
     old["_domain"] = "infra"
     new["_domain"] = "infra"
     records = [old, new]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert records[1]["_supersedes_display"] == [old["id"]]
 
@@ -295,7 +295,7 @@ async def test_mark_superseded_labels_deleted_target(team, data_path):
     """An outgoing supersedes target that's been archived is labeled (deleted),
     not shown as if it were still live."""
     from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _mark_superseded
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     m_dir = mulch_dir("acme", "infra")
@@ -311,7 +311,7 @@ async def test_mark_superseded_labels_deleted_target(team, data_path):
     )
     new["_domain"] = "infra"
     records = [new]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert records[0]["_supersedes_display"] == ["mx-archived1 (deleted)"]
 
@@ -319,7 +319,7 @@ async def test_mark_superseded_labels_deleted_target(team, data_path):
 async def test_mark_superseded_labels_missing_target(team, data_path):
     """An outgoing supersedes target that never existed at all (legacy data
     written before write-time validation existed) is labeled (missing)."""
-    from mulchd.mcp.tier2 import _mark_superseded
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     new = _jot(
@@ -329,14 +329,14 @@ async def test_mark_superseded_labels_missing_target(team, data_path):
     )
     new["_domain"] = "infra"
     records = [new]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert records[0]["_supersedes_display"] == ["mx-never-existed (missing)"]
 
 
 async def test_mark_superseded_flags_direct_cycle(team, data_path):
     """Two records that mutually supersede each other get _cycle_with set on both."""
-    from mulchd.mcp.tier2 import _mark_superseded
+    from mulchd.mcp.tier2 import mark_superseded
 
     t = team
     a = _jot(
@@ -362,7 +362,7 @@ async def test_mark_superseded_flags_direct_cycle(team, data_path):
     a["_domain"] = "infra"
     b["_domain"] = "infra"
     records = [a, b]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert records[0].get("_cycle_with") == [b["id"]]
     assert records[1].get("_cycle_with") == [a["id"]]
@@ -434,7 +434,7 @@ def test_find_cycles_empty_input():
 
 def test_find_cycles_self_loop_not_flagged_as_cycle():
     """A record whose own supersedes list contains its own id (only reachable
-    via legacy data written before _validate_references existed) resolves to
+    via legacy data written before validate_references existed) resolves to
     a single-node component and is correctly not treated as a cycle — a lone
     self-reference isn't a contradiction between two records the way A<->B is."""
     from mulchd.mcp.tier2 import _find_cycles

@@ -296,7 +296,7 @@ def test_format_outcomes_tag_empty():
 
 
 async def test_annotate_outcome_staleness_flags_edit_after_outcome(team, data_path):
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.mcp.tier2 import annotate_outcome_staleness
     from mulchd.models import RecordEdit
 
     t = team
@@ -310,7 +310,7 @@ async def test_annotate_outcome_staleness_flags_edit_after_outcome(team, data_pa
         before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
     )
     records = [r.copy()]
-    await _annotate_outcome_staleness(records, t.infra.id)
+    await annotate_outcome_staleness(records, t.infra.id)
     assert records[0].get("_outcomes_stale") is True
 
 
@@ -318,7 +318,7 @@ async def test_annotate_outcome_staleness_handles_z_suffix_timestamp(team, data_
     """A real ml-produced outcome timestamp isn't guaranteed to use Python's
     own +00:00 offset style — Z-suffix ISO 8601 must parse and compare
     correctly too, not just the format Python happens to emit."""
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.mcp.tier2 import annotate_outcome_staleness
     from mulchd.models import RecordEdit
 
     t = team
@@ -333,14 +333,14 @@ async def test_annotate_outcome_staleness_handles_z_suffix_timestamp(team, data_
         at=datetime(2026, 7, 28, 0, 0, 1, tzinfo=timezone.utc),
     )
     records = [r.copy()]
-    await _annotate_outcome_staleness(records, t.infra.id)
+    await annotate_outcome_staleness(records, t.infra.id)
     assert records[0].get("_outcomes_stale") is True
 
 
 async def test_annotate_outcome_staleness_not_flagged_when_outcome_is_newer(team, data_path):
     """A fresh outcome recorded after the edit means the content has since
     been re-confirmed — not stale."""
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.mcp.tier2 import annotate_outcome_staleness
     from mulchd.models import RecordEdit
 
     t = team
@@ -355,14 +355,14 @@ async def test_annotate_outcome_staleness_not_flagged_when_outcome_is_newer(team
         at=datetime(2026, 7, 28, 0, 0, tzinfo=timezone.utc),
     )
     records = [r.copy()]
-    await _annotate_outcome_staleness(records, t.infra.id)
+    await annotate_outcome_staleness(records, t.infra.id)
     assert records[0].get("_outcomes_stale") is None
 
 
 async def test_annotate_outcome_staleness_ignores_non_content_edits(team, data_path):
     """An edit that only touched classification/supersedes (not a content
     field) must not trigger staleness even if it postdates the outcome."""
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.mcp.tier2 import annotate_outcome_staleness
     from mulchd.models import RecordEdit
 
     t = team
@@ -376,12 +376,12 @@ async def test_annotate_outcome_staleness_ignores_non_content_edits(team, data_p
         before_snapshot={"classification": "observational"}, client="test", session_id=uuid.uuid4(),
     )
     records = [r.copy()]
-    await _annotate_outcome_staleness(records, t.infra.id)
+    await annotate_outcome_staleness(records, t.infra.id)
     assert records[0].get("_outcomes_stale") is None
 
 
 async def test_annotate_outcome_staleness_skips_records_without_outcomes(team, data_path):
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.mcp.tier2 import annotate_outcome_staleness
     from mulchd.models import RecordEdit
 
     t = team
@@ -394,7 +394,7 @@ async def test_annotate_outcome_staleness_skips_records_without_outcomes(team, d
         before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
     )
     records = [r.copy()]
-    await _annotate_outcome_staleness(records, t.infra.id)
+    await annotate_outcome_staleness(records, t.infra.id)
     assert records[0].get("_outcomes_stale") is None
 
 
@@ -404,7 +404,7 @@ async def test_edit_then_self_confirm_does_not_clear_stale_flag(team, data_path,
     edits a record's content, then immediately confirms their own edit,
     should not end up with a record that reads as freshly re-validated."""
     import mulchd.mcp.tier2 as mcp_tier2
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness, _edit_record, _record_outcome
+    from mulchd.mcp.tier2 import annotate_outcome_staleness, _edit_record, _record_outcome
 
     t = team
     r = _jot(
@@ -427,7 +427,7 @@ async def test_edit_then_self_confirm_does_not_clear_stale_flag(team, data_path,
         mcp_tier2.edit_record = orig_edit
 
     stale_check = r.copy()
-    await _annotate_outcome_staleness([stale_check], t.infra.id)
+    await annotate_outcome_staleness([stale_check], t.infra.id)
     assert stale_check.get("_outcomes_stale") is True
 
     async def _fake_outcome(m_dir, domain, rid, status, notes=None, agent=None):
@@ -453,7 +453,7 @@ async def test_edit_then_self_confirm_does_not_clear_stale_flag(team, data_path,
         mcp_tier2.record_outcome = orig_outcome
 
     still_stale_check = r.copy()
-    await _annotate_outcome_staleness([still_stale_check], t.infra.id)
+    await annotate_outcome_staleness([still_stale_check], t.infra.id)
     assert still_stale_check.get("_outcomes_stale") is True
 
 
@@ -462,7 +462,7 @@ async def test_edit_then_third_party_confirm_clears_stale_flag(team, data_path, 
     proves the fix distinguishes self- from third-party confirmation rather
     than just never clearing at all."""
     import mulchd.mcp.tier2 as mcp_tier2
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness, _edit_record, _record_outcome
+    from mulchd.mcp.tier2 import annotate_outcome_staleness, _edit_record, _record_outcome
 
     t = team
     r = _jot(
@@ -507,7 +507,7 @@ async def test_edit_then_third_party_confirm_clears_stale_flag(team, data_path, 
         mcp_tier2.record_outcome = orig_outcome
 
     cleared_check = r.copy()
-    await _annotate_outcome_staleness([cleared_check], t.infra.id)
+    await annotate_outcome_staleness([cleared_check], t.infra.id)
     assert cleared_check.get("_outcomes_stale") is None
 
 
@@ -515,7 +515,7 @@ async def test_outcome_with_no_agent_field_still_clears_stale_flag(team, data_pa
     """Outcomes recorded before this feature shipped have no agent field at
     all — treated as clearing staleness (legacy data isn't retroactively
     re-flagged), matching the original pre-fix behavior."""
-    from mulchd.mcp.tier2 import _annotate_outcome_staleness
+    from mulchd.mcp.tier2 import annotate_outcome_staleness
     from mulchd.models import RecordEdit
 
     t = team
@@ -531,7 +531,7 @@ async def test_outcome_with_no_agent_field_still_clears_stale_flag(team, data_pa
     )
 
     records = [r.copy()]
-    await _annotate_outcome_staleness(records, t.infra.id)
+    await annotate_outcome_staleness(records, t.infra.id)
     assert records[0].get("_outcomes_stale") is None
 
 

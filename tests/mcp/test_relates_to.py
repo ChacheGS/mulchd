@@ -1,6 +1,6 @@
 """
-relates_to read-time display tests (_mark_related_to) and move_record's
-independently-computed incoming-reference count (_find_incoming_references).
+relates_to read-time display tests (mark_related_to) and move_record's
+independently-computed incoming-reference count (find_incoming_references).
 """
 
 import json
@@ -11,7 +11,7 @@ from tests.mcp.conftest import ctx, _jot
 
 async def test_mark_related_to_sets_outgoing_and_incoming_tags(team, data_path):
     """B relates_to A: A gets _related_by, B gets _relates_to_display."""
-    from mulchd.mcp.tier2 import _mark_related_to
+    from mulchd.mcp.tier2 import mark_related_to
 
     t = team
     a = _jot(
@@ -26,7 +26,7 @@ async def test_mark_related_to_sets_outgoing_and_incoming_tags(team, data_path):
     a["_domain"] = "infra"
     b["_domain"] = "infra"
     records = [a, b]
-    await _mark_related_to(records, "acme", "infra")
+    await mark_related_to(records, "acme", "infra")
 
     assert records[0]["_related_by"] == [b["id"]]
     assert records[1]["_relates_to_display"] == [a["id"]]
@@ -36,7 +36,7 @@ async def test_mark_related_to_incoming_collects_multiple_referencers(team, data
     """Unlike supersedes' _superseded_by (single winner), relates_to's
     incoming side collects every referencer, since it's a non-exclusive
     association."""
-    from mulchd.mcp.tier2 import _mark_related_to
+    from mulchd.mcp.tier2 import mark_related_to
 
     t = team
     a = _jot(
@@ -55,14 +55,14 @@ async def test_mark_related_to_incoming_collects_multiple_referencers(team, data
     )
     a["_domain"] = "infra"
     records = [a]
-    await _mark_related_to(records, "acme", "infra")
+    await mark_related_to(records, "acme", "infra")
 
     assert sorted(records[0]["_related_by"]) == sorted([b["id"], c["id"]])
 
 
 async def test_mark_related_to_labels_deleted_target(team, data_path):
     from mulchd.domains import mulch_dir
-    from mulchd.mcp.tier2 import _mark_related_to
+    from mulchd.mcp.tier2 import mark_related_to
 
     t = team
     m_dir = mulch_dir("acme", "infra")
@@ -78,13 +78,13 @@ async def test_mark_related_to_labels_deleted_target(team, data_path):
     )
     new["_domain"] = "infra"
     records = [new]
-    await _mark_related_to(records, "acme", "infra")
+    await mark_related_to(records, "acme", "infra")
 
     assert records[0]["_relates_to_display"] == ["mx-archived1 (deleted)"]
 
 
 async def test_mark_related_to_labels_missing_target(team, data_path):
-    from mulchd.mcp.tier2 import _mark_related_to
+    from mulchd.mcp.tier2 import mark_related_to
 
     t = team
     new = _jot(
@@ -94,7 +94,7 @@ async def test_mark_related_to_labels_missing_target(team, data_path):
     )
     new["_domain"] = "infra"
     records = [new]
-    await _mark_related_to(records, "acme", "infra")
+    await mark_related_to(records, "acme", "infra")
 
     assert records[0]["_relates_to_display"] == ["mx-never-existed (missing)"]
 

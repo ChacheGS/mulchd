@@ -1,5 +1,5 @@
 """
-edit_record tests, including _annotate_edits.
+edit_record tests, including annotate_edits.
 """
 
 import pytest
@@ -118,7 +118,7 @@ async def test_edit_record_rejects_self_reference(team, data_path, fake_write_re
 
 async def test_edit_record_rejects_relates_to_self_reference(team, data_path, fake_write_record):
     """The self-reference guard applies to relates_to too, not just supersedes —
-    _validate_references' loop is field-agnostic."""
+    validate_references' loop is field-agnostic."""
     from mulchd.mcp.tier2 import _edit_record
 
     t = team
@@ -412,8 +412,8 @@ async def test_edit_record_no_stale_advisory_for_non_content_field(team, data_pa
 
 
 async def test_annotate_edits_sets_edited_flag(team, data_path):
-    """_annotate_edits marks records that have RecordEdit rows with _edited and edit count."""
-    from mulchd.mcp.tier2 import _annotate_edits
+    """annotate_edits marks records that have RecordEdit rows with _edited and edit count."""
+    from mulchd.mcp.tier2 import annotate_edits
 
     t = team
     r = _jot(
@@ -436,15 +436,15 @@ async def test_annotate_edits_sets_edited_flag(team, data_path):
         session_id=uuid.uuid4(),
     )
     records = [r.copy()]
-    await _annotate_edits(records, t.infra.id)
+    await annotate_edits(records, t.infra.id)
     assert records[0].get("_edited") is True
     assert records[0].get("_edit_count") == 1
     assert records[0].get("_last_edited_by") == "Carlos G."
 
 
 async def test_annotate_edits_counts_multiple_edits(team, data_path):
-    """_annotate_edits counts each edit and records the last editor."""
-    from mulchd.mcp.tier2 import _annotate_edits
+    """annotate_edits counts each edit and records the last editor."""
+    from mulchd.mcp.tier2 import annotate_edits
 
     t = team
     r = _jot(
@@ -468,7 +468,7 @@ async def test_annotate_edits_counts_multiple_edits(team, data_path):
             session_id=uuid.uuid4(),
         )
     records = [r.copy()]
-    await _annotate_edits(records, t.infra.id)
+    await annotate_edits(records, t.infra.id)
     assert records[0]["_edit_count"] == 3
     assert records[0]["_last_edited_by"] == "Jorge M."
 

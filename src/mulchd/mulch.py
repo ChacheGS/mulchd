@@ -213,7 +213,7 @@ async def move_record(
     computation of it skips the entire source-domain file (not just the
     moved record's line), so it misses same-domain references. Callers
     should compute inbound references themselves (see
-    supersession._find_incoming_references) before calling this.
+    supersession.find_incoming_references) before calling this.
 
     Ownership check is the caller's responsibility."""
     result = await _run(mulch_dir, ["move", source_domain, record_id, target_domain])

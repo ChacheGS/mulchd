@@ -34,25 +34,25 @@ from .schemas import (
 )
 from .supersession import (
     Classification,
-    _mark_superseded,
-    _mark_related_to,
-    _cross_domain_supersede_hints,
-    _find_incoming_references,
-    _validate_references,
+    mark_superseded,
+    mark_related_to,
+    cross_domain_supersede_hints,
+    find_incoming_references,
+    validate_references,
     _find_cycles,
-    _supersede_alerts,
-    _format_supersession_alerts,
+    supersede_alerts,
+    format_supersession_alerts,
 )
 from .formatting import (
     _CONTENT_FIELD_KEYS,
     _format_outcomes_tag,
     _decorate_header,
     _format_single,
-    _format_records,
-    _format_recent,
-    _wrap_untrusted,
-    _annotate_edits,
-    _annotate_outcome_staleness,
+    format_records,
+    format_recent,
+    wrap_untrusted,
+    annotate_edits,
+    annotate_outcome_staleness,
 )
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
@@ -311,11 +311,11 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         if truncated and page
         else None
     )
-    await _mark_superseded(page, ctx.org.slug, ctx.project.slug)
-    await _mark_related_to(page, ctx.org.slug, ctx.project.slug)
-    await _annotate_edits(page, ctx.project.id)
-    await _annotate_outcome_staleness(page, ctx.project.id)
-    cross_domain_hints = _cross_domain_supersede_hints(page)
+    await mark_superseded(page, ctx.org.slug, ctx.project.slug)
+    await mark_related_to(page, ctx.org.slug, ctx.project.slug)
+    await annotate_edits(page, ctx.project.id)
+    await annotate_outcome_staleness(page, ctx.project.id)
+    cross_domain_hints = cross_domain_supersede_hints(page)
     hint_text = ""
     if cross_domain_hints:
         hint_domains = sorted({h["in_domain"] for h in cross_domain_hints})
@@ -335,11 +335,11 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
             else []
         )
         meta_by_id = {m["record_id"]: m for m in meta_rows}
-        formatted = _format_recent(page, meta_by_id)
+        formatted = format_recent(page, meta_by_id)
     else:
-        formatted = _format_records(page)
+        formatted = format_records(page)
     if page:
-        formatted = _wrap_untrusted(formatted)
+        formatted = wrap_untrusted(formatted)
     text = warning + hint_text + formatted
     return (
         [TextContent(type="text", text=text)],
@@ -459,7 +459,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     project_records = await get_project_records(m_dir)
     if args.get("supersedes") or args.get("relates_to"):
         live_ids = {r["id"] for r in project_records if r.get("id")}
-        _validate_references(
+        validate_references(
             live_ids,
             list(args.get("supersedes") or []),
             list(args.get("relates_to") or []),
@@ -569,10 +569,10 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     msg = f"Recorded {written['type']} in {domain} ({written['id']}) — {ctx.org.slug}/{ctx.project.slug}"
     if similar_domain:
         msg += f"\n\n⚠ '{domain}' is a new domain; did you mean the existing domain '{similar_domain}'?"
-    alerts = await _supersede_alerts(
+    alerts = await supersede_alerts(
         m_dir, list(args.get("supersedes") or []), args["classification"]
     )
-    msg += _format_supersession_alerts(alerts, args["classification"])
+    msg += format_supersession_alerts(alerts, args["classification"])
     _fire_notify(domain, ctx, "write", written)
     return [TextContent(type="text", text=msg)]
 
@@ -612,13 +612,13 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
     results, truncated = _cap_per_domain(results, limit)
-    await _mark_superseded(results, ctx.org.slug, ctx.project.slug)
-    await _mark_related_to(results, ctx.org.slug, ctx.project.slug)
-    await _annotate_edits(results, ctx.project.id)
-    await _annotate_outcome_staleness(results, ctx.project.id)
-    formatted = _format_records(results)
+    await mark_superseded(results, ctx.org.slug, ctx.project.slug)
+    await mark_related_to(results, ctx.org.slug, ctx.project.slug)
+    await annotate_edits(results, ctx.project.id)
+    await annotate_outcome_staleness(results, ctx.project.id)
+    formatted = format_records(results)
     if results:
-        formatted = _wrap_untrusted(formatted)
+        formatted = wrap_untrusted(formatted)
     text = warning + formatted
     return (
         [TextContent(type="text", text=text)],
@@ -744,7 +744,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     if "supersedes" in updates or "relates_to" in updates:
         project_records = await get_project_records(m_dir)
         live_ids = {r["id"] for r in project_records if r.get("id")}
-        _validate_references(
+        validate_references(
             live_ids,
             list(updates.get("supersedes") or []),
             list(updates.get("relates_to") or []),
@@ -754,8 +754,8 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         added = [sid for sid in (updates["supersedes"] or []) if sid not in (record.get("supersedes") or [])]
         if added:
             effective_classification = updates.get("classification", record.get("classification", ""))
-            alerts = await _supersede_alerts(m_dir, added, effective_classification)
-            supersession_alert_text = _format_supersession_alerts(alerts, effective_classification)
+            alerts = await supersede_alerts(m_dir, added, effective_classification)
+            supersession_alert_text = format_supersession_alerts(alerts, effective_classification)
     await edit_record(m_dir, domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     try:
@@ -877,7 +877,7 @@ async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         )
     record = await _get_owned_record(ctx, source_domain, record_id, "move")
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    incoming_refs = await _find_incoming_references(m_dir, record_id)
+    incoming_refs = await find_incoming_references(m_dir, record_id)
     await move_record(m_dir, source_domain, record_id, target_domain)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     try:
@@ -1034,10 +1034,10 @@ async def _read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
         for r in records:
             r["_domain"] = name
-        await _mark_superseded(records, ctx.org.slug, ctx.project.slug)
-        await _mark_related_to(records, ctx.org.slug, ctx.project.slug)
+        await mark_superseded(records, ctx.org.slug, ctx.project.slug)
+        await mark_related_to(records, ctx.org.slug, ctx.project.slug)
         if records:
-            text = _wrap_untrusted(_format_records(records))
+            text = wrap_untrusted(format_records(records))
         else:
             text = f"No records in domain '{name}' yet."
         return [ReadResourceContents(content=text, mime_type="text/plain")]

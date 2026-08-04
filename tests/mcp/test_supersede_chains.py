@@ -1,10 +1,10 @@
 """
 Transitive supersede-chain resolution: _resolve_tips, and the tip annotations
-_mark_superseded adds for chains deeper than one hop.
+mark_superseded adds for chains deeper than one hop.
 """
 
 from mulchd.mcp.formatting import _decorate_header
-from mulchd.mcp.supersession import _mark_superseded, _resolve_tips
+from mulchd.mcp.supersession import _resolve_tips, mark_superseded
 from tests.mcp.conftest import _jot
 
 
@@ -155,7 +155,7 @@ async def test_mark_superseded_annotates_tip_on_two_hop_chain(team, data_path):
     )
     a["_domain"] = "api"
     records = [a]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert a["_superseded_by"] == b["id"]
     assert a["_superseded_tip"] == c["id"]
@@ -178,7 +178,7 @@ async def test_mark_superseded_omits_tip_when_superseder_is_current(team, data_p
     )
     a["_domain"] = "api"
     records = [a]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert a.get("_superseded_tip") is None
     assert a.get("_superseded_tip_hops") is None
@@ -209,7 +209,7 @@ async def test_mark_superseded_flags_ambiguous_tips_on_a_fork(team, data_path):
     )
     a["_domain"] = "api"
     records = [a]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert a["_superseded_tip_ambiguous"] == sorted([b["id"], c["id"]])
     assert a.get("_superseded_tip") is None
@@ -240,7 +240,7 @@ async def test_mark_superseded_records_tip_domain_for_cross_domain_chain(team, d
     )
     a["_domain"] = "api"
     records = [a]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert a["_superseded_tip"] == c["id"]
     assert a["_superseded_tip_domain"] == "ops"
@@ -248,7 +248,7 @@ async def test_mark_superseded_records_tip_domain_for_cross_domain_chain(team, d
 
 async def test_format_records_surfaces_the_tip_for_a_mid_chain_record(team, data_path):
     """Reading B of A<-B<-C names C, so no second fetch is needed to learn B is stale."""
-    from mulchd.mcp.tier2 import _format_records
+    from mulchd.mcp.tier2 import format_records
 
     a = _jot(data_path, "acme", "infra", "api", type="decision", content="First", owner="carlos")
     b = _jot(
@@ -275,8 +275,8 @@ async def test_format_records_surfaces_the_tip_for_a_mid_chain_record(team, data
         r["_domain"] = "api"
 
     records = [a, b]
-    await _mark_superseded(records, "acme", "infra")
-    text = _format_records(records)
+    await mark_superseded(records, "acme", "infra")
+    text = format_records(records)
 
     assert f"superseded by {c['id']} (current tip, 2 hops)" in text
     assert f"superseded by {c['id']}" in text.split(b["id"], 1)[1]
@@ -407,7 +407,7 @@ async def test_mark_superseded_leaves_cycle_members_untagged(team, data_path):
 
     a["_domain"] = "api"
     records = [a]
-    await _mark_superseded(records, "acme", "infra")
+    await mark_superseded(records, "acme", "infra")
 
     assert a.get("_superseded_tip") is None
     assert a.get("_superseded_tip_ambiguous") is None
