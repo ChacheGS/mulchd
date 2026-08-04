@@ -140,7 +140,21 @@ def _decorate_header(header: str, r: dict) -> str:
                 if r.get("_superseder_domain"):
                     banner += f" (in {r['_superseder_domain']})"
                 banner += f" — see get_record_history('{rid}') for the original text"
+                if r.get("_superseded_tip"):
+                    # Additive here rather than replacing the id: the alert's job
+                    # is to name what displaced this guardrail, and the tip is a
+                    # different record from the one that did.
+                    banner += (
+                        f" • current tip: {r['_superseded_tip']}"
+                        f" ({r.get('_superseded_tip_hops')} hops)"
+                    )
                 header += banner
+            elif r.get("_superseded_tip"):
+                tag = f" • superseded by {r['_superseded_tip']}"
+                if r.get("_superseded_tip_domain"):
+                    tag += f" (in {r['_superseded_tip_domain']})"
+                tag += f" (current tip, {r.get('_superseded_tip_hops')} hops)"
+                header += tag
             else:
                 tag = (
                     f" • superseded by {r['_superseded_by']}"
@@ -150,6 +164,9 @@ def _decorate_header(header: str, r: dict) -> str:
                 if r.get("_superseder_domain"):
                     tag += f" (in {r['_superseder_domain']})"
                 header += tag
+            if r.get("_superseded_tip_ambiguous"):
+                tips = r["_superseded_tip_ambiguous"]
+                header += f" ⚠ current tip ambiguous ({len(tips)} branches): {', '.join(tips)}"
         if r.get("_supersedes_display"):
             header += f" • supersedes {', '.join(r['_supersedes_display'])}"
         if r.get("_supersedes_foundational"):

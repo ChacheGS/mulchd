@@ -36,11 +36,16 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
 
     # {victim_id: (superseder_id, superseder_domain)}
     superseded_by: dict[str, tuple[str, str]] = {}
+    # Same edges, but keeping every superseder rather than one winner — a fork
+    # is exactly what tip resolution has to detect, so it can't run off a map
+    # that has already discarded all but the last-scanned branch.
+    superseders: dict[str, list[str]] = {}
     for stored in project_records:
         sid = stored.get("id", "")
         for vid in stored.get("supersedes") or []:
             if sid:
                 superseded_by[vid] = (sid, stored.get("_domain", ""))
+                superseders.setdefault(vid, []).append(sid)
 
     cycles = _find_cycles(project_records)
 
@@ -59,6 +64,18 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
                 r["_superseder_domain"] = superseder_domain
             if r.get("classification") == "foundational":
                 r["_foundational_superseded"] = True
+
+            tips, hops = _resolve_tips(rid or "", superseders, cycles)
+            if len(tips) > 1:
+                r["_superseded_tip_ambiguous"] = tips
+            elif hops > 1:
+                # hops == 1 means the immediate superseder is already the tip,
+                # so annotating it would only repeat what the header shows.
+                r["_superseded_tip"] = tips[0]
+                r["_superseded_tip_hops"] = hops
+                tip_domain = (live_by_id.get(tips[0]) or {}).get("_domain", "")
+                if tip_domain and tip_domain != r.get("_domain", ""):
+                    r["_superseded_tip_domain"] = tip_domain
 
         outgoing = r.get("supersedes") or []
         if outgoing:
@@ -83,14 +100,59 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
                 r["_supersedes_foundational"] = displaced_foundational
 
 
+def _resolve_tips(
+    record_id: str,
+    superseders: dict[str, list[str]],
+    cycles: dict[str, list[str]],
+) -> tuple[list[str], int]:
+    """Every terminal record reachable by walking supersede edges forward from
+    record_id, sorted, plus the hop distance to it when there is exactly one.
+
+    Breadth-first, so the reported distance is the shortest path when two
+    branches reconverge on the same tip. Hops is 0 whenever the walk ends at
+    more than one tip — a forked graph has no single current record, and
+    picking a winner would assert an ordering the data doesn't carry.
+
+    Cycle members are neither traversed nor returned: reads deliberately leave
+    them untagged with the contradictory-cycle banner instead, and following a
+    cycle edge wouldn't terminate. A chain running into a cycle therefore
+    resolves to no tip rather than to the last record before it, since that
+    record isn't actually current.
+    """
+    if record_id in cycles:
+        return [], 0
+    tips: dict[str, int] = {}
+    seen = {record_id}
+    frontier = [record_id]
+    depth = 0
+    while frontier:
+        depth += 1
+        next_frontier: list[str] = []
+        for node in frontier:
+            onward = [s for s in superseders.get(node, []) if s not in cycles]
+            if not onward:
+                # The starting record is a tip of nothing — it's the walk's origin.
+                if node != record_id:
+                    tips.setdefault(node, depth - 1)
+                continue
+            for s in onward:
+                if s not in seen:
+                    seen.add(s)
+                    next_frontier.append(s)
+        frontier = next_frontier
+    ordered = sorted(tips)
+    return ordered, tips[ordered[0]] if len(ordered) == 1 else 0
+
+
 async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str) -> None:
     """Tag each record with incoming/outgoing relates_to links.
 
     Mirrors _mark_superseded's scan-the-whole-project approach, but
     relates_to is a plain, non-exclusive association rather than a
     hierarchical one — a target can be referenced by any number of other
-    records (unlike _superseded_by, which keeps only the latest superseder),
-    so incoming links are collected as a list, not a single winner.
+    records (unlike _superseded_by, which keeps whichever superseder happened
+    to be scanned last), so incoming links are collected as a list, not a
+    single winner.
     """
     if not records:
         return
