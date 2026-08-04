@@ -1,6 +1,5 @@
-{% extends "base.html" %}
-{% block title %}mulchd admin — quality{% endblock %}
-{% block content %}
+{% extends "project_base.html" %}
+{% block project_content %}
 
 <style>
   .signal-badge { padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; }
@@ -27,34 +26,15 @@
 
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
   <div class="page-title" style="margin-bottom:0">Quality</div>
-  <form method="get" action="/admin/quality" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-    <select name="project" onchange="this.form.submit()"
-      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
-      <option value="">— project —</option>
-      {% for p in projects %}
-      <option value="{{ p.org.slug }}/{{ p.slug }}"
-        {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
-        {{ p.org.slug }} / {{ p.slug }}
-      </option>
-      {% endfor %}
-    </select>
-    {% if selected %}
+  <form method="get" action="/admin/p/{{ project.org.slug }}/{{ project.slug }}/quality" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
     <input type="text" name="domain" value="{{ filter_domain }}" placeholder="domain filter"
       style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; width:140px; outline:none">
     <button type="submit" class="btn btn-secondary">Filter</button>
     {% if filter_domain %}
-    <a href="/admin/quality?project={{ selected }}" class="btn btn-secondary">Clear</a>
-    {% endif %}
+    <a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/quality" class="btn btn-secondary">Clear</a>
     {% endif %}
   </form>
 </div>
-
-{% if not selected %}
-<div class="card">
-  <div class="empty-state">Select a project above to view its corpus quality report.</div>
-</div>
-
-{% else %}
 
 {% if not report %}
 <div class="card">
@@ -132,7 +112,6 @@
 </div>
 {% endif %}
 
-{% endif %}
 {% endif %}
 
 {% endblock %}

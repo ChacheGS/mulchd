@@ -29,42 +29,13 @@ async def _setup(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Access control
-# ---------------------------------------------------------------------------
-
-
-async def test_quality_page_requires_auth(client):
-    resp = await client.get("/admin/quality", follow_redirects=False)
-    assert resp.status_code == 303
-    assert "/connect" in resp.headers["location"]
-
-
-async def test_quality_page_rejects_non_admin_user(client):
-    from mulchd.auth import create_user
-    from mulchd.connect import _signer
-
-    user, _ = await create_user("regular", "Regular User")
-    signed = _signer().dumps(user.id)
-    client.cookies.set("mulchd_connect", signed)
-    resp = await client.get("/admin/quality", follow_redirects=False)
-    assert resp.status_code == 303
-    assert "/connect" in resp.headers["location"]
-
-
-# ---------------------------------------------------------------------------
-# Empty state
-# ---------------------------------------------------------------------------
-
-
-async def test_quality_page_no_project_selected_shows_empty_state(admin_client):
-    resp = await admin_client.get("/admin/quality")
-    assert resp.status_code == 200
-    assert "select a project" in resp.text.lower()
-
-
-# ---------------------------------------------------------------------------
 # Real end-to-end (real ml)
 # ---------------------------------------------------------------------------
+
+
+async def test_quality_page_404s_for_unknown_project(admin_client):
+    resp = await admin_client.get("/admin/p/nope/nope/quality")
+    assert resp.status_code == 404
 
 
 @ml_available
@@ -86,7 +57,7 @@ async def test_quality_page_renders_real_audit_report(admin_client, tmp_path, mo
         },
     )
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert resp.status_code == 200
     assert "api" in resp.text
     assert "evidence" in resp.text.lower() or "coverage" in resp.text.lower()
@@ -115,7 +86,7 @@ async def test_quality_page_renders_when_no_conventions_recorded(admin_client, t
         },
     )
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert resp.status_code == 200
     assert "api" in resp.text
 
@@ -134,7 +105,7 @@ async def test_quality_page_renders_when_a_signal_is_null(admin_client, tmp_path
 
     monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert resp.status_code == 200
     assert "PASS" in resp.text  # evidence_coverage still renders
     assert "FAIL" in resp.text  # floater_rate still renders
@@ -204,7 +175,7 @@ async def test_quality_page_renders_pass_warn_fail_signals(admin_client, tmp_pat
 
     monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert resp.status_code == 200
     assert "PASS" in resp.text
     assert "WARN" in resp.text
@@ -221,7 +192,7 @@ async def test_quality_page_renders_per_domain_breakdown(admin_client, tmp_path,
 
     monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert "api" in resp.text
     assert "infra" in resp.text
 
@@ -236,7 +207,7 @@ async def test_quality_page_renders_suggestions(admin_client, tmp_path, monkeypa
 
     monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert "1 convention lacks rule-signal language" in resp.text
     assert "mx-abc123" in resp.text
     assert "ml edit mx-abc123" in resp.text
@@ -262,11 +233,11 @@ async def test_quality_page_forwards_domain_filter_to_audit_corpus(admin_client,
 
     monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform&domain=api")
+    resp = await admin_client.get("/admin/p/acme/platform/quality?domain=api")
     assert resp.status_code == 200
     assert received["domain"] == "api"
     assert 'value="api"' in resp.text
-    assert "/admin/quality?project=acme/platform" in resp.text  # Clear link present
+    assert "/admin/p/acme/platform/quality" in resp.text  # Clear link present
 
 
 async def test_quality_page_omits_failures_warnings_when_empty(admin_client, tmp_path, monkeypatch):
@@ -282,5 +253,5 @@ async def test_quality_page_omits_failures_warnings_when_empty(admin_client, tmp
 
     monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
 
-    resp = await admin_client.get("/admin/quality?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
     assert resp.status_code == 200
