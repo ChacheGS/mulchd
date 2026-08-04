@@ -73,7 +73,7 @@ async def resolve_project(project: str) -> Project | None:
     if ref is None:
         return None
     org_slug, project_slug = ref
-    return await Project.filter(slug=project_slug, org__slug=org_slug).prefetch_related("org").first()
+    return await resolve_project_by_slugs(org_slug, project_slug)
 
 
 ADMIN_LAST_PROJECT_COOKIE = "admin_last_project"

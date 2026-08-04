@@ -15,7 +15,9 @@ async def test_sidebar_knowledge_links_fallback_to_projects_list_with_no_context
     the project picker) rather than a broken or guessed URL."""
     resp = await admin_client.get("/admin/users")
     assert resp.status_code == 200
-    assert 'href="/admin/projects"' in resp.text
+    # Projects nav item + Records/Record activity/Quality Knowledge links.
+    assert resp.text.count('href="/admin/projects"') == 4
+    assert "/admin/p/" not in resp.text
 
 
 async def test_sidebar_knowledge_links_use_last_project_cookie(admin_client):
