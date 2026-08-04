@@ -1,11 +1,5 @@
-{% extends "base.html" %}
-{% block title %}mulchd admin — {{ project.display_name }}{% endblock %}
-{% block content %}
-<div class="page-title">
-  <a href="/admin/projects" class="btn-link">← Projects</a>
-  &nbsp;{{ project.display_name }}
-</div>
-
+{% extends "project_base.html" %}
+{% block project_content %}
 <div class="card" style="margin-bottom:24px;">
   <div class="table-header" style="grid-template-columns:120px 1fr">
     <span>Field</span><span>Value</span>

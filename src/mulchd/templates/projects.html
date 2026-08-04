@@ -28,7 +28,7 @@
       </form>
     </span>
     <span class="text-muted">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
-    <span><a href="/admin/projects/{{ project.id }}" class="btn-link">Manage</a></span>
+    <span><a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/" class="btn-link">Manage</a></span>
   </div>
   {% else %}
   <div class="empty-state">No projects yet. Create an org first.</div>

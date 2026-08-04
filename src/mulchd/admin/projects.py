@@ -12,7 +12,13 @@ from ..models import (
     Role,
     User,
 )
-from ._shared import get_current_admin, require_admin, templates
+from ._shared import (
+    get_current_admin,
+    require_admin,
+    resolve_project_by_slugs,
+    set_last_project_cookie,
+    templates,
+)
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -33,9 +39,9 @@ async def projects_page(request: Request, error: str = "") -> Response:
     return await _render_projects(request, error=error)
 
 
-@router.get("/projects/{project_id}")
-async def project_detail_page(request: Request, project_id: int) -> Response:
-    project = await Project.filter(id=project_id).select_related("org").first()
+@router.get("/p/{org_slug}/{project_slug}/")
+async def project_overview_page(request: Request, org_slug: str, project_slug: str) -> Response:
+    project = await resolve_project_by_slugs(org_slug, project_slug)
     if project is None:
         return Response(status_code=404)
     invites = (
@@ -54,17 +60,23 @@ async def project_detail_page(request: Request, project_id: int) -> Response:
         )
         for use in uses:
             uses_by_invite[use.invite_id].append(use)
-    return templates.TemplateResponse(
+    all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
+    response = templates.TemplateResponse(
         request,
         "project_detail.html",
         {
-            "active": "projects",
+            "active": "records",  # sidebar Knowledge group, not a specific tab — see note below
             "project": project,
+            "all_projects": all_projects,
+            "active_tab": "overview",
+            "tab_path": "",
             "invites": invites,
             "uses_by_invite": uses_by_invite,
             "roles": list(Role),
         },
     )
+    set_last_project_cookie(response, org_slug, project_slug)
+    return response
 
 
 @router.post("/projects")

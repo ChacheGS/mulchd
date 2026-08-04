@@ -21,7 +21,7 @@ async def create_invite(
     allowed_email_domains: str = Form(""),
     admin: User = Depends(get_current_admin),
 ) -> Response:
-    project = await Project.get_or_none(id=project_id)
+    project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
         return Response(status_code=404)
 
@@ -47,17 +47,21 @@ async def create_invite(
     await log_event(
         InstanceEventCategory.INVITE_CREATED, actor=admin, project=project, detail={"role": role}
     )
-    return RedirectResponse(f"/admin/projects/{project_id}?new_token={token}", status_code=303)
+    return RedirectResponse(
+        f"/admin/p/{project.org.slug}/{project.slug}/?new_token={token}", status_code=303
+    )
 
 
 @router.post("/invites/{invite_id}/revoke")
 async def revoke_invite(
     request: Request, invite_id: int, admin: User = Depends(get_current_admin)
 ) -> Response:
-    invite = await InviteLink.filter(id=invite_id).select_related("project").first()
+    invite = await InviteLink.filter(id=invite_id).select_related("project__org").first()
     if invite is None:
         return Response(status_code=404)
     invite.revoked = True
     await invite.save(update_fields=["revoked"])
     await log_event(InstanceEventCategory.INVITE_REVOKED, actor=admin, project=invite.project)
-    return RedirectResponse(f"/admin/projects/{invite.project_id}", status_code=303)
+    return RedirectResponse(
+        f"/admin/p/{invite.project.org.slug}/{invite.project.slug}/", status_code=303
+    )

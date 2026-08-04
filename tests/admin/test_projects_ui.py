@@ -15,13 +15,18 @@ async def test_create_project(admin_client):
     assert resp.status_code == 303
 
 
-async def test_project_detail_page_renders(admin_client):
+async def test_project_overview_page_renders(admin_client):
     from mulchd.models import Organization, Project
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
-    resp = await admin_client.get(f"/admin/projects/{project.id}")
+    resp = await admin_client.get(f"/admin/p/{org.slug}/{project.slug}/")
     assert resp.status_code == 200
     assert project.display_name in resp.text
+
+
+async def test_project_overview_page_404s_for_unknown_slug(admin_client):
+    resp = await admin_client.get("/admin/p/nope/nope/")
+    assert resp.status_code == 404
 
 
 async def test_project_detail_renders_invite_rows(admin_client):
@@ -48,7 +53,7 @@ async def test_project_detail_renders_invite_rows(admin_client):
     await InviteLink.create(token="t4", project=project, role=Role.READER, revoked=True)
     await InviteUse.create(invite=active, user=user)
 
-    resp = await admin_client.get(f"/admin/projects/{project.id}")
+    resp = await admin_client.get(f"/admin/p/{org.slug}/{project.slug}/")
     assert resp.status_code == 200
     assert "badge-admin" in resp.text
     assert "badge-writer" in resp.text
@@ -68,7 +73,7 @@ async def test_project_detail_shows_invite_creator(admin_client):
         data={"role": "writer", "max_uses": "", "expires_in": "", "allowed_email_domains": ""},
     )
 
-    resp = await admin_client.get(f"/admin/projects/{project.id}")
+    resp = await admin_client.get(f"/admin/p/{org.slug}/{project.slug}/")
     assert resp.status_code == 200
     assert "by admin" in resp.text
 

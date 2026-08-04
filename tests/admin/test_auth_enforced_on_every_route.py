@@ -15,6 +15,8 @@ from mulchd.admin import router as admin_router
 _PATH_PARAM_PLACEHOLDERS = {
     "org": "acme",
     "project": "infra",
+    "org_slug": "acme",
+    "project_slug": "infra",
     "user_id": "1",
     "project_id": "1",
     "membership_id": "1",
