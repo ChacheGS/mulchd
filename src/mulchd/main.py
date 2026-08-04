@@ -145,12 +145,20 @@ async def _connect_admin_context(request: Request, call_next):
 async def _admin_project_switcher_context(request: Request, call_next):
     """The sidebar's project switcher (base.html) needs the full project list
     on every /admin page, not just ones that already resolve a `project` —
-    computed once here instead of duplicated in every admin route. Skips
-    /admin/api/ and /admin/records/count, which return JSON and never render
-    base.html — the query would be pure waste there, and records/count in
-    particular is polled every 15s by the Records page while it's open."""
+    computed once here instead of duplicated in every admin route. Gated to
+    GET requests: admin POST endpoints all follow the PRG pattern (redirect
+    303 after write, decision mx-792f52) and never render base.html, so the
+    query would be pure waste there. Also skips /admin/api/ and
+    /admin/records/count, which are GET but return JSON, not base.html —
+    records/count in particular is polled every 15s by the Records page
+    while it's open."""
     path = request.url.path
-    if path.startswith("/admin") and not path.startswith("/admin/api/") and path != "/admin/records/count":
+    if (
+        request.method == "GET"
+        and path.startswith("/admin")
+        and not path.startswith("/admin/api/")
+        and path != "/admin/records/count"
+    ):
         request.state.all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
     return await call_next(request)
 
