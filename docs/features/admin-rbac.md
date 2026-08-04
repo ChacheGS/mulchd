@@ -13,7 +13,7 @@ A few rules keep this safe:
 
 ## Instance activity log
 
-`/admin/activity` records account- and access-level events across the whole instance — the kind of thing an admin needs to answer "who did this and when," separate from the per-project record audit log at `/admin/audit` (writes/edits/deletes of individual knowledge records, with restore).
+`/admin/activity` records account- and access-level events across the whole instance — the kind of thing an admin needs to answer "who did this and when," separate from the per-project record activity log at `/admin/p/<org>/<project>/record-activity` (writes/edits/deletes of individual knowledge records, with restore).
 
 Logged events: admin grant/revoke, project membership added/removed (including via invite-link claims), organization/project created, invite link created/revoked, user created/deactivated, global token reset, first login, and OAuth identity linked.
 
