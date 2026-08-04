@@ -122,3 +122,40 @@ async def test_project_overview_links_to_filtered_memberships_and_tokens(admin_c
     assert resp.status_code == 200
     assert "/admin/memberships?project=acme/infra" in resp.text
     assert "/admin/project-tokens?project=acme/infra" in resp.text
+
+
+async def test_projects_page_pick_for_shows_banner_and_tab_links(admin_client):
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+
+    resp = await admin_client.get("/admin/projects?pick_for=records")
+    assert resp.status_code == 200
+    assert "Pick a project to view its" in resp.text
+    assert "Records" in resp.text
+    assert f'href="/admin/p/{org.slug}/{project.slug}/records"' in resp.text
+
+
+async def test_projects_page_unknown_pick_for_is_ignored(admin_client):
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+
+    resp = await admin_client.get("/admin/projects?pick_for=bogus")
+    assert resp.status_code == 200
+    assert "Pick a project" not in resp.text
+    assert f'href="/admin/p/{org.slug}/{project.slug}/"' in resp.text  # normal Manage link
+
+
+async def test_projects_page_no_pick_for_shows_manage_link(admin_client):
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+
+    resp = await admin_client.get("/admin/projects")
+    assert resp.status_code == 200
+    assert "Pick a project" not in resp.text
+    assert f'href="/admin/p/{org.slug}/{project.slug}/"' in resp.text

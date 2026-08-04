@@ -114,9 +114,9 @@
 
     <div class="nav-group-label">Knowledge</div>
     {% set _kp = (project.org.slug ~ '/' ~ project.slug) if (project is defined and project) else request.cookies.get('admin_last_project', '') %}
-    <a href="{{ ('/admin/p/' ~ _kp ~ '/records') if _kp else '/admin/projects' }}" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
-    <a href="{{ ('/admin/p/' ~ _kp ~ '/record-activity') if _kp else '/admin/projects' }}" class="nav-link {% if active == 'record-activity' %}active{% endif %}">Record activity</a>
-    <a href="{{ ('/admin/p/' ~ _kp ~ '/quality') if _kp else '/admin/projects' }}" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/records') if _kp else '/admin/projects?pick_for=records' }}" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/record-activity') if _kp else '/admin/projects?pick_for=record-activity' }}" class="nav-link {% if active == 'record-activity' %}active{% endif %}">Record activity</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/quality') if _kp else '/admin/projects?pick_for=quality' }}" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>
 
     <div class="sidebar-spacer"></div>
     <a href="/connect/logout" class="sidebar-logout" style="text-decoration:none;">Logout</a>

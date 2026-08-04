@@ -5,6 +5,9 @@
 {% if error %}
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
+{% if pick_for_label %}
+<div class="alert alert-warning">Pick a project to view its <strong>{{ pick_for_label }}</strong></div>
+{% endif %}
 <div class="card">
   <div class="table-header" style="grid-template-columns: 1fr 1fr 2fr 100px 120px 100px">
     <span>Org</span>
@@ -28,7 +31,13 @@
       </form>
     </span>
     <span class="text-muted">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
-    <span><a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/" class="btn-link">Manage</a></span>
+    <span>
+      {% if pick_for %}
+      <a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/{{ pick_for }}" class="btn-link">View {{ pick_for_label }} →</a>
+      {% else %}
+      <a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/" class="btn-link">Manage</a>
+      {% endif %}
+    </span>
   </div>
   {% else %}
   <div class="empty-state">No projects yet. Create an org first.</div>

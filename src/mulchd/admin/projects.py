@@ -22,21 +22,39 @@ from ._shared import (
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
+_PICK_FOR_LABELS = {
+    "records": "Records",
+    "record-activity": "Record activity",
+    "quality": "Quality",
+}
 
-async def _render_projects(request: Request, *, error: str = "", status_code: int = 200) -> Response:
+
+async def _render_projects(
+    request: Request, *, error: str = "", status_code: int = 200, pick_for: str = ""
+) -> Response:
     projects = await Project.all().order_by("slug").prefetch_related("org")
     orgs = await Organization.all().order_by("slug")
+    pick_for_label = _PICK_FOR_LABELS.get(pick_for, "")
     return templates.TemplateResponse(
         request,
         "projects.html",
-        {"active": "projects", "projects": projects, "orgs": orgs, "error": error},
+        {
+            "active": "projects",
+            "projects": projects,
+            "orgs": orgs,
+            "error": error,
+            # Empty unless pick_for matched the allowlist above — a bogus
+            # value must never reach the template's URL-building logic.
+            "pick_for": pick_for if pick_for_label else "",
+            "pick_for_label": pick_for_label,
+        },
         status_code=status_code,
     )
 
 
 @router.get("/projects")
-async def projects_page(request: Request, error: str = "") -> Response:
-    return await _render_projects(request, error=error)
+async def projects_page(request: Request, error: str = "", pick_for: str = "") -> Response:
+    return await _render_projects(request, error=error, pick_for=pick_for)
 
 
 @router.get("/p/{org_slug}/{project_slug}/")
