@@ -7,7 +7,13 @@ from ..domains import mulch_dir
 from ..models import RecordEdit, RecordEvent, RecordMeta
 from ..mulch import restore_record
 from ..records import read_domain_records
-from ._shared import require_admin, resolve_project_by_slugs, set_last_project_cookie, templates
+from ._shared import (
+    parse_project_ref,
+    require_admin,
+    resolve_project_by_slugs,
+    set_last_project_cookie,
+    templates,
+)
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -235,8 +241,6 @@ async def restore_record_action(
     project: str = Form(...),
     record_id: str = Form(...),
 ) -> Response:
-    from ._shared import parse_project_ref
-
     ref = parse_project_ref(project)
     if ref:
         org_slug, project_slug = ref
