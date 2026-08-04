@@ -166,7 +166,11 @@ def _decorate_header(header: str, r: dict) -> str:
                 header += tag
             if r.get("_superseded_tip_ambiguous"):
                 tips = r["_superseded_tip_ambiguous"]
-                header += f" ⚠ current tip ambiguous ({len(tips)} branches): {', '.join(tips)}"
+                branch_domains = r.get("_superseded_tip_ambiguous_domains") or {}
+                shown = [
+                    f"{t} (in {branch_domains[t]})" if t in branch_domains else t for t in tips
+                ]
+                header += f" ⚠ current tip ambiguous ({len(tips)} branches): {', '.join(shown)}"
         if r.get("_supersedes_display"):
             header += f" • supersedes {', '.join(r['_supersedes_display'])}"
         if r.get("_supersedes_foundational"):

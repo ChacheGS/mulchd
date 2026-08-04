@@ -36,6 +36,7 @@ from .supersession import (
     Classification,
     _mark_superseded,
     _mark_related_to,
+    _cross_domain_supersede_hints,
     _find_incoming_references,
     _validate_references,
     _find_cycles,
@@ -314,15 +315,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     await _mark_related_to(page, ctx.org.slug, ctx.project.slug)
     await _annotate_edits(page, ctx.project.id)
     await _annotate_outcome_staleness(page, ctx.project.id)
-    cross_domain_hints = [
-        {
-            "record_id": r["id"],
-            "superseded_by": r["_superseded_by"],
-            "in_domain": r["_superseder_domain"],
-        }
-        for r in page
-        if r.get("_superseder_domain")
-    ]
+    cross_domain_hints = _cross_domain_supersede_hints(page)
     hint_text = ""
     if cross_domain_hints:
         hint_domains = sorted({h["in_domain"] for h in cross_domain_hints})

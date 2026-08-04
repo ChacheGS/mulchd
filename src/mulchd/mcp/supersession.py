@@ -68,6 +68,14 @@ async def _mark_superseded(records: list[dict], org_slug: str, project_slug: str
             tips, hops = _resolve_tips(rid or "", superseders, cycles)
             if len(tips) > 1:
                 r["_superseded_tip_ambiguous"] = tips
+                branch_domains = {
+                    tid: dom
+                    for tid in tips
+                    if (dom := (live_by_id.get(tid) or {}).get("_domain", ""))
+                    and dom != r.get("_domain", "")
+                }
+                if branch_domains:
+                    r["_superseded_tip_ambiguous_domains"] = branch_domains
             elif hops > 1:
                 # hops == 1 means the immediate superseder is already the tip,
                 # so annotating it would only repeat what the header shows.
@@ -142,6 +150,46 @@ def _resolve_tips(
         frontier = next_frontier
     ordered = sorted(tips)
     return ordered, tips[ordered[0]] if len(ordered) == 1 else 0
+
+
+def _cross_domain_supersede_hints(records: list[dict]) -> list[dict]:
+    """Structured "read this domain next" pointers for records superseded from
+    outside their own domain.
+
+    Points at whatever is actually current, not at the nearest superseder: for
+    a chain, that's the tip, and an out-of-domain intermediate hop generates no
+    hint at all once the tip is local — sending a reader to a domain whose only
+    relevant record is itself superseded is the same wasted fetch this field
+    exists to prevent. Forks emit one pointer per out-of-domain branch, since
+    no single one of them is the answer.
+
+    Records must already be annotated by _mark_superseded.
+    """
+    hints: list[dict] = []
+    for r in records:
+        rid = r.get("id")
+        if r.get("_superseded_tip_domain"):
+            hints.append(
+                {
+                    "record_id": rid,
+                    "superseded_by": r["_superseded_tip"],
+                    "in_domain": r["_superseded_tip_domain"],
+                }
+            )
+        elif r.get("_superseded_tip"):
+            continue  # tip is in this record's own domain — nothing else to read
+        elif r.get("_superseded_tip_ambiguous"):
+            for tid, dom in (r.get("_superseded_tip_ambiguous_domains") or {}).items():
+                hints.append({"record_id": rid, "superseded_by": tid, "in_domain": dom})
+        elif r.get("_superseder_domain"):
+            hints.append(
+                {
+                    "record_id": rid,
+                    "superseded_by": r["_superseded_by"],
+                    "in_domain": r["_superseder_domain"],
+                }
+            )
+    return hints
 
 
 async def _mark_related_to(records: list[dict], org_slug: str, project_slug: str) -> None:

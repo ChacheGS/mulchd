@@ -282,6 +282,110 @@ async def test_format_records_surfaces_the_tip_for_a_mid_chain_record(team, data
     assert f"superseded by {c['id']}" in text.split(b["id"], 1)[1]
 
 
+async def _chain(data_path, *domains):
+    """Write a supersede chain, one record per domain given, oldest first."""
+    made = []
+    for i, domain in enumerate(domains):
+        made.append(
+            _jot(
+                data_path,
+                "acme",
+                "infra",
+                domain,
+                type="decision",
+                content=f"Step {i}",
+                owner="carlos",
+                supersedes=[made[-1]["id"]] if made else [],
+            )
+        )
+    return made
+
+
+async def test_cross_domain_hint_points_at_the_tip_not_the_stale_hop(team, data_path):
+    """A cross-domain tip behind a same-domain hop still yields a hint naming its domain."""
+    from mulchd.mcp.tier2 import _read_expertise
+    from tests.mcp.conftest import ctx
+
+    t = team
+    a, _b, c = await _chain(data_path, "guardrails", "guardrails", "policies")
+
+    _, structured = await _read_expertise(
+        {"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    hints = [h for h in structured.get("cross_domain_hints", []) if h["record_id"] == a["id"]]
+    assert len(hints) == 1
+    assert hints[0]["in_domain"] == "policies"
+    assert hints[0]["superseded_by"] == c["id"]
+
+
+async def test_no_cross_domain_hint_when_the_tip_is_in_scope(team, data_path):
+    """An out-of-scope intermediate hop is not worth reading when the tip is local."""
+    from mulchd.mcp.tier2 import _read_expertise
+    from tests.mcp.conftest import ctx
+
+    t = team
+    a, _b, _c = await _chain(data_path, "guardrails", "policies", "guardrails")
+
+    _, structured = await _read_expertise(
+        {"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    hints = [h for h in structured.get("cross_domain_hints", []) if h["record_id"] == a["id"]]
+    assert hints == []
+
+
+async def test_cross_domain_hint_covers_every_fork_branch(team, data_path):
+    """Each out-of-scope fork tip gets its own hint, so no branch is unreachable."""
+    from mulchd.mcp.tier2 import _read_expertise
+    from tests.mcp.conftest import ctx
+
+    t = team
+    a = _jot(
+        data_path, "acme", "infra", "guardrails", type="decision", content="First", owner="carlos"
+    )
+    b = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "policies",
+        type="decision",
+        content="Branch one",
+        owner="carlos",
+        supersedes=[a["id"]],
+    )
+    c = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "ops",
+        type="decision",
+        content="Branch two",
+        owner="jorge",
+        supersedes=[a["id"]],
+    )
+
+    _, structured = await _read_expertise(
+        {"domains": ["guardrails"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    hints = [h for h in structured.get("cross_domain_hints", []) if h["record_id"] == a["id"]]
+    assert sorted(h["in_domain"] for h in hints) == ["ops", "policies"]
+    assert sorted(h["superseded_by"] for h in hints) == sorted([b["id"], c["id"]])
+
+
+def test_header_shows_domains_for_ambiguous_branches():
+    header = _decorate_header(
+        "mx-a",
+        {
+            "id": "mx-a",
+            "_domain": "guardrails",
+            "_superseded": True,
+            "_superseded_by": "mx-b",
+            "_superseded_tip_ambiguous": ["mx-c", "mx-d"],
+            "_superseded_tip_ambiguous_domains": {"mx-c": "ops"},
+        },
+    )
+    assert "current tip ambiguous (2 branches): mx-c (in ops), mx-d" in header
+
+
 async def test_mark_superseded_leaves_cycle_members_untagged(team, data_path):
     """A chain into a cycle still yields no tip and no supersede tag on the cycle."""
     a = _jot(data_path, "acme", "infra", "api", type="decision", content="First", owner="carlos")
