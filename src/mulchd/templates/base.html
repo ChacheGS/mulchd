@@ -116,7 +116,7 @@
     <div class="nav-group-label">Project</div>
     {% set _kp = (project.org.slug ~ '/' ~ project.slug) if (project is defined and project) else request.cookies.get('admin_last_project', '') %}
     {% set _tab_path = tab_path if tab_path is defined else '' %}
-    <select class="sidebar-project-switcher" onchange="if (this.value) location.href = '/admin/p/' + this.value + '/{{ _tab_path }}'">
+    <select class="sidebar-project-switcher" onchange="if (this.value) location.href = '/admin/p/' + this.value.split('/').map(encodeURIComponent).join('/') + '/{{ _tab_path }}'">
       <option value="">— select a project —</option>
       {% for p in request.state.all_projects %}
       <option value="{{ p.org.slug }}/{{ p.slug }}" {% if (p.org.slug ~ '/' ~ p.slug) == _kp %}selected{% endif %}>{{ p.org.slug }} / {{ p.slug }}</option>

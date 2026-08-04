@@ -64,7 +64,10 @@ async def test_sidebar_project_switcher_preselects_cookie_project(admin_client):
 async def test_sidebar_project_switcher_targets_overview_from_non_project_page(admin_client):
     resp = await admin_client.get("/admin/users")
     assert resp.status_code == 200
-    assert "location.href = '/admin/p/' + this.value + '/'" in resp.text
+    assert (
+        "location.href = '/admin/p/' + this.value.split('/').map(encodeURIComponent).join('/') + '/'"
+        in resp.text
+    )
 
 
 async def test_sidebar_project_switcher_preserves_tab_on_project_page(admin_client, tmp_path, monkeypatch):
@@ -77,7 +80,10 @@ async def test_sidebar_project_switcher_preserves_tab_on_project_page(admin_clie
 
     resp = await admin_client.get("/admin/p/acme/infra/records")
     assert resp.status_code == 200
-    assert "location.href = '/admin/p/' + this.value + '/records'" in resp.text
+    assert (
+        "location.href = '/admin/p/' + this.value.split('/').map(encodeURIComponent).join('/') + '/records'"
+        in resp.text
+    )
 
 
 async def test_project_home_header_has_no_switcher(admin_client, tmp_path, monkeypatch):
