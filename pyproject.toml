@@ -73,11 +73,11 @@ package = true
 dev = ["pyright>=1.1.411"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src"]
 pythonVersion = "3.14"
 pythonPlatform = "Linux"
 venvPath = "."
 venv = ".venv"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
 reportMissingTypeStubs = false
 reportIncompatibleVariableOverride = false

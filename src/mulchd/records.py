@@ -10,14 +10,17 @@ domain without ranking — no BM25 needed there.
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import aiofiles
 
+Record = dict[str, Any]
 
-async def read_domain_records(path: Path) -> list[dict]:
+
+async def read_domain_records(path: Path) -> list[Record]:
     if not path.exists():
         return []
-    records = []
+    records: list[Record] = []
     async with aiofiles.open(path) as f:
         content = await f.read()
     for line in content.splitlines():
@@ -31,7 +34,7 @@ async def read_domain_records(path: Path) -> list[dict]:
     return records
 
 
-async def find_record(path: Path, record_id: str) -> dict | None:
+async def find_record(path: Path, record_id: str) -> Record | None:
     for r in await read_domain_records(path):
         if r.get("id") == record_id:
             return r

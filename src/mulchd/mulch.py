@@ -11,8 +11,10 @@ import json
 import os
 from enum import StrEnum
 from pathlib import Path
+from typing import Any, cast
 
 from .domains import validate_domain
+from .records import Record as Record
 
 
 class MulchError(Exception):
@@ -29,7 +31,7 @@ class RecordNotWrittenError(MulchError):
     record type hits.
     """
 
-    def __init__(self, summary: dict):
+    def __init__(self, summary: Record):
         self.summary = summary
         super().__init__(f"ml record did not create a new record: {summary}")
 
@@ -37,7 +39,9 @@ class RecordNotWrittenError(MulchError):
 _ML_TIMEOUT_SECONDS = 30
 
 
-async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) -> dict | list:
+async def _run(
+    mulch_dir: Path, args: list[str], stdin_data: str | None = None
+) -> dict[str, Any] | list[Any]:
     env = {**os.environ, "MULCH_DIR": str(mulch_dir)}
     proc = await asyncio.create_subprocess_exec(
         "ml",
@@ -73,7 +77,7 @@ async def _run(mulch_dir: Path, args: list[str], stdin_data: str | None = None) 
     return json.loads(text)
 
 
-async def write_record(mulch_dir: Path, domain: str, record: dict) -> dict:
+async def write_record(mulch_dir: Path, domain: str, record: Record) -> Record:
     """
     Pipe `record` to `ml record {domain} --stdin --json`.
     Returns the written record dict (with id populated by mulch).
@@ -100,7 +104,7 @@ async def write_record(mulch_dir: Path, domain: str, record: dict) -> dict:
     return written
 
 
-def _find_written_record(jsonl_path: Path, record: dict) -> dict | None:
+def _find_written_record(jsonl_path: Path, record: Record) -> Record | None:
     """Find a just-written record in the JSONL by matching stable fields."""
     try:
         lines = jsonl_path.read_text().splitlines()
@@ -125,7 +129,7 @@ async def search_domains(
     mulch_dir: Path,
     query: str,
     domains: list[str] | None = None,
-) -> list[dict]:
+) -> list[Record]:
     """
     Run BM25 search via `ml --json search`.
 
@@ -140,7 +144,7 @@ async def search_domains(
     results = await asyncio.gather(
         *(_run(mulch_dir, ["search", query, "--domain", domain]) for domain in domains)
     )
-    records: list[dict] = []
+    records: list[Record] = []
     for domain, result in zip(domains, results):
         for entry in _extract_matches(result):
             entry["_domain"] = domain
@@ -148,10 +152,10 @@ async def search_domains(
     return records
 
 
-def _extract_matches(result: dict | list) -> list[dict]:
+def _extract_matches(result: dict[str, Any] | list[Any]) -> list[Record]:
     if not isinstance(result, dict):
         return []
-    matches: list[dict] = []
+    matches: list[Record] = []
     for domain_entry in result.get("domains", []):
         domain = domain_entry.get("domain", "")
         for record in domain_entry.get("matches", []):
@@ -174,14 +178,14 @@ _EDIT_FLAG_MAP: dict[str, str] = {
 }
 
 
-async def edit_record(mulch_dir: Path, domain: str, record_id: str, updates: dict) -> dict:
+async def edit_record(mulch_dir: Path, domain: str, record_id: str, updates: Record) -> Record:
     """Edit a record via ml edit. Ownership check is the caller's responsibility."""
     args = ["edit", domain, record_id]
     for key, flag in _EDIT_FLAG_MAP.items():
         if key in updates:
             val = updates[key]
             if isinstance(val, list):
-                val = ",".join(str(v) for v in val)
+                val = ",".join(str(v) for v in cast(list[Any], val))
             args.extend([flag, str(val)])
     result = await _run(mulch_dir, args)
     return result if isinstance(result, dict) else {}
@@ -194,7 +198,7 @@ async def delete_record(mulch_dir: Path, domain: str, record_id: str) -> None:
     )
 
 
-async def restore_record(mulch_dir: Path, record_id: str) -> dict:
+async def restore_record(mulch_dir: Path, record_id: str) -> Record:
     """Restore a soft-archived record via ml restore. Returns the restored record dict."""
     result = await _run(mulch_dir, ["restore", record_id])
     return result if isinstance(result, dict) else {}
@@ -202,7 +206,7 @@ async def restore_record(mulch_dir: Path, record_id: str) -> dict:
 
 async def move_record(
     mulch_dir: Path, source_domain: str, record_id: str, target_domain: str
-) -> dict:
+) -> Record:
     """Move a record between domains via `ml move`, preserving its ID.
 
     Ignore this result's `incomingReferences` field — mulch 0.10.7's own
@@ -238,7 +242,7 @@ async def record_outcome(
     status: OutcomeStatus,
     notes: str | None = None,
     agent: str | None = None,
-) -> dict:
+) -> Record:
     """
     Append an outcome to an existing record via `ml outcome`. This feeds the
     confirmation-frequency boost ml's search already applies by default —
@@ -258,7 +262,7 @@ async def record_outcome(
     return result if isinstance(result, dict) else {}
 
 
-async def audit_corpus(mulch_dir: Path, domain: str | None = None) -> dict:
+async def audit_corpus(mulch_dir: Path, domain: str | None = None) -> dict[str, Any]:
     """Run `ml audit --json --suggest`, returning the full {report, suggestions}
     payload. mulchd does no analysis of its own — this is a pure pass-through
     to ml's existing corpus-quality report."""
