@@ -32,6 +32,12 @@
   </div>
 </div>
 
+<div id="bulk-delete-bar" style="display:none; align-items:center; gap:12px; position:sticky; top:0; z-index:5; background:#1e293b; color:white; border-radius:6px; padding:10px 16px; margin-bottom:16px; font-size:13px;">
+  <span id="bulk-delete-count"></span>
+  <button onclick="submitBulkDelete()" style="background:#ef4444; color:white; border:none; padding:5px 12px; border-radius:4px; cursor:pointer; font-size:13px;">Delete selected</button>
+  <button onclick="clearBulkSelection()" style="background:none; border:none; color:#cbd5e1; cursor:pointer; text-decoration:underline; font-size:12px;">Clear</button>
+</div>
+
 {% if not domains %}
 <div class="card">
   <div class="empty-state">No expertise records found for this project yet.</div>
@@ -63,6 +69,9 @@
 
     {# ── meta row ── #}
     <div class="record-meta">
+      {% if r.id %}
+      <input type="checkbox" class="record-select" data-domain="{{ domain.name }}" data-id="{{ r.id }}" onchange="updateBulkBar()">
+      {% endif %}
       <span class="badge" style="{{ type_styles.get(r.type, 'background:#f1f5f9; color:#475569') }}">{{ r.type }}</span>
       {% if r.classification %}
         <span class="badge" style="background:#f8fafc; color:#64748b; border:1px solid #e2e8f0">{{ r.classification }}</span>
@@ -245,6 +254,46 @@ function filterRecords(q) {
 function toggleEdit(id) {
   var el = document.getElementById(id);
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateBulkBar() {
+  var checked = document.querySelectorAll('.record-select:checked');
+  var bar = document.getElementById('bulk-delete-bar');
+  var countEl = document.getElementById('bulk-delete-count');
+  if (checked.length > 0) {
+    countEl.textContent = checked.length + ' selected';
+    bar.style.display = 'flex';
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearBulkSelection() {
+  document.querySelectorAll('.record-select:checked').forEach(function(cb) { cb.checked = false; });
+  updateBulkBar();
+}
+
+function submitBulkDelete() {
+  var checked = document.querySelectorAll('.record-select:checked');
+  if (checked.length === 0) return;
+  if (!confirm('Delete ' + checked.length + ' record' + (checked.length === 1 ? '' : 's') + '? This can\'t be undone.')) return;
+  var form = document.createElement('form');
+  form.method = 'post';
+  form.action = '/admin/records/bulk-delete';
+  var projectInput = document.createElement('input');
+  projectInput.type = 'hidden';
+  projectInput.name = 'project';
+  projectInput.value = '{{ project.org.slug }}/{{ project.slug }}';
+  form.appendChild(projectInput);
+  checked.forEach(function(cb) {
+    var input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'items';
+    input.value = JSON.stringify({domain: cb.dataset.domain, id: cb.dataset.id});
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
 }
 
 function dismissBanner() {

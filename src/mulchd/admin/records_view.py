@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
@@ -41,6 +43,31 @@ async def delete_record_action(
         org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
         await delete_record(m_dir, domain, record_id)
+    return RedirectResponse(f"/admin/p/{project}/records", status_code=303)
+
+
+@router.post("/records/bulk-delete")
+async def bulk_delete_records_action(
+    request: Request,
+    project: str = Form(...),
+    items: list[str] = Form(...),
+) -> Response:
+    ref = parse_project_ref(project)
+    if ref:
+        org_slug, project_slug = ref
+        m_dir = mulch_dir(org_slug, project_slug)
+        for item in items:
+            try:
+                parsed = json.loads(item)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if not isinstance(parsed, dict):
+                continue
+            domain = parsed.get("domain")
+            record_id = parsed.get("id")
+            if not isinstance(domain, str) or not domain or not isinstance(record_id, str) or not record_id:
+                continue
+            await delete_record(m_dir, domain, record_id)
     return RedirectResponse(f"/admin/p/{project}/records", status_code=303)
 
 
