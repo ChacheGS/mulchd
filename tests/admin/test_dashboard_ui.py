@@ -23,3 +23,5 @@ async def test_dashboard_renders(admin_client):
     resp = await admin_client.get("/admin/")
     assert resp.status_code == 200
     assert "Dashboard" in resp.text
+    assert 'id="usage-chart"' not in resp.text
+    assert "loadUsageChart" not in resp.text

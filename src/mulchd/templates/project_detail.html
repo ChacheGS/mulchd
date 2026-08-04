@@ -29,7 +29,7 @@
     <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.05em">Trend</span>
     <span style="flex:1"></span>
     {% for p, label in [('day','Day'), ('week','Week'), ('month','Month')] %}
-    <button onclick="loadUsageChart('{{ project.org.slug }}', '{{ project.slug }}', '{{ p }}')"
+    <button onclick="loadUsageChart('{{ p }}')"
             id="usage-btn-{{ p }}"
             style="padding:2px 10px; font-size:11px; border-radius:3px; border:1px solid #e2e8f0; cursor:pointer; background:white; color:#64748b; font-weight:500">
       {{ label }}
@@ -151,7 +151,7 @@ function renderUsageBreakdown(id, rows) {
   }).join('');
 }
 
-function loadUsageChart(org, project, period) {
+function loadUsageChart(period) {
   ['day','week','month'].forEach(function(p) {
     var btn = document.getElementById('usage-btn-' + p);
     if (!btn) return;
@@ -195,7 +195,7 @@ function loadUsageChart(org, project, period) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  loadUsageChart('{{ project.org.slug }}', '{{ project.slug }}', 'week');
+  loadUsageChart('week');
 });
 </script>
 {% endblock %}
