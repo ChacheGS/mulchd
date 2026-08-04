@@ -28,6 +28,53 @@ async def _setup(tmp_path, monkeypatch):
     return org, project, alice
 
 
+async def test_quality_page_unknown_domain_does_not_crash(admin_client, tmp_path, monkeypatch):
+    """A domain that doesn't exist in the project must not reach ml at all —
+    previously this caused an unhandled MulchError -> 500."""
+    import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
+
+    org, project, alice = await _setup(tmp_path, monkeypatch)
+    m_dir = mulch_dir("acme", "platform")
+    (m_dir / "expertise").mkdir(parents=True)
+    (m_dir / "expertise" / "api.jsonl").write_text("")
+
+    received = {}
+
+    async def _fake_audit(m_dir, domain=None):
+        received["domain"] = domain
+        return _fake_report()
+
+    monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
+
+    resp = await admin_client.get("/admin/p/acme/platform/quality?domain=nonexistent")
+    assert resp.status_code == 200
+    assert "nonexistent" not in resp.text
+    assert received["domain"] is None
+
+
+async def test_quality_page_dropdown_lists_available_domains(admin_client, tmp_path, monkeypatch):
+    import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
+
+    org, project, alice = await _setup(tmp_path, monkeypatch)
+    m_dir = mulch_dir("acme", "platform")
+    (m_dir / "expertise").mkdir(parents=True)
+    (m_dir / "expertise" / "api.jsonl").write_text("")
+    (m_dir / "expertise" / "infra.jsonl").write_text("")
+
+    async def _fake_audit(m_dir, domain=None):
+        return _fake_report()
+
+    monkeypatch.setattr(quality_module, "audit_corpus", _fake_audit)
+
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
+    assert resp.status_code == 200
+    assert '<select name="domain"' in resp.text
+    assert '<option value="api"' in resp.text
+    assert '<option value="infra"' in resp.text
+
+
 # ---------------------------------------------------------------------------
 # Real end-to-end (real ml)
 # ---------------------------------------------------------------------------
@@ -222,8 +269,12 @@ async def test_quality_page_forwards_domain_filter_to_audit_corpus(admin_client,
     """The domain= query param must reach audit_corpus, and the Clear link
     must be present so the filter can be removed."""
     import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
 
     org, project, alice = await _setup(tmp_path, monkeypatch)
+    m_dir = mulch_dir("acme", "platform")
+    (m_dir / "expertise").mkdir(parents=True)
+    (m_dir / "expertise" / "api.jsonl").write_text("")
 
     received = {}
 

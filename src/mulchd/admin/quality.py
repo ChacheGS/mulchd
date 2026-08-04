@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
-from ..domains import mulch_dir
+from ..domains import list_domain_names, mulch_dir
 from ..models import Project
 from ..mulch import audit_corpus
 from ._shared import require_admin, resolve_project_by_slugs, set_last_project_cookie, templates
@@ -17,8 +17,14 @@ async def quality_page(
     if project is None:
         return Response(status_code=404)
 
+    available_domains = list_domain_names(org_slug, project_slug)
+    # A domain that doesn't currently exist (typo, or removed since page load)
+    # must never reach `ml` — that's what previously caused an unhandled
+    # MulchError -> 500. Silently drop it back to "no filter" instead.
+    domain_filter = domain if domain in available_domains else ""
+
     m_dir = mulch_dir(org_slug, project_slug)
-    result = await audit_corpus(m_dir, domain=domain or None)
+    result = await audit_corpus(m_dir, domain=domain_filter or None)
     report = result.get("report", {})
     suggestions = result.get("suggestions", {}).get("groups", [])
 
@@ -32,7 +38,8 @@ async def quality_page(
             "all_projects": all_projects,
             "active_tab": "quality",
             "tab_path": "quality",
-            "filter_domain": domain,
+            "available_domains": available_domains,
+            "filter_domain": domain_filter,
             "report": report,
             "suggestions": suggestions,
         },

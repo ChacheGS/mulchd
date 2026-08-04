@@ -27,9 +27,13 @@
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
   <div class="page-title" style="margin-bottom:0">Quality</div>
   <form method="get" action="/admin/p/{{ project.org.slug }}/{{ project.slug }}/quality" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-    <input type="text" name="domain" value="{{ filter_domain }}" placeholder="domain filter"
-      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; width:140px; outline:none">
-    <button type="submit" class="btn btn-secondary">Filter</button>
+    <select name="domain" onchange="this.form.submit()"
+      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
+      <option value="">— all domains —</option>
+      {% for d in available_domains %}
+      <option value="{{ d }}" {% if d == filter_domain %}selected{% endif %}>{{ d }}</option>
+      {% endfor %}
+    </select>
     {% if filter_domain %}
     <a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/quality" class="btn btn-secondary">Clear</a>
     {% endif %}
