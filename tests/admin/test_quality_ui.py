@@ -287,7 +287,7 @@ async def test_quality_page_forwards_domain_filter_to_audit_corpus(admin_client,
     resp = await admin_client.get("/admin/p/acme/platform/quality?domain=api")
     assert resp.status_code == 200
     assert received["domain"] == "api"
-    assert 'value="api"' in resp.text
+    assert '<option value="api" selected>' in resp.text
     assert "/admin/p/acme/platform/quality" in resp.text  # Clear link present
 
 
