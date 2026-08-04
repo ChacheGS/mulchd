@@ -2,6 +2,7 @@
 {% block page_title %}{{ project.display_name }}{% endblock %}
 {% block topbar_right %}
 <a href="/connect/projects" style="font-size:13px;color:#64748b;text-decoration:none;margin-right:auto;">← Projects</a>
+{% if request.state.is_admin_user %}<a href="/admin/" class="btn-link" style="font-size:13px;">Admin</a>{% endif %}
 <a href="/connect/logout" class="btn-link" style="font-size:13px;">Sign out</a>
 {% endblock %}
 {% block content %}

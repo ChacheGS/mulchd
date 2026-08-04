@@ -59,6 +59,20 @@ async def test_connect_projects_no_invite_error_banner_without_param(client, ali
     assert 'class="alert alert-warning"' not in resp.text
 
 
+async def test_connect_projects_shows_admin_link_for_superadmin(admin_client):
+    resp = await admin_client.get("/connect/projects")
+    assert resp.status_code == 200
+    assert 'href="/admin/"' in resp.text
+
+
+async def test_connect_projects_hides_admin_link_for_non_admin(client, alice_and_project):
+    user, token, org, project = alice_and_project
+    await _authed_client(client, token)
+    resp = await client.get("/connect/projects")
+    assert resp.status_code == 200
+    assert 'href="/admin/"' not in resp.text
+
+
 # ── project page ────────────────────────────────────────────────────────────
 
 

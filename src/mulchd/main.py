@@ -17,7 +17,7 @@ from starlette.responses import Response
 from tortoise import Tortoise
 
 from .admin import router as admin_router
-from .admin._shared import AdminRequired, redirect_login
+from .admin._shared import AdminRequired, is_admin, redirect_login
 from .api import router as api_router
 from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
@@ -128,6 +128,19 @@ app.add_middleware(
     session_cookie="mulchd_session",
     https_only=settings.is_https,
 )
+
+
+@app.middleware("http")
+async def _connect_admin_context(request: Request, call_next):
+    """Only /connect pages need to know whether the current user is an admin
+    (to show/hide the Admin link) — scoping the extra DB query to this prefix
+    keeps every other request (MCP calls, health checks, /admin itself, which
+    already has its own auth) from paying for it."""
+    if request.url.path.startswith("/connect"):
+        request.state.is_admin_user = await is_admin(request)
+    return await call_next(request)
+
+
 app.include_router(admin_router)
 app.include_router(api_router)
 app.include_router(connect_router)

@@ -1,6 +1,11 @@
 {% extends "connect/connect_base.html" %}
 {% block page_title %}projects{% endblock %}
-{% block topbar_right %}<a href="/connect/logout" class="btn-link" style="margin-left:auto;font-size:13px;">Sign out</a>{% endblock %}
+{% block topbar_right %}
+<div style="margin-left:auto; display:flex; align-items:center; gap:16px;">
+  {% if request.state.is_admin_user %}<a href="/admin/" class="btn-link" style="font-size:13px;">Admin</a>{% endif %}
+  <a href="/connect/logout" class="btn-link" style="font-size:13px;">Sign out</a>
+</div>
+{% endblock %}
 {% block content %}
 {% if invite_error %}<div class="alert alert-warning">{{ invite_error }}</div>{% endif %}
 <div class="page-title" style="font-size:17px;font-weight:600;margin-bottom:20px;">Your projects</div>
