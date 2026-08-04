@@ -2,7 +2,7 @@ from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
 from fastapi import HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ..admin_grants import is_superadmin
@@ -74,3 +74,28 @@ async def resolve_project(project: str) -> Project | None:
         return None
     org_slug, project_slug = ref
     return await Project.filter(slug=project_slug, org__slug=org_slug).prefetch_related("org").first()
+
+
+ADMIN_LAST_PROJECT_COOKIE = "admin_last_project"
+
+
+async def resolve_project_by_slugs(org_slug: str, project_slug: str) -> Project | None:
+    """Resolve a project from URL path slugs, with org prefetched so templates
+    can read project.org.slug without an extra query. Mirrors resolve_project's
+    prefetch pattern for a query-param-style "org/project" string."""
+    return await Project.filter(slug=project_slug, org__slug=org_slug).prefetch_related("org").first()
+
+
+def set_last_project_cookie(response: Response, org_slug: str, project_slug: str) -> None:
+    """Remember the last project visited via a project-scoped admin page, purely
+    as a sidebar-navigation convenience — never a source of truth for access
+    control or page behavior. If this cookie is missing, stale, or tampered
+    with, the worst case is the sidebar's Knowledge links fall back to the
+    Projects list instead of jumping straight to a project; nothing more."""
+    response.set_cookie(
+        ADMIN_LAST_PROJECT_COOKIE,
+        f"{org_slug}/{project_slug}",
+        httponly=True,
+        samesite="lax",
+        max_age=60 * 60 * 24 * 365,
+    )

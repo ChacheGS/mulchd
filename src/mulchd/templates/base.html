@@ -12,6 +12,8 @@
   .layout { display: flex; min-height: 100vh; }
   .sidebar { width: 168px; background: #1e293b; padding: 14px 8px; display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
   .sidebar-logo { color: white; font-weight: 700; font-size: 15px; padding: 2px 8px 12px; letter-spacing: -0.3px; }
+  .nav-group-label { color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; padding: 10px 10px 4px; }
+  .nav-group-label:first-of-type { padding-top: 2px; }
   .nav-link { display: block; padding: 7px 10px; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 13px; }
   .nav-link:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
   .nav-link.active { background: rgba(255,255,255,0.12); color: white; }
@@ -98,16 +100,24 @@
 <div class="layout">
   <nav class="sidebar">
     <div class="sidebar-logo">mulchd</div>
+
+    <div class="nav-group-label">Overview</div>
     <a href="/admin/" class="nav-link {% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="/admin/activity" class="nav-link {% if active == 'activity' %}active{% endif %}">Activity</a>
+
+    <div class="nav-group-label">Instance</div>
     <a href="/admin/users" class="nav-link {% if active == 'users' %}active{% endif %}">Users</a>
     <a href="/admin/orgs" class="nav-link {% if active == 'orgs' %}active{% endif %}">Orgs</a>
     <a href="/admin/projects" class="nav-link {% if active == 'projects' %}active{% endif %}">Projects</a>
     <a href="/admin/memberships" class="nav-link {% if active == 'memberships' %}active{% endif %}">Memberships</a>
     <a href="/admin/project-tokens" class="nav-link {% if active == 'project-tokens' %}active{% endif %}">Tokens</a>
-    <a href="/admin/records" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
-    <a href="/admin/audit" class="nav-link {% if active == 'audit' %}active{% endif %}">Audit</a>
-    <a href="/admin/quality" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>
-    <a href="/admin/activity" class="nav-link {% if active == 'activity' %}active{% endif %}">Activity</a>
+
+    <div class="nav-group-label">Knowledge</div>
+    {% set _kp = (project.org.slug ~ '/' ~ project.slug) if (project is defined and project) else request.cookies.get('admin_last_project', '') %}
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/records') if _kp else '/admin/projects' }}" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/record-activity') if _kp else '/admin/projects' }}" class="nav-link {% if active == 'record-activity' %}active{% endif %}">Record activity</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/quality') if _kp else '/admin/projects' }}" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>
+
     <div class="sidebar-spacer"></div>
     <a href="/connect/logout" class="sidebar-logout" style="text-decoration:none;">Logout</a>
     <div class="sidebar-version">v{{ mulchd_version }}</div>
