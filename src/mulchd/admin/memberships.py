@@ -4,15 +4,26 @@ from tortoise.exceptions import IntegrityError
 
 from ..instance_events import log_event
 from ..models import InstanceEventCategory, Project, Role, User, UserMembership
-from ._shared import get_current_admin, require_admin, templates
+from ._shared import get_current_admin, require_admin, resolve_project, templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
 async def _render_memberships(
-    request: Request, *, preselect_user: str = "", error: str = "", status_code: int = 200
+    request: Request,
+    *,
+    preselect_user: str = "",
+    error: str = "",
+    status_code: int = 200,
+    project_filter: str = "",
 ) -> Response:
-    memberships = await UserMembership.all().prefetch_related("user", "project", "project__org")
+    qs = UserMembership.all()
+    filtered_project = None
+    if project_filter:
+        filtered_project = await resolve_project(project_filter)
+        if filtered_project:
+            qs = qs.filter(project=filtered_project)
+    memberships = await qs.prefetch_related("user", "project", "project__org")
     users = await User.filter(active=True).order_by("username")
     projects = await Project.all().order_by("slug").prefetch_related("org")
     return templates.TemplateResponse(
@@ -26,14 +37,18 @@ async def _render_memberships(
             "roles": list(Role),
             "preselect_user": preselect_user,
             "error": error,
+            "project_filter": project_filter,
+            "filtered_project": filtered_project,
         },
         status_code=status_code,
     )
 
 
 @router.get("/memberships")
-async def memberships_page(request: Request, user: str = "", error: str = "") -> Response:
-    return await _render_memberships(request, preselect_user=user, error=error)
+async def memberships_page(
+    request: Request, user: str = "", error: str = "", project: str = ""
+) -> Response:
+    return await _render_memberships(request, preselect_user=user, error=error, project_filter=project)
 
 
 @router.post("/memberships")

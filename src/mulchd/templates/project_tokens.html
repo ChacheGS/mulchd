@@ -2,6 +2,12 @@
 {% block title %}mulchd admin — project tokens{% endblock %}
 {% block content %}
 <div class="page-title">Project Tokens</div>
+{% if project_filter %}
+<div class="alert alert-warning" style="display:flex; justify-content:space-between; align-items:center;">
+  <span>Filtered to <strong>{{ project_filter }}</strong>{% if not filtered_project %} (unknown project){% endif %}</span>
+  <a href="/admin/project-tokens" class="btn-link">Clear</a>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="table-header" style="grid-template-columns: 1fr 1.5fr 1fr 80px 70px 60px">

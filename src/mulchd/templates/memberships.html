@@ -2,6 +2,12 @@
 {% block title %}mulchd admin — memberships{% endblock %}
 {% block content %}
 <div class="page-title">Memberships</div>
+{% if project_filter %}
+<div class="alert alert-warning" style="display:flex; justify-content:space-between; align-items:center;">
+  <span>Filtered to <strong>{{ project_filter }}</strong>{% if not filtered_project %} (unknown project){% endif %}</span>
+  <a href="/admin/memberships" class="btn-link">Clear</a>
+</div>
+{% endif %}
 {% if error %}
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
@@ -41,6 +47,7 @@
   <div class="empty-state">No memberships yet.</div>
   {% endfor %}
 
+  {% if not project_filter %}
   <div class="form-section">
     <div class="form-section-title">Add membership</div>
     {% if users and projects %}
@@ -79,5 +86,6 @@
     <div class="text-muted">Create an org and project first.</div>
     {% endif %}
   </div>
+  {% endif %}
 </div>
 {% endblock %}

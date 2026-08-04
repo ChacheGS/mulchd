@@ -110,3 +110,15 @@ async def test_create_project_duplicate_does_not_log(admin_client):
 
     count = await InstanceEvent.filter(category=InstanceEventCategory.PROJECT_CREATED).count()
     assert count == 1
+
+
+async def test_project_overview_links_to_filtered_memberships_and_tokens(admin_client):
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+
+    resp = await admin_client.get(f"/admin/p/{org.slug}/{project.slug}/")
+    assert resp.status_code == 200
+    assert "/admin/memberships?project=acme/infra" in resp.text
+    assert "/admin/project-tokens?project=acme/infra" in resp.text

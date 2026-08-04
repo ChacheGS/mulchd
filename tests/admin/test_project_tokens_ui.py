@@ -42,3 +42,20 @@ async def test_revoke_token_action_deactivates_token(admin_client):
 
     await token.refresh_from_db()
     assert token.active is False
+
+
+async def test_project_tokens_page_filters_by_project(admin_client):
+    from mulchd.models import Organization, Project, ProjectToken, User
+
+    org = await Organization.create(slug="acme", display_name="Acme")
+    proj_a = await Project.create(slug="infra", display_name="Infra", org=org)
+    proj_b = await Project.create(slug="web", display_name="Web", org=org)
+    alice = await User.create(username="alice", display_name="Alice", token_hash="h1")
+    await ProjectToken.create(user=alice, project=proj_a, token_hash="t1", label="a-token")
+    await ProjectToken.create(user=alice, project=proj_b, token_hash="t2", label="b-token")
+
+    resp = await admin_client.get("/admin/project-tokens?project=acme/infra")
+    assert resp.status_code == 200
+    assert "a-token" in resp.text
+    assert "b-token" not in resp.text
+    assert "Filtered to" in resp.text

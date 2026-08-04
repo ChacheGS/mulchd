@@ -103,3 +103,39 @@ async def test_remove_nonexistent_membership_does_not_log(admin_client):
 
     count = await InstanceEvent.filter(category=InstanceEventCategory.MEMBERSHIP_REMOVED).count()
     assert count == 0
+
+
+async def test_memberships_page_filters_by_project(admin_client):
+    from mulchd.models import Organization, Project, Role, User, UserMembership
+
+    org = await Organization.create(slug="acme", display_name="Acme")
+    proj_a = await Project.create(slug="infra", display_name="Infra", org=org)
+    proj_b = await Project.create(slug="web", display_name="Web", org=org)
+    alice = await User.create(username="alice", display_name="Alice", token_hash="h1")
+    bob = await User.create(username="bob", display_name="Bob", token_hash="h2")
+    await UserMembership.create(user=alice, project=proj_a, role=Role.WRITER)
+    await UserMembership.create(user=bob, project=proj_b, role=Role.WRITER)
+
+    resp = await admin_client.get("/admin/memberships?project=acme/infra")
+    assert resp.status_code == 200
+    assert "alice" in resp.text
+    assert "bob" not in resp.text
+    assert "Filtered to" in resp.text
+
+
+async def test_memberships_page_unfiltered_shows_everyone(admin_client):
+    from mulchd.models import Organization, Project, Role, User, UserMembership
+
+    org = await Organization.create(slug="acme", display_name="Acme")
+    proj_a = await Project.create(slug="infra", display_name="Infra", org=org)
+    proj_b = await Project.create(slug="web", display_name="Web", org=org)
+    alice = await User.create(username="alice", display_name="Alice", token_hash="h1")
+    bob = await User.create(username="bob", display_name="Bob", token_hash="h2")
+    await UserMembership.create(user=alice, project=proj_a, role=Role.WRITER)
+    await UserMembership.create(user=bob, project=proj_b, role=Role.WRITER)
+
+    resp = await admin_client.get("/admin/memberships")
+    assert resp.status_code == 200
+    assert "alice" in resp.text
+    assert "bob" in resp.text
+    assert "Filtered to" not in resp.text
