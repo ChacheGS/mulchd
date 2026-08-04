@@ -14,6 +14,7 @@ from ..models import (
 )
 from ._shared import (
     get_current_admin,
+    is_valid_slug,
     require_admin,
     resolve_project_by_slugs,
     set_last_project_cookie,
@@ -109,9 +110,16 @@ async def create_project(
     org = await Organization.get_or_none(id=org_id)
     if org is None:
         return RedirectResponse("/admin/projects", status_code=303)
+    slug = slug.strip()
+    if not is_valid_slug(slug):
+        return await _render_projects(
+            request,
+            error=f"Project slug '{slug}' must be lowercase letters, numbers, and hyphens only.",
+            status_code=422,
+        )
     try:
         project = await Project.create(
-            slug=slug.strip(),
+            slug=slug,
             display_name=display_name.strip(),
             knowledge_language=knowledge_language.strip() or None,
             org=org,

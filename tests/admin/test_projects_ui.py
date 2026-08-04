@@ -15,6 +15,22 @@ async def test_create_project(admin_client):
     assert resp.status_code == 303
 
 
+async def test_create_project_rejects_slash_in_slug(admin_client):
+    """A slug containing '/' would break the org/project-slug join used
+    throughout the admin UI (cookies, ?project= params, /admin/p/... routes)."""
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme-slash", display_name="Acme")
+    resp = await admin_client.post(
+        "/admin/projects",
+        data={"org_id": org.id, "slug": "data/platform", "display_name": "Data Platform"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 422
+    assert "lowercase letters, numbers, and hyphens" in resp.text
+    assert await Project.filter(slug="data/platform").first() is None
+
+
 async def test_project_overview_page_renders(admin_client):
     from mulchd.models import Organization, Project
     org = await Organization.create(slug="acme", display_name="Acme Corp")

@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from mulchd.admin._shared import (
     AdminRequired,
     get_current_admin,
+    is_valid_slug,
     redirect_login,
     require_admin,
     require_admin_json,
@@ -103,3 +104,17 @@ async def test_require_admin_json_returns_403_unauthenticated(db):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         resp = await ac.get("/needs-admin-json")
     assert resp.status_code == 403
+
+
+def test_is_valid_slug_accepts_lowercase_digits_and_hyphens():
+    assert is_valid_slug("acme")
+    assert is_valid_slug("acme-123")
+    assert is_valid_slug("123")
+
+
+def test_is_valid_slug_rejects_slash_and_other_unsafe_characters():
+    assert not is_valid_slug("acme/infra")
+    assert not is_valid_slug("acme infra")
+    assert not is_valid_slug("acme_infra")
+    assert not is_valid_slug("Acme")
+    assert not is_valid_slug("")

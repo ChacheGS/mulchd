@@ -1,3 +1,4 @@
+import re
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
@@ -8,6 +9,19 @@ from fastapi.templating import Jinja2Templates
 from ..admin_grants import is_superadmin
 from ..connect import _get_connect_user_id
 from ..models import Project, User
+
+# Matches the pattern already declared (but never enforced server-side) on the
+# org/project creation forms' `pattern="[a-z0-9\-]+"` attribute. Org and project
+# slugs are joined with "/" throughout the admin UI (the admin_last_project
+# cookie, ?project=org/slug query params, /admin/p/{org_slug}/{project_slug}/...
+# routes) — a slug containing "/" would make that join ambiguous to parse back
+# apart, and one containing other URL-reserved characters could produce a
+# malformed or unexpected navigation target.
+_SLUG_RE = re.compile(r"^[a-z0-9-]+$")
+
+
+def is_valid_slug(slug: str) -> bool:
+    return bool(_SLUG_RE.match(slug))
 
 # Templates live at src/mulchd/templates/, one level above this package.
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
