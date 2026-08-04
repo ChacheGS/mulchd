@@ -1,6 +1,5 @@
-{% extends "base.html" %}
-{% block title %}mulchd admin — audit{% endblock %}
-{% block content %}
+{% extends "project_base.html" %}
+{% block project_content %}
 
 <style>
   .event-block { border-bottom: 1px solid #f1f5f9; padding: 10px 16px; }
@@ -21,19 +20,8 @@
 </style>
 
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
-  <div class="page-title" style="margin-bottom:0">Audit</div>
-  <form method="get" action="/admin/audit" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-    <select name="project" onchange="this.form.submit()"
-      style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
-      <option value="">— project —</option>
-      {% for p in projects %}
-      <option value="{{ p.org.slug }}/{{ p.slug }}"
-        {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
-        {{ p.org.slug }} / {{ p.slug }}
-      </option>
-      {% endfor %}
-    </select>
-    {% if selected %}
+  <div class="page-title" style="margin-bottom:0">Record activity</div>
+  <form method="get" action="/admin/p/{{ project.org.slug }}/{{ project.slug }}/record-activity" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
     <select name="action"
       style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
       <option value="">all actions</option>
@@ -46,18 +34,10 @@
       style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; width:140px; outline:none">
     <button type="submit" class="btn btn-secondary">Filter</button>
     {% if filter_action or filter_domain %}
-    <a href="/admin/audit?project={{ selected }}" class="btn btn-secondary">Clear</a>
-    {% endif %}
+    <a href="/admin/p/{{ project.org.slug }}/{{ project.slug }}/record-activity" class="btn btn-secondary">Clear</a>
     {% endif %}
   </form>
 </div>
-
-{% if not selected %}
-<div class="card">
-  <div class="empty-state">Select a project above to view its audit log.</div>
-</div>
-
-{% else %}
 
 {# ── Event log ── #}
 <div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px">
@@ -151,7 +131,7 @@
     {% if r.id %}
     <form method="post" action="/admin/audit/restore"
           onsubmit="return confirm('Restore {{ r.id }} to live records?')" style="margin:0">
-      <input type="hidden" name="project" value="{{ selected }}">
+      <input type="hidden" name="project" value="{{ project.org.slug }}/{{ project.slug }}">
       <input type="hidden" name="record_id" value="{{ r.id }}">
       <button type="submit" class="btn btn-secondary" style="padding:4px 10px; font-size:12px">Restore</button>
     </form>
@@ -160,8 +140,6 @@
   {% endfor %}
 </div>
 {% endfor %}
-{% endif %}
-
 {% endif %}
 
 {% endblock %}

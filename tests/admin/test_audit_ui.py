@@ -59,16 +59,9 @@ def _jot(tmp_path: Path, domain: str, **fields) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def test_audit_page_renders(admin_client):
-    resp = await admin_client.get("/admin/audit")
-    assert resp.status_code == 200
-    assert "Audit" in resp.text
-
-
-async def test_audit_page_redirects_when_not_logged_in(client):
-    resp = await client.get("/admin/audit", follow_redirects=False)
-    assert resp.status_code == 303
-    assert "/connect" in resp.headers["location"]
+async def test_record_activity_page_404s_for_unknown_project(admin_client):
+    resp = await admin_client.get("/admin/p/nope/nope/record-activity")
+    assert resp.status_code == 404
 
 
 async def test_audit_page_with_project_shows_events(admin_client, tmp_path, monkeypatch):
@@ -100,7 +93,7 @@ async def test_audit_page_with_project_shows_events(admin_client, tmp_path, monk
         session_id=uuid.uuid4(),
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert resp.status_code == 200
     assert r["id"] in resp.text
     assert "write" in resp.text
@@ -130,13 +123,13 @@ async def test_audit_move_event_shows_source_and_target_domain(admin_client, tmp
         session_id=uuid.uuid4(),
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert resp.status_code == 200
     assert "move" in resp.text
     assert "scratch → correct" in resp.text
     assert "Relocated record" in resp.text
 
-    filtered = await admin_client.get("/admin/audit?project=acme/platform&action=move")
+    filtered = await admin_client.get("/admin/p/acme/platform/record-activity?action=move")
     assert filtered.status_code == 200
     assert r["id"] in filtered.text
 
@@ -185,7 +178,7 @@ async def test_audit_cross_owner_edit_shows_badge(admin_client, tmp_path, monkey
         session_id=sid,
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert "cross-owner-badge" in resp.text
     assert "Alice K." in resp.text  # display name, not raw username
 
@@ -229,7 +222,7 @@ async def test_audit_same_owner_edit_no_badge(admin_client, tmp_path, monkeypatc
         session_id=sid,
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert 'class="cross-owner-badge"' not in resp.text
 
 
@@ -265,7 +258,7 @@ async def test_audit_cross_owner_falls_back_to_jsonl_owner(admin_client, tmp_pat
         session_id=sid,
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert "cross-owner-badge" in resp.text
 
 
@@ -306,7 +299,7 @@ async def test_audit_write_superseding_foundational_with_lower_tier(
         session_id=uuid.uuid4(),
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert "downgrade-badge" in resp.text
     assert "foundational → tactical" in resp.text
 
@@ -341,7 +334,7 @@ async def test_audit_write_superseding_foundational_same_tier(admin_client, tmp_
         session_id=uuid.uuid4(),
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert "downgrade-badge" in resp.text
     assert "supersedes foundational" in resp.text
     assert "foundational → foundational" not in resp.text
@@ -379,7 +372,7 @@ async def test_audit_edit_that_lowers_classification(admin_client, tmp_path, mon
         session_id=sid,
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert "downgrade-badge" in resp.text
     assert "foundational → tactical" in resp.text
 
@@ -414,7 +407,7 @@ async def test_audit_tactical_supersedes_tactical_no_badge(admin_client, tmp_pat
         session_id=uuid.uuid4(),
     )
 
-    resp = await admin_client.get("/admin/audit?project=acme/platform")
+    resp = await admin_client.get("/admin/p/acme/platform/record-activity")
     assert 'class="downgrade-badge"' not in resp.text
 
 
@@ -423,13 +416,13 @@ async def test_audit_tactical_supersedes_tactical_no_badge(admin_client, tmp_pat
 # ---------------------------------------------------------------------------
 
 
-async def test_audit_restore_redirects(admin_client, tmp_path, monkeypatch):
-    """POST /audit/restore calls restore_record and redirects back to the audit page."""
+async def test_record_activity_restore_redirects(admin_client, tmp_path, monkeypatch):
+    """POST /audit/restore calls restore_record and redirects back to the record activity page."""
     from mulchd.config import settings
 
     monkeypatch.setattr(settings, "data_path", tmp_path)
 
-    import mulchd.admin.audit as audit_mod
+    import mulchd.admin.record_activity as audit_mod
 
     calls: list[tuple] = []
 
