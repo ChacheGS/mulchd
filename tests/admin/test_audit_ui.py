@@ -1,5 +1,6 @@
 """
-Tests for /admin/audit — event log rendering and threat-model detection logic.
+Tests for the project Record activity tab (/admin/p/<org>/<project>/record-activity) —
+event log rendering and threat-model detection logic.
 
 Strategy: seed RecordEvent, RecordEdit, RecordMeta, and JSONL files directly;
 hit the page via admin_client and assert on HTML output.

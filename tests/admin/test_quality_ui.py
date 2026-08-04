@@ -1,5 +1,6 @@
 """
-Tests for /admin/quality — corpus-quality report rendering.
+Tests for the project Quality tab (/admin/p/<org>/<project>/quality) —
+corpus-quality report rendering.
 
 Strategy: real ml audit integration test (gated by ml_available, same
 convention as tests/test_mcp_tools.py) plus monkeypatched fixture data for
@@ -75,14 +76,14 @@ async def test_quality_page_dropdown_lists_available_domains(admin_client, tmp_p
     assert '<option value="infra"' in resp.text
 
 
-# ---------------------------------------------------------------------------
-# Real end-to-end (real ml)
-# ---------------------------------------------------------------------------
-
-
 async def test_quality_page_404s_for_unknown_project(admin_client):
     resp = await admin_client.get("/admin/p/nope/nope/quality")
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Real end-to-end (real ml)
+# ---------------------------------------------------------------------------
 
 
 @ml_available

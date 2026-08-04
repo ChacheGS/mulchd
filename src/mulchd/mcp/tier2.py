@@ -685,10 +685,10 @@ async def _get_record_schema(args: dict) -> list[TextContent]:
 async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]:
     """Render the write/edit/delete timeline for one record, drawing on the
     existing RecordEvent/RecordEdit audit tables (previously only visible via
-    the admin UI at /admin/audit) — no new storage, just a read surface.
+    the admin UI's Record activity tab) — no new storage, just a read surface.
 
     RecordEdit rows are matched to their edit RecordEvent by session_id, not
-    by raw chronological position — mirroring admin/audit.py's approach —
+    by raw chronological position — mirroring admin/record_activity.py's approach —
     since two concurrent editors can otherwise produce same-record edit
     events whose (at) ordering doesn't line up 1:1 with RecordEdit's, which
     would silently attribute one actor's before-snapshot to another's edit."""

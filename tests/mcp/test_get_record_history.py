@@ -74,7 +74,7 @@ async def test_get_record_history_matches_snapshots_by_session_not_position(team
     """Two different actors editing the same record in overlapping sessions
     must not have their before_snapshots swapped just because RecordEvent's
     and RecordEdit's independent (at) orderings don't line up — snapshots are
-    matched by session_id, mirroring admin/audit.py's approach."""
+    matched by session_id, mirroring admin/record_activity.py's approach."""
     import asyncio
 
     from mulchd.mcp.tier2 import _get_record_history
