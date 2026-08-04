@@ -82,7 +82,9 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
         request,
         "project_detail.html",
         {
-            "active": "records",  # sidebar Project group, not a specific tab — see note below
+            # "records" just keeps the sidebar's Project group visually active while on
+            # Overview — the sidebar has no dedicated "Overview" entry of its own to highlight.
+            "active": "records",
             "project": project,
             "active_tab": "overview",
             "tab_path": "",
