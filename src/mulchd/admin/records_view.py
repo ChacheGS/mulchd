@@ -5,7 +5,13 @@ from ..domains import mulch_dir
 from ..models import Project
 from ..mulch import delete_record, edit_record
 from ..records import read_domain_records
-from ._shared import parse_project_ref, require_admin, resolve_project, templates
+from ._shared import (
+    parse_project_ref,
+    require_admin,
+    resolve_project_by_slugs,
+    set_last_project_cookie,
+    templates,
+)
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -35,7 +41,7 @@ async def delete_record_action(
         org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
         await delete_record(m_dir, domain, record_id)
-    return RedirectResponse(f"/admin/records?project={project}", status_code=303)
+    return RedirectResponse(f"/admin/p/{project}/records", status_code=303)
 
 
 @router.post("/records/edit")
@@ -52,37 +58,38 @@ async def edit_record_action(
         org_slug, project_slug = ref
         m_dir = mulch_dir(org_slug, project_slug)
         await edit_record(m_dir, domain, record_id, {field: value.strip()})
-    return RedirectResponse(f"/admin/records?project={project}", status_code=303)
+    return RedirectResponse(f"/admin/p/{project}/records", status_code=303)
 
 
-@router.get("/records")
-async def records_page(request: Request, project: str = "") -> Response:
-    projects = await Project.all().prefetch_related("org").order_by("org__slug", "slug")
+@router.get("/p/{org_slug}/{project_slug}/records")
+async def records_page(request: Request, org_slug: str, project_slug: str) -> Response:
+    project = await resolve_project_by_slugs(org_slug, project_slug)
+    if project is None:
+        return Response(status_code=404)
 
     domains_data: list[dict] = []
-    selected_project = None
-
-    if project:
-        selected_project = await resolve_project(project)
-        if selected_project:
-            expertise_dir = mulch_dir(selected_project.org.slug, selected_project.slug) / "expertise"
-            if expertise_dir.exists():
-                for jsonl_file in sorted(expertise_dir.glob("*.jsonl")):
-                    records = await read_domain_records(jsonl_file)
-                    if records:
-                        domains_data.append({"name": jsonl_file.stem, "records": records})
+    expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
+    if expertise_dir.exists():
+        for jsonl_file in sorted(expertise_dir.glob("*.jsonl")):
+            records = await read_domain_records(jsonl_file)
+            if records:
+                domains_data.append({"name": jsonl_file.stem, "records": records})
 
     total_record_count = sum(len(d["records"]) for d in domains_data)
+    all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "records.html",
         {
             "active": "records",
-            "projects": projects,
-            "selected": project,
-            "selected_project": selected_project,
+            "project": project,
+            "all_projects": all_projects,
+            "active_tab": "records",
+            "tab_path": "records",
             "domains": domains_data,
             "total_record_count": total_record_count,
         },
     )
+    set_last_project_cookie(response, org_slug, project_slug)
+    return response

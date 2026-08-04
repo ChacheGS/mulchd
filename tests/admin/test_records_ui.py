@@ -34,15 +34,9 @@ async def test_records_count_with_jsonl(admin_client, tmp_path, monkeypatch):
     assert resp.json() == {"count": 3}
 
 
-async def test_records_page_requires_auth(client):
-    resp = await client.get("/admin/records", follow_redirects=False)
-    assert resp.status_code == 303
-    assert "/connect" in resp.headers["location"]
-
-
-async def test_records_page_no_project_selected(admin_client):
-    resp = await admin_client.get("/admin/records")
-    assert resp.status_code == 200
+async def test_records_page_404s_for_unknown_project(admin_client):
+    resp = await admin_client.get("/admin/p/nope/nope/records")
+    assert resp.status_code == 404
 
 
 async def test_records_page_renders_domains_and_records(admin_client, tmp_path, monkeypatch):
@@ -61,7 +55,7 @@ async def test_records_page_renders_domains_and_records(admin_client, tmp_path, 
         '{"id":"mx-aaa","type":"decision","classification":"tactical",'
         '"title":"Use Postgres","owner":"carlos","recorded_at":"2026-07-01T00:00:00+00:00"}\n'
     )
-    resp = await admin_client.get("/admin/records?project=acme/demo")
+    resp = await admin_client.get("/admin/p/acme/demo/records")
     assert resp.status_code == 200
     assert "architecture" in resp.text
     assert "mx-aaa" in resp.text
@@ -95,7 +89,7 @@ async def test_delete_record_action_calls_delete_record(admin_client, tmp_path, 
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert "/admin/records?project=acme/demo" in resp.headers["location"]
+    assert "/admin/p/acme/demo/records" in resp.headers["location"]
     assert called["args"] == ("architecture", "mx-aaa")
 
 
@@ -139,6 +133,6 @@ async def test_edit_record_action_calls_edit_record(admin_client, tmp_path, monk
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert "/admin/records?project=acme/demo" in resp.headers["location"]
+    assert "/admin/p/acme/demo/records" in resp.headers["location"]
     # value.strip() is applied before calling edit_record
     assert called["args"] == ("architecture", "mx-aaa", {"content": "new content"})

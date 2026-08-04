@@ -1,6 +1,5 @@
-{% extends "base.html" %}
-{% block title %}mulchd admin — records{% endblock %}
-{% block content %}
+{% extends "project_base.html" %}
+{% block project_content %}
 
 <style>
   .record-card { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
@@ -19,43 +18,21 @@
   #new-records-banner button { background:none; border:none; cursor:pointer; color:#92400e; font-size:14px; padding:0; margin-left:auto; line-height:1; }
 </style>
 
-{% if selected %}
 <div id="new-records-banner">
   <span>↑ </span><span id="new-records-msg"></span>
   <a onclick="location.reload()">Refresh</a>
   <button onclick="dismissBanner()" title="Dismiss">✕</button>
 </div>
-{% endif %}
 
 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px">
   <div class="page-title" style="margin-bottom:0">Records</div>
   <div style="display:flex; align-items:center; gap:12px">
-    {% if selected %}
     <input id="record-search" type="search" placeholder="Filter records…" oninput="filterRecords(this.value)"
       style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; outline:none; width:200px">
-    {% endif %}
-    <form method="get" action="/admin/records" style="display:flex; align-items:center; gap:8px">
-      <label for="proj-select" style="font-size:12px; color:#64748b">Project</label>
-      <select id="proj-select" name="project" onchange="this.form.submit()"
-        style="border:1px solid #d1d5db; border-radius:4px; padding:6px 10px; font-size:13px; background:white; outline:none; cursor:pointer">
-        <option value="">— select —</option>
-        {% for p in projects %}
-        <option value="{{ p.org.slug }}/{{ p.slug }}"
-          {% if selected == p.org.slug ~ '/' ~ p.slug %}selected{% endif %}>
-          {{ p.org.slug }} / {{ p.slug }}
-        </option>
-        {% endfor %}
-      </select>
-    </form>
   </div>
 </div>
 
-{% if not selected %}
-<div class="card">
-  <div class="empty-state">Select a project above to view its expertise records.</div>
-</div>
-
-{% elif not domains %}
+{% if not domains %}
 <div class="card">
   <div class="empty-state">No expertise records found for this project yet.</div>
 </div>
@@ -100,7 +77,7 @@
         title="Edit record">✎</button>
       <form method="post" action="/admin/records/delete"
             onsubmit="return confirm('Delete {{ r.id }}?')" style="margin:0">
-        <input type="hidden" name="project" value="{{ selected }}">
+        <input type="hidden" name="project" value="{{ project.org.slug }}/{{ project.slug }}">
         <input type="hidden" name="domain" value="{{ domain.name }}">
         <input type="hidden" name="record_id" value="{{ r.id }}">
         <button type="submit"
@@ -231,7 +208,7 @@
     <div id="edit-{{ r.id }}" style="display:none; background:#f8fafc; border-top:1px solid #f1f5f9; padding:12px 16px">
       {% for fname, fval in edit_fields %}
       <form method="post" action="/admin/records/edit" style="margin-bottom:8px">
-        <input type="hidden" name="project" value="{{ selected }}">
+        <input type="hidden" name="project" value="{{ project.org.slug }}/{{ project.slug }}">
         <input type="hidden" name="domain" value="{{ domain.name }}">
         <input type="hidden" name="record_id" value="{{ r.id }}">
         <input type="hidden" name="field" value="{{ fname }}">
@@ -253,7 +230,6 @@
 
 {% endif %}
 
-{% if selected %}
 <script>
 var INITIAL_COUNT = {{ total_record_count }};
 var _pollInterval = null;
@@ -284,7 +260,7 @@ function hasOpenEditPanel() {
 
 function checkForNewRecords() {
   if (_dismissed || hasOpenEditPanel()) return;
-  fetch('/admin/records/count?project={{ selected | urlencode }}')
+  fetch('/admin/records/count?project={{ (project.org.slug ~ "/" ~ project.slug) | urlencode }}')
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.count > INITIAL_COUNT) {
@@ -311,5 +287,4 @@ function stopPolling() {
 window.addEventListener('beforeunload', stopPolling);
 startPolling();
 </script>
-{% endif %}
 {% endblock %}
