@@ -1,5 +1,6 @@
 {% extends "project_base.html" %}
 {% block project_content %}
+{% set project_ref = project.org.slug ~ '/' ~ project.slug %}
 
 <style>
   .record-card { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
@@ -86,7 +87,7 @@
         title="Edit record">✎</button>
       <form method="post" action="/admin/records/delete"
             onsubmit="return confirm('Delete {{ r.id }}?')" style="margin:0">
-        <input type="hidden" name="project" value="{{ project.org.slug }}/{{ project.slug }}">
+        <input type="hidden" name="project" value="{{ project_ref }}">
         <input type="hidden" name="domain" value="{{ domain.name }}">
         <input type="hidden" name="record_id" value="{{ r.id }}">
         <button type="submit"
@@ -217,7 +218,7 @@
     <div id="edit-{{ r.id }}" style="display:none; background:#f8fafc; border-top:1px solid #f1f5f9; padding:12px 16px">
       {% for fname, fval in edit_fields %}
       <form method="post" action="/admin/records/edit" style="margin-bottom:8px">
-        <input type="hidden" name="project" value="{{ project.org.slug }}/{{ project.slug }}">
+        <input type="hidden" name="project" value="{{ project_ref }}">
         <input type="hidden" name="domain" value="{{ domain.name }}">
         <input type="hidden" name="record_id" value="{{ r.id }}">
         <input type="hidden" name="field" value="{{ fname }}">
@@ -283,7 +284,7 @@ function submitBulkDelete() {
   var projectInput = document.createElement('input');
   projectInput.type = 'hidden';
   projectInput.name = 'project';
-  projectInput.value = '{{ project.org.slug }}/{{ project.slug }}';
+  projectInput.value = '{{ project_ref }}';
   form.appendChild(projectInput);
   checked.forEach(function(cb) {
     var input = document.createElement('input');
@@ -309,7 +310,7 @@ function hasOpenEditPanel() {
 
 function checkForNewRecords() {
   if (_dismissed || hasOpenEditPanel()) return;
-  fetch('/admin/records/count?project={{ (project.org.slug ~ "/" ~ project.slug) | urlencode }}')
+  fetch('/admin/records/count?project={{ project_ref | urlencode }}')
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.count > INITIAL_COUNT) {
