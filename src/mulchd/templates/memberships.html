@@ -47,7 +47,6 @@
   <div class="empty-state">No memberships yet.</div>
   {% endfor %}
 
-  {% if not project_filter %}
   <div class="form-section">
     <div class="form-section-title">Add membership</div>
     {% if users and projects %}
@@ -86,6 +85,5 @@
     <div class="text-muted">Create an org and project first.</div>
     {% endif %}
   </div>
-  {% endif %}
 </div>
 {% endblock %}

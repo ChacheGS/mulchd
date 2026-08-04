@@ -118,9 +118,15 @@ async def test_memberships_page_filters_by_project(admin_client):
 
     resp = await admin_client.get("/admin/memberships?project=acme/infra")
     assert resp.status_code == 200
-    assert "alice" in resp.text
-    assert "bob" not in resp.text
+    # Membership rows render the username in its own monospace span; the
+    # Add-membership form's user dropdown always lists every active user
+    # (by design) as a plain <option>, so scope the assertion to the row
+    # markup rather than the raw page text.
+    assert '<span class="monospace">alice</span>' in resp.text
+    assert '<span class="monospace">bob</span>' not in resp.text
     assert "Filtered to" in resp.text
+    # bob is still offered in the Add-membership form's user dropdown.
+    assert '<option value="{}"'.format(bob.id) in resp.text
 
 
 async def test_memberships_page_unfiltered_shows_everyone(admin_client):
