@@ -238,6 +238,72 @@ async def test_write_record_validates_required_fields(team, data_path, fake_writ
         )
 
 
+@pytest.mark.parametrize("files_value", [[], ["src/foo.py"]], ids=["empty", "populated"])
+async def test_write_decision_rejects_files_regardless_of_content(
+    team, data_path, fake_write_record, files_value
+):
+    """`files` is only valid on pattern/reference records — ml's own schema
+    rejects it on decision (and convention/failure/guide) whether the list is
+    empty or populated, with an error that never mentions `files` at all. This
+    must be caught before ever reaching ml, for both cases identically."""
+    t = team
+    with pytest.raises(ValueError, match="record type 'decision' does not support 'files'"):
+        await _record_expertise(
+            {
+                "domain": "infra",
+                "type": "decision",
+                "classification": "tactical",
+                "title": "some decision",
+                "rationale": "some rationale",
+                "files": files_value,
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_write_pattern_accepts_files(team, data_path, fake_write_record):
+    """The one case files= is actually meant for — must still work."""
+    t = team
+    result = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "pattern",
+            "classification": "tactical",
+            "name": "retry wrapper",
+            "description": "wraps flaky calls with exponential backoff",
+            "files": ["src/retry.py"],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Recorded" in result[0].text or "mx-" in result[0].text
+
+
+async def test_edit_record_rejects_files_on_unsupported_type(team, data_path, fake_write_record):
+    """The same files/type restriction applies on the edit path, checked
+    against the existing record's actual type rather than a `type` arg (edit
+    doesn't take one)."""
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "always do the thing",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    with pytest.raises(ValueError, match="record type 'convention' does not support 'files'"):
+        await _edit_record(
+            {"record_id": record_id, "domain": "infra", "files": ["src/foo.py"]},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
 @ml_available
 async def test_live_write_record_succeeds(team, data_path):
     """write_record should complete without error via the live ml CLI."""

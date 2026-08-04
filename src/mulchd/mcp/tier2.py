@@ -429,6 +429,17 @@ def _normalize_evidence(evidence: dict) -> dict:
     return {k: ", ".join(v) if isinstance(v, list) else v for k, v in evidence.items()}
 
 
+def _validate_files_supported(rtype: str, args: dict) -> None:
+    """ml's own per-type record schema only allows `files` on pattern/reference
+    (see _RECORD_SCHEMAS) — mulchd's tool schema advertises it more broadly, so
+    a caller can build an args dict ml will reject outright (a "must NOT have
+    additional properties" / oneOf-mismatch error that never mentions `files`)
+    regardless of whether the list is empty or populated. Reject up front with
+    a message that actually names the problem."""
+    if "files" in args and "files" not in _RECORD_SCHEMAS[rtype]["optional"]:
+        raise ValueError(f"record type '{rtype}' does not support 'files' — only pattern and reference records do")
+
+
 async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "write records")
     rtype = args["type"]
@@ -436,6 +447,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     missing = [f for f in required if not args.get(f)]
     if missing:
         raise ValueError(f"record type '{rtype}' requires: {', '.join(missing)}")
+    _validate_files_supported(rtype, args)
     domain = args["domain"]
     existing_domains = list_domain_names(ctx.org.slug, ctx.project.slug)
     similar_domain = (
@@ -717,6 +729,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     record_id = args["record_id"]
     domain = args["domain"]
     record = await _get_owned_record(ctx, domain, record_id, "edit")
+    _validate_files_supported(record["type"], args)
     update_keys = {
         "classification",
         "title",

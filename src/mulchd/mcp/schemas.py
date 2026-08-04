@@ -37,11 +37,6 @@ _EVIDENCE_STRING_OR_ARRAY = {
 }
 
 _RELATED_RECORD_PROPERTIES = {
-    "files": {
-        "type": "array",
-        "items": {"type": "string"},
-        "description": "Related file paths",
-    },
     "relates_to": {
         "type": "array",
         "items": {"type": "string"},
@@ -51,6 +46,19 @@ _RELATED_RECORD_PROPERTIES = {
         "type": "array",
         "items": {"type": "string"},
         "description": "Record IDs this record replaces",
+    },
+}
+
+# `files` is only valid on pattern/reference records — ml's own per-type record
+# schema rejects it (empty or populated) on convention/decision/failure/guide.
+# Spread only into write_pattern/write_reference's inputSchema below, not into
+# _RELATED_RECORD_PROPERTIES, so the four other write_* tools don't advertise a
+# field that will always be rejected if a caller uses it.
+_FILES_PROPERTY = {
+    "files": {
+        "type": "array",
+        "items": {"type": "string"},
+        "description": "Related file paths",
     },
 }
 
@@ -163,6 +171,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the pattern."},
                 "description": {"type": "string", "description": "What the pattern is and how to use it."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_FILES_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "name", "description"],
@@ -183,6 +192,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the reference."},
                 "description": {"type": "string", "description": "What it points to and why it matters."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_FILES_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "name", "description"],
@@ -452,6 +462,7 @@ TIER2_TOOLS = [
                 },
                 "resolution": {"type": "string", "description": "failure: resolution field"},
                 "name": {"type": "string", "description": "pattern/reference/guide: name field"},
+                **_FILES_PROPERTY,
                 **_RELATED_RECORD_PROPERTIES,
             },
             "required": ["record_id", "domain"],
