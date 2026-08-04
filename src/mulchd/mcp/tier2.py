@@ -573,7 +573,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
         # operation fails cleanly instead of leaving silent cross-store drift.
         await delete_record(m_dir, domain, written["id"])
         raise
-    msg = f"Recorded {written['type']} in {domain} ({written['id']})"
+    msg = f"Recorded {written['type']} in {domain} ({written['id']}) — {ctx.org.slug}/{ctx.project.slug}"
     if similar_domain:
         msg += f"\n\n⚠ '{domain}' is a new domain; did you mean the existing domain '{similar_domain}'?"
     alerts = await _supersede_alerts(
@@ -790,7 +790,7 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         # with no corresponding history/event row.
         await edit_record(m_dir, domain, record_id, before_snapshot)
         raise
-    msg = f"Updated {record_id} in {domain}"
+    msg = f"Updated {record_id} in {domain} — {ctx.org.slug}/{ctx.project.slug}"
     old_cls = before_snapshot.get("classification", "")
     new_cls = updates.get("classification", "")
     if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
@@ -862,7 +862,12 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     if domain_path.exists() and not await read_domain_records(domain_path):
         domain_path.unlink()
     _fire_notify(domain, ctx, "delete", record)
-    return [TextContent(type="text", text=f"Deleted {record_id} from {domain}")]
+    return [
+        TextContent(
+            type="text",
+            text=f"Deleted {record_id} from {domain} — {ctx.org.slug}/{ctx.project.slug}",
+        )
+    ]
 
 
 async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
@@ -902,7 +907,7 @@ async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     source_path = expertise_path(ctx.org.slug, ctx.project.slug, source_domain)
     if source_path.exists() and not await read_domain_records(source_path):
         source_path.unlink()
-    msg = f"Moved {record_id} from {source_domain} to {target_domain}"
+    msg = f"Moved {record_id} from {source_domain} to {target_domain} — {ctx.org.slug}/{ctx.project.slug}"
     if incoming_refs:
         msg += (
             f"\n\n{len(incoming_refs)} inbound reference(s) found; ID is preserved "

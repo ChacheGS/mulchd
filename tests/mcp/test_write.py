@@ -112,6 +112,9 @@ async def test_writer_record_returns_confirmation(team, data_path, fake_write_re
     assert len(result) == 1
     assert "convention" in result[0].text
     assert "infra" in result[0].text
+    # Names the org/project so an agent juggling multiple mulchd connections
+    # can catch a wrong-target write.
+    assert "acme/infra" in result[0].text
 
 
 async def test_write_convention_with_evidence(team, data_path, fake_write_record):

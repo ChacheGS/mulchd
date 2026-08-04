@@ -9,6 +9,32 @@ import pytest
 from tests.mcp.conftest import ctx, _jot, _make_fake_delete
 
 
+async def test_delete_confirmation_names_org_and_project(team, data_path, monkeypatch):
+    """The response stamps which org/project the delete happened in, so an
+    agent juggling multiple mulchd connections can catch a wrong-target call."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _delete_record
+
+    t = team
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    record = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="only record",
+        owner="carlos",
+    )
+    monkeypatch.setattr(mcp_tier2, "delete_record", _make_fake_delete(expertise))
+
+    result = await _delete_record(
+        {"record_id": record["id"], "domain": "scratch"}, ctx(t.carlos, t.org, t.infra)
+    )
+    assert "acme/infra" in result[0].text
+
+
 async def test_delete_last_record_removes_domain(team, data_path, monkeypatch):
     """Deleting the last record in a domain removes the domain JSONL automatically."""
     import mulchd.mcp.tier2 as mcp_tier2

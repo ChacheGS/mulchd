@@ -11,6 +11,31 @@ from mulchd.models import RecordEvent, Role
 from tests.mcp.conftest import ctx, _jot, _make_fake_move
 
 
+async def test_move_confirmation_names_org_and_project(team, data_path, monkeypatch):
+    """The response stamps which org/project the move happened in, so an
+    agent juggling multiple mulchd connections can catch a wrong-target call."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _move_record
+
+    t = team
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    record = _jot(
+        data_path, "acme", "infra", "scratch", type="convention",
+        classification="foundational", content="misplaced", owner="carlos",
+    )
+    _jot(
+        data_path, "acme", "infra", "correct", type="convention",
+        classification="foundational", content="existing target record", owner="carlos",
+    )
+    monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
+
+    result = await _move_record(
+        {"record_id": record["id"], "domain": "scratch", "target_domain": "correct"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "acme/infra" in result[0].text
+
+
 async def test_move_relocates_record_between_domains(team, data_path, monkeypatch):
     """A successful move removes the record from the source domain's JSONL and
     appends it to the target domain's."""

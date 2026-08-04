@@ -8,6 +8,44 @@ from mulchd.models import RecordEdit
 from tests.mcp.conftest import ctx, _jot
 
 
+async def test_edit_confirmation_names_org_and_project(team, data_path, fake_write_record):
+    """The response stamps which org/project the edit happened in, so an
+    agent juggling multiple mulchd connections can catch a wrong-target call."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+
+    await mcp_tier2._record_expertise(
+        {
+            "domain": "stamp-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "original",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["stamp-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": record_id, "domain": "stamp-test", "content": "updated"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "acme/infra" in result[0].text
+
+
 async def test_edit_record_snapshots_before_values(team, data_path, fake_write_record):
     """RecordEdit captures the pre-edit values of changed fields."""
     import mulchd.mcp.tier2 as mcp_tier2
