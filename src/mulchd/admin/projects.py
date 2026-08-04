@@ -78,14 +78,12 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
         )
         for use in uses:
             uses_by_invite[use.invite_id].append(use)
-    all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
     response = templates.TemplateResponse(
         request,
         "project_detail.html",
         {
-            "active": "records",  # sidebar Knowledge group, not a specific tab — see note below
+            "active": "records",  # sidebar Project group, not a specific tab — see note below
             "project": project,
-            "all_projects": all_projects,
             "active_tab": "overview",
             "tab_path": "",
             "invites": invites,

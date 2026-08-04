@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 
 from ..domains import list_domain_names, mulch_dir
-from ..models import Project
 from ..mulch import audit_corpus
 from ._shared import require_admin, resolve_project_by_slugs, set_last_project_cookie, templates
 
@@ -28,14 +27,12 @@ async def quality_page(
     report = result.get("report", {})
     suggestions = result.get("suggestions", {}).get("groups", [])
 
-    all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
     response = templates.TemplateResponse(
         request,
         "quality.html",
         {
             "active": "quality",
             "project": project,
-            "all_projects": all_projects,
             "active_tab": "quality",
             "tab_path": "quality",
             "available_domains": available_domains,

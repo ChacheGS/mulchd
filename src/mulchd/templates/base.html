@@ -14,6 +14,7 @@
   .sidebar-logo { color: white; font-weight: 700; font-size: 15px; padding: 2px 8px 12px; letter-spacing: -0.3px; }
   .nav-group-label { color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; padding: 10px 10px 4px; }
   .nav-group-label:first-of-type { padding-top: 2px; }
+  .sidebar-project-switcher { width: calc(100% - 20px); margin: 0 10px 6px; font-size: 11px; padding: 4px 6px; border-radius: 4px; border: 1px solid #334155; background: #0f172a; color: white; cursor: pointer; }
   .nav-link { display: block; padding: 7px 10px; color: #94a3b8; text-decoration: none; border-radius: 4px; font-size: 13px; }
   .nav-link:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
   .nav-link.active { background: rgba(255,255,255,0.12); color: white; }
@@ -112,8 +113,15 @@
     <a href="/admin/memberships" class="nav-link {% if active == 'memberships' %}active{% endif %}">Memberships</a>
     <a href="/admin/project-tokens" class="nav-link {% if active == 'project-tokens' %}active{% endif %}">Tokens</a>
 
-    <div class="nav-group-label">Knowledge</div>
+    <div class="nav-group-label">Project</div>
     {% set _kp = (project.org.slug ~ '/' ~ project.slug) if (project is defined and project) else request.cookies.get('admin_last_project', '') %}
+    {% set _tab_path = tab_path if tab_path is defined else '' %}
+    <select class="sidebar-project-switcher" onchange="if (this.value) location.href = '/admin/p/' + this.value + '/{{ _tab_path }}'">
+      <option value="">— select a project —</option>
+      {% for p in request.state.all_projects %}
+      <option value="{{ p.org.slug }}/{{ p.slug }}" {% if (p.org.slug ~ '/' ~ p.slug) == _kp %}selected{% endif %}>{{ p.org.slug }} / {{ p.slug }}</option>
+      {% endfor %}
+    </select>
     <a href="{{ ('/admin/p/' ~ _kp ~ '/records') if _kp else '/admin/projects?pick_for=records' }}" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
     <a href="{{ ('/admin/p/' ~ _kp ~ '/record-activity') if _kp else '/admin/projects?pick_for=record-activity' }}" class="nav-link {% if active == 'record-activity' %}active{% endif %}">Record activity</a>
     <a href="{{ ('/admin/p/' ~ _kp ~ '/quality') if _kp else '/admin/projects?pick_for=quality' }}" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>

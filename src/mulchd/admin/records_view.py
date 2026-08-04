@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from ..domains import mulch_dir
-from ..models import Project
 from ..mulch import delete_record, edit_record
 from ..records import read_domain_records
 from ._shared import (
@@ -103,7 +102,6 @@ async def records_page(request: Request, org_slug: str, project_slug: str) -> Re
                 domains_data.append({"name": jsonl_file.stem, "records": records})
 
     total_record_count = sum(len(d["records"]) for d in domains_data)
-    all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
 
     response = templates.TemplateResponse(
         request,
@@ -111,7 +109,6 @@ async def records_page(request: Request, org_slug: str, project_slug: str) -> Re
         {
             "active": "records",
             "project": project,
-            "all_projects": all_projects,
             "active_tab": "records",
             "tab_path": "records",
             "domains": domains_data,

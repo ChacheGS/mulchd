@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..domains import mulch_dir
-from ..models import Project, RecordEdit, RecordEvent, RecordMeta
+from ..models import RecordEdit, RecordEvent, RecordMeta
 from ..mulch import restore_record
 from ..records import read_domain_records
 from ._shared import require_admin, resolve_project_by_slugs, set_last_project_cookie, templates
@@ -211,14 +211,12 @@ async def record_activity_page(
             if records:
                 archived_domains.append({"name": jsonl_file.stem, "records": records})
 
-    all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
     response = templates.TemplateResponse(
         request,
         "record_activity.html",
         {
             "active": "record-activity",
             "project": project,
-            "all_projects": all_projects,
             "active_tab": "record-activity",
             "tab_path": "record-activity",
             "events": events,
