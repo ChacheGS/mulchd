@@ -6,7 +6,7 @@ import uuid
 
 import pytest
 
-from mulchd.models import RecordEdit
+from mulchd.models import RecordEdit, Role
 from tests.mcp.conftest import _jot, ctx
 
 
@@ -46,6 +46,85 @@ async def test_edit_confirmation_names_org_and_project(team, data_path, fake_wri
         mcp_tier2.edit_record = orig_edit
 
     assert "acme/infra" in result[0].text
+
+
+async def test_edit_record_warns_on_admin_override(team, data_path, fake_write_record):
+    """An admin editing a record they don't own only succeeded because of the
+    admin bypass — nothing else in the response signals that, so this is the
+    one place an agent (or a human reading the confirmation) finds out."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {
+            "domain": "override-test",
+            "type": "convention",
+            "classification": "foundational",
+            "content": "original",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["override-test"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": record_id, "domain": "override-test", "content": "changed by admin"},
+            ctx(t.jorge, t.org, t.infra, role=Role.ADMIN),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "ADMIN OVERRIDE" in result[0].text
+    assert record_id in result[0].text.split("ADMIN OVERRIDE")[1]
+    assert "carlos" in result[0].text
+
+
+async def test_edit_record_no_admin_override_warning_for_own_record(
+    team, data_path, fake_write_record
+):
+    """An admin editing their own record is ordinary writer behavior, not an
+    override — no warning should appear."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {
+            "domain": "override-test-2",
+            "type": "convention",
+            "classification": "foundational",
+            "content": "original",
+        },
+        ctx(t.jorge, t.org, t.infra, role=Role.ADMIN),
+    )
+    records = await mcp_tier2._read_expertise(
+        {"domains": ["override-test-2"]}, ctx(t.jorge, t.org, t.infra, role=Role.ADMIN)
+    )
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": record_id, "domain": "override-test-2", "content": "still mine"},
+            ctx(t.jorge, t.org, t.infra, role=Role.ADMIN),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "ADMIN OVERRIDE" not in result[0].text
 
 
 async def test_edit_record_snapshots_before_values(team, data_path, fake_write_record):

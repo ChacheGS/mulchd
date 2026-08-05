@@ -143,9 +143,9 @@ trivial details, anything reversible in minutes, or unsettled speculation.
 If two records conflict: prefer foundational over tactical over observational; within a \
 tier, prefer the newer record; if two live records genuinely contradict, flag it to the \
 user and propose a superseding record rather than silently picking one. \
-If a write_* tool returns a SUPERSESSION WARNING or edit_record returns a \
-CLASSIFICATION DOWNGRADE warning, stop immediately and show the user the full \
-warning before doing anything else — do not proceed without explicit acknowledgement.
+If a write_* tool returns a SUPERSESSION WARNING, or edit_record returns a \
+CLASSIFICATION DOWNGRADE or ADMIN OVERRIDE warning, stop immediately and show the user \
+the full warning before doing anything else — do not proceed without explicit acknowledgement.
 
 If a tool call fails or the connection drops mid-session, don't stall retrying — continue \
 the work, keep a list of records you would have written, and show that list to the user \
@@ -250,6 +250,25 @@ async def _get_owned_record(
     if owner_check and ctx.role != Role.ADMIN and record.get("owner") != ctx.user.username:
         raise ValueError(f"you can only {verb} your own records (writer role)")
     return record
+
+
+def _admin_override_warning(ctx: AuthContext, record: Record) -> str:
+    """A writer's own-record check passed only because ctx is admin — the
+    caller isn't the record's owner and a plain writer would have been
+    rejected. Nothing else in edit_record's response signals this, so an
+    admin-privileged agent gets no warning it's doing something a normal
+    writer couldn't."""
+    from ..models import Role
+
+    owner = record.get("owner")
+    if ctx.role != Role.ADMIN or owner == ctx.user.username:
+        return ""
+    return (
+        f"\n\n⚠ ADMIN OVERRIDE: editing {record.get('id', '?')}, owned by {owner}, as admin — "
+        f"a writer without admin could not. For foundational or otherwise significant records, "
+        f"prefer a superseding record instead so the change stays attributable. Stop and flag "
+        f"this to the user before continuing."
+    )
 
 
 def _parse_since(raw: str) -> datetime:
@@ -917,6 +936,7 @@ async def _edit_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
             f"\n\n⚠ OUTCOME TRUST STALE: {len(existing_outcomes)} confirmed outcome(s) describe "
             f"the previous content — they no longer apply to what you just wrote."
         )
+    msg += _admin_override_warning(ctx, record)
     notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
     _fire_notify(domain, ctx, "edit", notif_record)
     return [TextContent(type="text", text=msg)]
