@@ -507,6 +507,11 @@ async def test_write_convention_same_content_different_domain_rejected_gracefull
     assert "Not recorded" in result[0].text
     assert "already exists" in result[0].text
     assert "infra" in result[0].text
+    # The existing record is in a different domain than the one being written
+    # to — edit_record/supersedes would point at someone else's record, so the
+    # remedy must be "rename", not those.
+    assert "rename" in result[0].text.lower()
+    assert "edit_record to update it, or add supersedes" not in result[0].text
 
     domains = await list_available_domains(t.org.slug, t.infra.slug)
     assert not any(d["name"] == "security" for d in domains)

@@ -538,13 +538,30 @@ async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[Text
     for existing in project_records:
         if existing.get("type") == rtype and existing.get(dedup_field) == record.get(dedup_field):
             existing_domain = existing.get("_domain", domain)
+            existing_id = existing.get("id", "?")
+            if existing_domain == domain:
+                remedy = (
+                    "Use edit_record to update it, or add supersedes if this is meant to replace it."
+                )
+            else:
+                # This match is in a different domain than the one being written to —
+                # edit_record/supersedes would point the caller at someone else's
+                # record. The real fix is a different dedup_field value: record IDs
+                # are derived from type + dedup_field with no domain in the mix (see
+                # the comment above this loop), so the same value in another domain
+                # isn't an independent record here, it's the identical ID collided.
+                remedy = (
+                    f"Record identity comes from {dedup_field}, not domain, so this name is "
+                    f"taken project-wide — rename this one to record it here. If you actually "
+                    f"mean to update or replace the existing record, use edit_record or "
+                    f"move_record on {existing_id} in {existing_domain} instead."
+                )
             return [
                 TextContent(
                     type="text",
                     text=(
                         f"Not recorded: a {rtype} with the same {dedup_field} already exists "
-                        f"({existing.get('id', '?')}) in {existing_domain}. Use edit_record to "
-                        f"update it, or add supersedes if this is meant to replace it."
+                        f"({existing_id}) in {existing_domain}. {remedy}"
                     ),
                 )
             ]
