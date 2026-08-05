@@ -382,6 +382,9 @@ async def _read_expertise(
             else []
         )
         meta_by_id = {m["record_id"]: m for m in meta_rows}
+        for r in page:
+            m = meta_by_id.get(r.get("id", ""))
+            r["_session_id"] = str(m["session_id"]) if m else None
         formatted = format_recent(page, meta_by_id)
     else:
         formatted = format_records(page)

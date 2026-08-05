@@ -158,3 +158,65 @@ async def test_read_records_since_does_not_leak_attribution_across_projects_with
     text = text_content[0].text
     assert "Carlos G." in text
     assert "Ana R." not in text
+
+
+async def test_read_records_since_structured_output_carries_session_grouping_key(
+    team, data_path
+):
+    """The tool description promises since= results "grouped by the session
+    that wrote them" — the text output delivers that via "## Session —" \
+    headers, but structured_content's records list is flat with no field a
+    caller could group by itself. Two distinct RecordMeta session_ids must
+    show up as two distinct _session_id values on the matching records."""
+    t = team
+    now = datetime.now(timezone.utc)
+    session_a = uuid.uuid4()
+    session_b = uuid.uuid4()
+
+    record_a = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="from session A",
+        owner="carlos",
+        recorded_at=now,
+    )
+    record_b = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="from session B",
+        owner="jorge",
+        recorded_at=now,
+    )
+    await RecordMeta.create(
+        record_id=record_a["id"],
+        project=t.infra,
+        domain="infra",
+        author=t.carlos,
+        session_id=session_a,
+        client="test",
+    )
+    await RecordMeta.create(
+        record_id=record_b["id"],
+        project=t.infra,
+        domain="infra",
+        author=t.jorge,
+        session_id=session_b,
+        client="test",
+    )
+
+    _, structured = await _read_expertise(
+        {"since": (now - timedelta(seconds=1)).isoformat(), "domains": ["infra"]},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    by_id = {r["id"]: r for r in structured["records"]}
+    assert by_id[record_a["id"]]["_session_id"] == str(session_a)
+    assert by_id[record_b["id"]]["_session_id"] == str(session_b)
+    assert by_id[record_a["id"]]["_session_id"] != by_id[record_b["id"]]["_session_id"]
