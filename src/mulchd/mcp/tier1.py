@@ -1,13 +1,16 @@
-from typing import Any
-
-from mcp.server import Server
+from mcp.server import Server, ServerRequestContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import TextContent, Tool
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ContentBlock,
+    ListToolsResult,
+    PaginatedRequestParams,
+    TextContent,
+    Tool,
+)
 
 from ..config import settings
-
-tier1_server = Server("mulchd")
-tier1_manager = StreamableHTTPSessionManager(app=tier1_server, stateless=True)
 
 TIER1_TOOLS = [
     Tool(
@@ -16,17 +19,18 @@ TIER1_TOOLS = [
             "Get instructions for setting up mulchd with your MCP client. "
             "Call this if you have no other mulchd tools available."
         ),
-        inputSchema={"type": "object", "properties": {}},
+        input_schema={"type": "object", "properties": {}},
     ),
 ]
 
 
-@tier1_server.list_tools()
-async def list_tools() -> list[Tool]:
-    return TIER1_TOOLS
+async def _list_tools(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListToolsResult:
+    return ListToolsResult(tools=TIER1_TOOLS)
 
 
-async def _get_setup_instructions() -> list[TextContent]:
+async def _get_setup_instructions() -> list[ContentBlock]:
     base_url = settings.resolved_base_url
     lines = [
         f"mulchd server: {base_url}",
@@ -46,8 +50,19 @@ async def _get_setup_instructions() -> list[TextContent]:
     return [TextContent(type="text", text="\n".join(lines))]
 
 
-@tier1_server.call_tool()
-async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-    if name == "get_setup_instructions":
-        return await _get_setup_instructions()
-    raise ValueError(f"Unknown tool: {name}")
+async def _call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
+    if params.name == "get_setup_instructions":
+        content = await _get_setup_instructions()
+        return CallToolResult(content=content, is_error=False)
+    return CallToolResult(
+        content=[TextContent(type="text", text=f"Unknown tool: {params.name}")],
+        is_error=True,
+    )
+
+
+tier1_server = Server(
+    "mulchd",
+    on_list_tools=_list_tools,
+    on_call_tool=_call_tool,
+)
+tier1_manager = StreamableHTTPSessionManager(app=tier1_server, stateless=True)

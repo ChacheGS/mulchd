@@ -16,11 +16,11 @@ async def test_list_tools_hides_mutating_tools_from_reader(team, data_path):
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
     try:
-        tools = await list_tools()
+        result = await list_tools(None, None)
     finally:
         auth_ctx.reset(token)
 
-    names = {tool.name for tool in tools}
+    names = {tool.name for tool in result.tools}
     assert names == {
         "read_records",
         "search_records",
@@ -36,11 +36,11 @@ async def test_list_tools_shows_everything_to_writer(team, data_path):
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.WRITER))
     try:
-        tools = await list_tools()
+        result = await list_tools(None, None)
     finally:
         auth_ctx.reset(token)
 
-    assert {tool.name for tool in tools} == {tool.name for tool in TIER2_TOOLS}
+    assert {tool.name for tool in result.tools} == {tool.name for tool in TIER2_TOOLS}
 
 
 async def test_list_tools_shows_everything_to_admin(team, data_path):
@@ -49,33 +49,40 @@ async def test_list_tools_shows_everything_to_admin(team, data_path):
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.ADMIN))
     try:
-        tools = await list_tools()
+        result = await list_tools(None, None)
     finally:
         auth_ctx.reset(token)
 
-    assert {tool.name for tool in tools} == {tool.name for tool in TIER2_TOOLS}
+    assert {tool.name for tool in result.tools} == {tool.name for tool in TIER2_TOOLS}
 
 
 async def test_list_tools_raises_without_auth_context():
     from mulchd.mcp.tier2 import list_tools
 
     with pytest.raises(ValueError, match="No auth context"):
-        await list_tools()
+        await list_tools(None, None)
 
 
 async def test_call_tool_still_rejects_reader_for_hidden_tool(team, data_path):
     """The advertised list changing must not weaken the actual enforcement —
     a READER token calling a hidden tool directly still gets the existing
     specific rejection message."""
+    from mcp.types import CallToolRequestParams
+
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
     try:
-        with pytest.raises(ValueError, match="reader role cannot edit records"):
-            await call_tool(
-                "edit_record", {"record_id": "mx-whatever", "domain": "infra", "content": "x"}
-            )
+        result = await call_tool(
+            None,
+            CallToolRequestParams(
+                name="edit_record",
+                arguments={"record_id": "mx-whatever", "domain": "infra", "content": "x"},
+            ),
+        )
     finally:
         auth_ctx.reset(token)
+    assert result.is_error is True
+    assert "reader role cannot edit records" in result.content[0].text
 
 
 async def test_record_events_written_for_write_edit_delete(team, data_path, fake_write_record):

@@ -179,8 +179,7 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
     """The mulchd://domain/{name} resource endpoint renders record content
     through the same format_records path as read_records — it must get the
     same untrusted-data boundary, not just the tool-call entry points."""
-    from pydantic import AnyUrl
-
+    from mcp.types import ReadResourceRequestParams
     from mulchd.mcp.tier2 import read_resource
 
     t = team
@@ -196,10 +195,10 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
     )
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        contents = await read_resource(AnyUrl("mulchd://domain/infra"))
+        result = await read_resource(None, ReadResourceRequestParams(uri="mulchd://domain/infra"))
     finally:
         auth_ctx.reset(token)
-    text = contents[0].content
+    text = result.contents[0].text
     assert isinstance(text, str)
     assert "<record_content>" in text
     assert "</record_content>" in text
@@ -207,17 +206,16 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
 
 
 async def test_read_resource_no_wrapping_when_no_records(team, data_path):
-    from pydantic import AnyUrl
-
+    from mcp.types import ReadResourceRequestParams
     from mulchd.mcp.tier2 import read_resource
 
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        contents = await read_resource(AnyUrl("mulchd://domain/infra"))
+        result = await read_resource(None, ReadResourceRequestParams(uri="mulchd://domain/infra"))
     finally:
         auth_ctx.reset(token)
-    text = contents[0].content
+    text = result.contents[0].text
     assert isinstance(text, str)
     assert "No records in domain" in text
     assert "<record_content>" not in text

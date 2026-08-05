@@ -150,7 +150,7 @@ def test_write_decision_schema_exposes_date():
 
     write_tool = next(t for t in TIER2_TOOLS if t.name == "write_decision")
     assert (
-        "date" in write_tool.inputSchema["properties"]
+        "date" in write_tool.input_schema["properties"]
     ), "write_decision must include 'date' to match what get_record_schema advertises"
 
 
@@ -175,7 +175,7 @@ def test_write_tools_declare_type_specific_required_fields_in_schema():
 
     for tool_name, fields in expected_content_fields.items():
         tool = next(t for t in TIER2_TOOLS if t.name == tool_name)
-        required = set(tool.inputSchema["required"])
+        required = set(tool.input_schema["required"])
         assert (
             fields <= required
         ), f"{tool_name} must declare {fields} as required in its JSON schema, got {required}"
@@ -189,7 +189,7 @@ def test_search_records_filter_param_named_owner_not_author():
     from mulchd.mcp.tier2 import TIER2_TOOLS
 
     search_tool = next(t for t in TIER2_TOOLS if t.name == "search_records")
-    props = search_tool.inputSchema["properties"]
+    props = search_tool.input_schema["properties"]
     assert "owner" in props, "search_records filter parameter should be named 'owner'"
     assert (
         "author" not in props

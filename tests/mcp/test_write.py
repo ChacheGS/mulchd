@@ -25,7 +25,7 @@ def test_edit_record_schema_does_not_advertise_evidence():
     """evidence is write-only (set at record creation, not editable later) —
     edit_record's schema must not promise a field its handler silently drops."""
     edit_record = _tool_by_name("edit_record")
-    assert "evidence" not in edit_record.inputSchema["properties"]
+    assert "evidence" not in edit_record.input_schema["properties"]
 
 
 def test_write_tools_schemas_advertise_evidence():
@@ -38,7 +38,7 @@ def test_write_tools_schemas_advertise_evidence():
         "write_guide",
     ):
         tool = _tool_by_name(name)
-        assert "evidence" in tool.inputSchema["properties"], name
+        assert "evidence" in tool.input_schema["properties"], name
 
 
 def test_write_convention_schema_rejects_unknown_evidence_field():
@@ -58,7 +58,7 @@ def test_write_convention_schema_rejects_unknown_evidence_field():
                 "content": "x",
                 "evidence": {"not_a_real_field": "oops"},
             },
-            schema=tool.inputSchema,
+            schema=tool.input_schema,
         )
 
 
@@ -192,22 +192,27 @@ async def test_write_record_evidence_is_optional(team, data_path, fake_write_rec
 async def test_write_decision_dispatch_creates_decision_record(team, data_path, fake_write_record):
     """The write_decision tool call must inject type='decision' before reaching
     _record_expertise, without the caller having to pass type explicitly."""
+    from mcp.types import CallToolRequestParams
+
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         result = await call_tool(
-            "write_decision",
-            {
-                "domain": "infra",
-                "classification": "tactical",
-                "title": "Use IMDSv2",
-                "rationale": "Blocks SSRF-based credential theft",
-            },
+            None,
+            CallToolRequestParams(
+                name="write_decision",
+                arguments={
+                    "domain": "infra",
+                    "classification": "tactical",
+                    "title": "Use IMDSv2",
+                    "rationale": "Blocks SSRF-based credential theft",
+                },
+            ),
         )
     finally:
         auth_ctx.reset(token)
-    assert isinstance(result, list)
-    assert "decision" in result[0].text
+    assert result.is_error is False
+    assert "decision" in result.content[0].text
 
     text_content, _ = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     assert "IMDSv2" in text_content[0].text
@@ -219,16 +224,22 @@ async def test_write_convention_dispatch_rejects_missing_content(
     """write_convention must still enforce its required field via the shared
     validation in _record_expertise even though the schema itself has no
     'type' property for the caller to get wrong."""
+    from mcp.types import CallToolRequestParams
+
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        with pytest.raises(ValueError, match="requires: content"):
-            await call_tool(
-                "write_convention",
-                {"domain": "infra", "classification": "tactical"},
-            )
+        result = await call_tool(
+            None,
+            CallToolRequestParams(
+                name="write_convention",
+                arguments={"domain": "infra", "classification": "tactical"},
+            ),
+        )
     finally:
         auth_ctx.reset(token)
+    assert result.is_error is True
+    assert "requires: content" in result.content[0].text
 
 
 async def test_write_record_validates_required_fields(team, data_path, fake_write_record):

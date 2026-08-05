@@ -24,51 +24,51 @@ def _session(name: str):
 def test_register_and_lookup():
     r = SubscriptionRegistry()
     s1, s2 = _session("a"), _session("b")
-    r.register(s1, "arch")
-    r.register(s2, "arch")
-    assert r.subscribers_for("arch", exclude=s1) == {s2}
-    assert r.subscribers_for("arch", exclude=s2) == {s1}
+    r.register("s1", s1, "arch")
+    r.register("s2", s2, "arch")
+    assert r.subscribers_for("arch", exclude="s1") == {"s2": s2}
+    assert r.subscribers_for("arch", exclude="s2") == {"s1": s1}
 
 
 def test_exclude_self_only():
     r = SubscriptionRegistry()
     s = _session("a")
-    r.register(s, "arch")
-    assert r.subscribers_for("arch", exclude=s) == set()
+    r.register("s1", s, "arch")
+    assert r.subscribers_for("arch", exclude="s1") == {}
 
 
 def test_empty_domain_returns_empty_set():
     r = SubscriptionRegistry()
-    assert r.subscribers_for("nonexistent", exclude=None) == set()
+    assert r.subscribers_for("nonexistent", exclude="") == {}
 
 
 def test_unregister_removes_from_all_domains():
     r = SubscriptionRegistry()
     s = _session("a")
-    r.register(s, "arch")
-    r.register(s, "conventions")
-    r.unregister_session(s)
-    assert r.subscribers_for("arch", exclude=None) == set()
-    assert r.subscribers_for("conventions", exclude=None) == set()
+    r.register("s1", s, "arch")
+    r.register("s1", s, "conventions")
+    r.unregister_session("s1")
+    assert r.subscribers_for("arch", exclude="") == {}
+    assert r.subscribers_for("conventions", exclude="") == {}
 
 
 def test_multiple_domains_independent():
     r = SubscriptionRegistry()
     s1, s2 = _session("a"), _session("b")
-    r.register(s1, "arch")
-    r.register(s2, "conventions")
-    assert r.subscribers_for("arch", exclude=None) == {s1}
-    assert r.subscribers_for("conventions", exclude=None) == {s2}
+    r.register("s1", s1, "arch")
+    r.register("s2", s2, "conventions")
+    assert r.subscribers_for("arch", exclude="") == {"s1": s1}
+    assert r.subscribers_for("conventions", exclude="") == {"s2": s2}
 
 
 def test_unregister_domain_specific():
     r = SubscriptionRegistry()
     s = _session("a")
-    r.register(s, "arch")
-    r.register(s, "conventions")
-    r.unregister(s, "arch")
-    assert r.subscribers_for("arch", exclude=None) == set()
-    assert r.subscribers_for("conventions", exclude=None) == {s}
+    r.register("s1", s, "arch")
+    r.register("s1", s, "conventions")
+    r.unregister("s1", "arch")
+    assert r.subscribers_for("arch", exclude="") == {}
+    assert r.subscribers_for("conventions", exclude="") == {"s1": s}
 
 
 @pytest.mark.asyncio
@@ -83,8 +83,8 @@ async def test_notify_domain_sends_to_subscribers(monkeypatch, db):
     fake_registry = SubscriptionRegistry()
     subscriber = MagicMock()
     subscriber.send_resource_updated = AsyncMock()
-    actor_session = object()
-    fake_registry.register(subscriber, "arch")
+    actor_session_id = "s-actor"
+    fake_registry.register("s-subscriber", subscriber, "arch")
 
     monkeypatch.setattr(tier2_module, "registry", fake_registry)
 
@@ -99,7 +99,7 @@ async def test_notify_domain_sends_to_subscribers(monkeypatch, db):
         "title": "Always validate at the boundary",
         "recorded_at": "2026-07-07T10:00:00Z",
     }
-    await _notify_domain("arch", actor_session, ctx, "write", record)
+    await _notify_domain("arch", actor_session_id, ctx, "write", record)
 
     subscriber.send_resource_updated.assert_called_once()
     called_uri = str(subscriber.send_resource_updated.call_args[0][0])
@@ -120,7 +120,7 @@ async def test_notify_domain_skips_actor_session(monkeypatch, db):
     fake_registry = SubscriptionRegistry()
     actor_session = MagicMock()
     actor_session.send_resource_updated = AsyncMock()
-    fake_registry.register(actor_session, "arch")
+    fake_registry.register("s-actor", actor_session, "arch")
 
     monkeypatch.setattr(tier2_module, "registry", fake_registry)
 
@@ -130,7 +130,7 @@ async def test_notify_domain_skips_actor_session(monkeypatch, db):
     ctx.project.slug = "p"
 
     record = {"type": "convention", "classification": "tactical", "content": "x"}
-    await _notify_domain("arch", actor_session, ctx, "write", record)
+    await _notify_domain("arch", "s-actor", ctx, "write", record)
 
     actor_session.send_resource_updated.assert_not_called()
 
@@ -147,8 +147,8 @@ async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
     fake_registry = SubscriptionRegistry()
     dead_session = MagicMock()
     dead_session.send_resource_updated = AsyncMock(side_effect=Exception("connection closed"))
-    actor_session = object()
-    fake_registry.register(dead_session, "arch")
+    actor_session_id = "s-actor"
+    fake_registry.register("s-dead", dead_session, "arch")
 
     monkeypatch.setattr(tier2_module, "registry", fake_registry)
 
@@ -158,9 +158,9 @@ async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
     ctx.project.slug = "p"
 
     record = {"type": "pattern", "classification": "observational", "name": "foo"}
-    await _notify_domain("arch", actor_session, ctx, "write", record)
+    await _notify_domain("arch", actor_session_id, ctx, "write", record)
 
-    assert dead_session not in fake_registry.subscribers_for("arch", exclude=None)
+    assert fake_registry.subscribers_for("arch", exclude="") == {}
 
 
 @pytest.mark.asyncio
@@ -180,14 +180,8 @@ async def test_write_record_dispatches_notify(notify_data_path, monkeypatch, db)
 
     ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
 
-    fake_ctx = MagicMock()
-    fake_ctx.session = object()
-
     dispatched = []
 
-    monkeypatch.setattr(
-        type(tier2_module.tier2_server), "request_context", property(lambda self: fake_ctx)
-    )
     monkeypatch.setattr(
         tier2_module,
         "write_record",
@@ -246,14 +240,8 @@ async def test_edit_record_dispatches_notify(notify_data_path, monkeypatch, db):
 
     ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
 
-    fake_ctx = MagicMock()
-    fake_ctx.session = object()
-
     dispatched = []
 
-    monkeypatch.setattr(
-        type(tier2_module.tier2_server), "request_context", property(lambda self: fake_ctx)
-    )
     monkeypatch.setattr(
         tier2_module,
         "find_record",
@@ -309,14 +297,8 @@ async def test_delete_record_dispatches_notify(notify_data_path, monkeypatch, db
 
     ctx = AuthContext(user=user, project=project, org=org, role=Role.WRITER)
 
-    fake_ctx = MagicMock()
-    fake_ctx.session = object()
-
     dispatched = []
 
-    monkeypatch.setattr(
-        type(tier2_module.tier2_server), "request_context", property(lambda self: fake_ctx)
-    )
     monkeypatch.setattr(
         tier2_module,
         "find_record",

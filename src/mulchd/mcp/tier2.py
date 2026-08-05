@@ -4,7 +4,6 @@ import difflib
 import json
 import logging
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 from uuid import UUID, uuid7
@@ -13,14 +12,28 @@ _log = logging.getLogger("mulchd.mcp")
 
 import urllib.parse
 
-from pydantic import AnyUrl
 from tortoise.exceptions import IntegrityError
 
-from mcp.server import Server
-from mcp.server.lowlevel.helper_types import ReadResourceContents
-from mcp.server.lowlevel.server import NotificationOptions
+from mcp.server import Server, ServerRequestContext
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import Resource, ResourceTemplate, TextContent, Tool
+from mcp.types import (
+    CallToolRequestParams,
+    CallToolResult,
+    ContentBlock,
+    EmptyResult,
+    ListResourcesResult,
+    ListResourceTemplatesResult,
+    ListToolsResult,
+    PaginatedRequestParams,
+    ReadResourceRequestParams,
+    ReadResourceResult,
+    Resource,
+    ResourceTemplate,
+    SubscribeRequestParams,
+    TextContent,
+    TextResourceContents,
+    UnsubscribeRequestParams,
+)
 
 from ..auth import AuthContext
 from ..domains import (
@@ -43,7 +56,7 @@ from ..mulch import (
     write_record,
 )
 from ..records import find_record, read_domain_records
-from .context import auth_ctx
+from .context import auth_ctx, session_id_ctx
 from .formatting import (
     _format_outcomes_tag,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_outcomes.py
 )
@@ -164,13 +177,6 @@ since=<session_start_timestamp>) once for the domains you're relying on before p
 rather than assuming silence means nothing changed. Don't poll on every turn — only before \
 actions that would be costly to get wrong.\
 """
-
-tier2_server = Server("mulchd", instructions=SESSION_WORKFLOW)
-tier2_manager = StreamableHTTPSessionManager(
-    app=tier2_server,
-    stateless=False,
-    session_idle_timeout=1800,
-)
 
 # ---------------------------------------------------------------------------
 # Session tracking
@@ -368,13 +374,13 @@ async def _read_expertise(
 
 async def _notify_domain(
     domain: str,
-    actor_session: object,
+    actor_session_id: str | None,
     ctx: AuthContext,
     action: str,
     record: Record,
 ) -> None:
     """Fan out notifications/resources/updated to all subscribed sessions except the actor."""
-    subscribers = registry.subscribers_for(domain, exclude=actor_session)
+    subscribers = registry.subscribers_for(domain, exclude=actor_session_id or "")
     _log.debug(
         "_notify_domain: domain=%s action=%s subscribers=%d", domain, action, len(subscribers)
     )
@@ -395,27 +401,24 @@ async def _notify_domain(
             "at": record.get("recorded_at", ""),
         }
     )
-    uri = AnyUrl(f"mulchd://{ctx.org.slug}/{ctx.project.slug}/{domain}?{params}")
-    dead: set[object] = set()
-    for session in list(subscribers):
+    uri = f"mulchd://{ctx.org.slug}/{ctx.project.slug}/{domain}?{params}"
+    dead: set[str] = set()
+    for session_id, session in list(subscribers.items()):
         try:
             await session.send_resource_updated(uri)
-            _log.debug("_notify_domain: sent to session %s", id(session))
+            _log.debug("_notify_domain: sent to session %s", session_id)
         except Exception as exc:
-            _log.debug("_notify_domain: dead session %s (%s)", id(session), exc)
-            dead.add(session)
-    for s in dead:
-        registry.unregister_session(s)
+            _log.debug("_notify_domain: dead session %s (%s)", session_id, exc)
+            dead.add(session_id)
+    for sid in dead:
+        registry.unregister_session(sid)
 
 
 def _fire_notify(domain: str, ctx: AuthContext, action: str, record: Record) -> None:
     """Schedule _notify_domain as a tracked background task. A no-op outside a
-    live MCP request (request_context raises LookupError), e.g. in tests."""
-    try:
-        req_ctx = tier2_server.request_context
-    except LookupError:
-        return
-    _t = asyncio.create_task(_notify_domain(domain, req_ctx.session, ctx, action, record))
+    live MCP request (no session id was captured for this call), e.g. in tests."""
+    session_id = session_id_ctx.get()
+    _t = asyncio.create_task(_notify_domain(domain, session_id, ctx, action, record))
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
 
@@ -950,7 +953,11 @@ async def _move_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
     return [TextContent(type="text", text=msg)]
 
 
-async def _record_tool_call(name: str, ctx: AuthContext) -> None:
+async def _record_tool_call(name: str, ctx: AuthContext, protocol_version: str) -> None:
+    # protocol_version is accepted here so this task's call_tool call site (which
+    # already reads ctx.protocol_version off the SDK's ServerRequestContext) has a
+    # compatible target — it isn't persisted yet. Task 2 adds the ToolCall.protocol_version
+    # column/migration and wires this parameter through to ToolCall.create(...).
     await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=ctx.client)
 
 
@@ -959,189 +966,199 @@ async def _record_tool_call(name: str, ctx: AuthContext) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _list_tools() -> list[Tool]:
+async def list_tools(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListToolsResult:
     from ..models import Role
 
-    ctx = auth_ctx.get()
-    if ctx is None:
+    auth = auth_ctx.get()
+    if auth is None:
         raise ValueError("No auth context — use a project token for this connection")
-    if ctx.role == Role.READER:
-        return [t for t in TIER2_TOOLS if t.annotations and t.annotations.readOnlyHint]
-    return TIER2_TOOLS
+    if auth.role == Role.READER:
+        tools = [t for t in TIER2_TOOLS if t.annotations and t.annotations.read_only_hint]
+    else:
+        tools = TIER2_TOOLS
+    return ListToolsResult(tools=tools)
 
 
-# Server.list_tools()'s decorator parameter type is a union of the zero-arg and
-# one-arg (raw Request) handler shapes; since it returns `func` unchanged rather
-# than narrowing via a TypeVar, applying it inline would widen the decorated
-# name's inferred type to that union, and every direct caller of list_tools()
-# in this codebase (which all use the zero-arg form) would get a spurious
-# "expected 1 more positional argument". Applying the decorator for its
-# registration side effect on the private name, then exposing the original
-# function under an explicit annotation, keeps the public symbol's real type.
-tier2_server.list_tools()(_list_tools)
-list_tools: Callable[[], Awaitable[list[Tool]]] = _list_tools
-
-
-async def _call_tool(
-    name: str, arguments: dict[str, Any] | None
+async def _dispatch_call_tool(
+    name: str, args: dict[str, Any], auth: AuthContext
 ) -> list[TextContent] | tuple[list[TextContent], dict[str, Any]]:
-    args = arguments or {}
-    ctx = auth_ctx.get()
-    if ctx is None:
-        raise ValueError("No auth context — use a project token for this connection")
-    _t = asyncio.create_task(_record_tool_call(name, ctx))
-    _background_tasks.add(_t)
-    _t.add_done_callback(_background_tasks.discard)
     match name:
         case "read_records":
-            return await _read_expertise(args, ctx)
+            return await _read_expertise(args, auth)
         case "write_convention":
-            return await _record_expertise({**args, "type": "convention"}, ctx)
+            return await _record_expertise({**args, "type": "convention"}, auth)
         case "write_decision":
-            return await _record_expertise({**args, "type": "decision"}, ctx)
+            return await _record_expertise({**args, "type": "decision"}, auth)
         case "write_failure":
-            return await _record_expertise({**args, "type": "failure"}, ctx)
+            return await _record_expertise({**args, "type": "failure"}, auth)
         case "write_pattern":
-            return await _record_expertise({**args, "type": "pattern"}, ctx)
+            return await _record_expertise({**args, "type": "pattern"}, auth)
         case "write_reference":
-            return await _record_expertise({**args, "type": "reference"}, ctx)
+            return await _record_expertise({**args, "type": "reference"}, auth)
         case "write_guide":
-            return await _record_expertise({**args, "type": "guide"}, ctx)
+            return await _record_expertise({**args, "type": "guide"}, auth)
         case "search_records":
-            return await _search_expertise(args, ctx)
+            return await _search_expertise(args, auth)
         case "list_domains":
-            return await _list_domains(ctx)
+            return await _list_domains(auth)
         case "get_record_schema":
             return await _get_record_schema(args)
         case "get_record_history":
-            return await _get_record_history(args, ctx)
+            return await _get_record_history(args, auth)
         case "record_outcome":
-            return await _record_outcome(args, ctx)
+            return await _record_outcome(args, auth)
         case "edit_record":
-            return await _edit_record(args, ctx)
+            return await _edit_record(args, auth)
         case "delete_record":
-            return await _delete_record(args, ctx)
+            return await _delete_record(args, auth)
         case "move_record":
-            return await _move_record(args, ctx)
+            return await _move_record(args, auth)
         case _:
             raise ValueError(f"Unknown tool: {name}")
 
 
-# See list_tools' comment above for why this is registered on a private name
-# and re-exposed with an explicit annotation rather than decorated inline.
-tier2_server.call_tool()(_call_tool)
-call_tool: Callable[
-    [str, dict[str, Any] | None],
-    Awaitable[list[TextContent] | tuple[list[TextContent], dict[str, Any]]],
-] = _call_tool
+async def call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
+    from ..mulch import MulchError
+
+    args = params.arguments or {}
+    auth = auth_ctx.get()
+    if auth is None:
+        raise ValueError("No auth context — use a project token for this connection")
+    request = getattr(ctx, "request", None)
+    session_id_ctx.set(request.headers.get("mcp-session-id") if request is not None else None)
+    protocol_version = getattr(ctx, "protocol_version", "unknown")
+    _t = asyncio.create_task(_record_tool_call(params.name, auth, protocol_version))
+    _background_tasks.add(_t)
+    _t.add_done_callback(_background_tasks.discard)
+    try:
+        result = await _dispatch_call_tool(params.name, args, auth)
+    except (ValueError, MulchError) as e:
+        return CallToolResult(
+            content=[TextContent(type="text", text=str(e))],
+            is_error=True,
+        )
+    if isinstance(result, tuple):
+        content, structured = result
+        return CallToolResult(
+            content=cast("list[ContentBlock]", content),
+            structured_content=structured,
+            is_error=False,
+        )
+    return CallToolResult(content=cast("list[ContentBlock]", result), is_error=False)
 
 
-@tier2_server.list_resources()
-async def list_resources() -> list[Resource]:
-    ctx = auth_ctx.get()
-    if ctx is None:
-        return []
-    domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
-    return [
+async def list_resources(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListResourcesResult:
+    auth = auth_ctx.get()
+    if auth is None:
+        return ListResourcesResult(resources=[])
+    domains = await list_available_domains(auth.org.slug, auth.project.slug)
+    resources = [
         Resource(
             uri=d["uri"],
             name=d["name"],
             description=d.get("description", ""),
-            mimeType="text/plain",
+            mime_type="text/plain",
         )
         for d in domains
     ]
+    return ListResourcesResult(resources=resources)
 
 
-@tier2_server.list_resource_templates()
-async def list_resource_templates() -> list[ResourceTemplate]:
-    return [
-        ResourceTemplate(
-            uriTemplate="mulchd://domain/{name}",
-            name="Domain records",
-            description="All expertise records in a domain. Substitute {name} with the domain name.",
-            mimeType="text/plain",
-        )
-    ]
+async def list_resource_templates(
+    ctx: ServerRequestContext, params: PaginatedRequestParams | None
+) -> ListResourceTemplatesResult:
+    return ListResourceTemplatesResult(
+        resource_templates=[
+            ResourceTemplate(
+                uri_template="mulchd://domain/{name}",
+                name="Domain records",
+                description="All expertise records in a domain. Substitute {name} with the domain name.",
+                mime_type="text/plain",
+            )
+        ]
+    )
 
 
-async def _read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
-    ctx = auth_ctx.get()
-    if ctx is None:
+async def read_resource(
+    ctx: ServerRequestContext, params: ReadResourceRequestParams
+) -> ReadResourceResult:
+    auth = auth_ctx.get()
+    if auth is None:
         raise ValueError("No auth context")
-    uri_str = str(uri)
-    if uri_str.startswith("mulchd://domain/"):
-        name = uri_str[len("mulchd://domain/") :]
-        records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
+    uri = params.uri
+    if uri.startswith("mulchd://domain/"):
+        name = uri[len("mulchd://domain/") :]
+        records = await read_domain_records(expertise_path(auth.org.slug, auth.project.slug, name))
         for r in records:
             r["_domain"] = name
-        await mark_superseded(records, ctx.org.slug, ctx.project.slug)
-        await mark_related_to(records, ctx.org.slug, ctx.project.slug)
+        await mark_superseded(records, auth.org.slug, auth.project.slug)
+        await mark_related_to(records, auth.org.slug, auth.project.slug)
         if records:
             text = wrap_untrusted(format_records(records))
         else:
             text = f"No records in domain '{name}' yet."
-        return [ReadResourceContents(content=text, mime_type="text/plain")]
-    raise ValueError(f"Unknown resource URI: {uri_str}")
+        return ReadResourceResult(
+            contents=[TextResourceContents(uri=uri, text=text, mime_type="text/plain")]
+        )
+    raise ValueError(f"Unknown resource URI: {uri}")
 
 
-# See list_tools' comment above for why this is registered on a private name
-# and re-exposed with an explicit annotation rather than decorated inline.
-tier2_server.read_resource()(_read_resource)
-read_resource: Callable[[AnyUrl], Awaitable[list[ReadResourceContents]]] = _read_resource
-
-
-@tier2_server.subscribe_resource()
-async def subscribe_resource(uri: AnyUrl) -> None:
-    _log.debug("subscribe_resource: uri=%s", uri)
-    ctx = auth_ctx.get()
-    if ctx is None:
+async def subscribe_resource(
+    ctx: ServerRequestContext, params: SubscribeRequestParams
+) -> EmptyResult:
+    _log.debug("subscribe_resource: uri=%s", params.uri)
+    auth = auth_ctx.get()
+    if auth is None:
         _log.debug("subscribe_resource: no auth context, skipping")
-        return
-    uri_str = str(uri)
-    if uri_str.startswith("mulchd://domain/"):
-        domain = uri_str[len("mulchd://domain/") :]
-        try:
-            session = tier2_server.request_context.session
-            registry.register(session, domain)
+        return EmptyResult()
+    if params.uri.startswith("mulchd://domain/"):
+        domain = params.uri[len("mulchd://domain/") :]
+        session_id = ctx.request.headers.get("mcp-session-id") if ctx.request is not None else None
+        if session_id is not None:
+            registry.register(session_id, ctx.session, domain)
             _log.debug(
-                "subscribe_resource: registered session %s for domain %s", id(session), domain
+                "subscribe_resource: registered session %s for domain %s", session_id, domain
             )
-        except LookupError as exc:
-            _log.debug("subscribe_resource: no request context (%s)", exc)
+        else:
+            _log.debug("subscribe_resource: no mcp-session-id header, skipping")
+    return EmptyResult()
 
 
-@tier2_server.unsubscribe_resource()
-async def unsubscribe_resource(uri: AnyUrl) -> None:
-    _log.debug("unsubscribe_resource: uri=%s", uri)
-    ctx = auth_ctx.get()
-    if ctx is None:
-        return
-    uri_str = str(uri)
-    if uri_str.startswith("mulchd://domain/"):
-        domain = uri_str[len("mulchd://domain/") :]
-        try:
-            session = tier2_server.request_context.session
-            registry.unregister(session, domain)
+async def unsubscribe_resource(
+    ctx: ServerRequestContext, params: UnsubscribeRequestParams
+) -> EmptyResult:
+    _log.debug("unsubscribe_resource: uri=%s", params.uri)
+    auth = auth_ctx.get()
+    if auth is None:
+        return EmptyResult()
+    if params.uri.startswith("mulchd://domain/"):
+        domain = params.uri[len("mulchd://domain/") :]
+        session_id = ctx.request.headers.get("mcp-session-id") if ctx.request is not None else None
+        if session_id is not None:
+            registry.unregister(session_id, domain)
             _log.debug(
-                "unsubscribe_resource: unregistered session %s from domain %s", id(session), domain
+                "unsubscribe_resource: unregistered session %s from domain %s", session_id, domain
             )
-        except LookupError:
-            pass
+    return EmptyResult()
 
 
-# The MCP SDK hardcodes resources.subscribe=False regardless of registered handlers.
-# Patch get_capabilities to advertise our subscribe_resource support correctly.
-_orig_get_capabilities = tier2_server.get_capabilities
-
-
-def _get_capabilities_with_subscribe(
-    notification_options: NotificationOptions, experimental_capabilities: dict[str, dict[str, Any]]
-):
-    caps = _orig_get_capabilities(notification_options, experimental_capabilities)
-    if caps.resources is not None:
-        caps.resources.subscribe = True
-    return caps
-
-
-tier2_server.get_capabilities = _get_capabilities_with_subscribe
+tier2_server = Server(
+    "mulchd",
+    instructions=SESSION_WORKFLOW,
+    on_list_tools=list_tools,
+    on_call_tool=call_tool,
+    on_list_resources=list_resources,
+    on_list_resource_templates=list_resource_templates,
+    on_read_resource=read_resource,
+    on_subscribe_resource=subscribe_resource,
+    on_unsubscribe_resource=unsubscribe_resource,
+)
+tier2_manager = StreamableHTTPSessionManager(
+    app=tier2_server,
+    stateless=False,
+    session_idle_timeout=1800,
+)

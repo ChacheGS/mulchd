@@ -103,7 +103,7 @@ _WRITE_TOOLS = [
             "Record a convention that's been established or corrected — without being asked. "
             "Writing to a domain that does not exist will create it automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
@@ -114,7 +114,7 @@ _WRITE_TOOLS = [
             },
             "required": ["domain", "classification", "content"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="write_decision",
@@ -122,7 +122,7 @@ _WRITE_TOOLS = [
             "Record a decision that's been made or confirmed — without being asked. "
             "Writing to a domain that does not exist will create it automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
@@ -138,7 +138,7 @@ _WRITE_TOOLS = [
             },
             "required": ["domain", "classification", "title", "rationale"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="write_failure",
@@ -146,7 +146,7 @@ _WRITE_TOOLS = [
             "Record something that broke and how it got fixed — without being asked. "
             "Writing to a domain that does not exist will create it automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
@@ -158,7 +158,7 @@ _WRITE_TOOLS = [
             },
             "required": ["domain", "classification", "description", "resolution"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="write_pattern",
@@ -166,7 +166,7 @@ _WRITE_TOOLS = [
             "Record a reusable solution or code shape that emerged — without being asked. "
             "Writing to a domain that does not exist will create it automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
@@ -182,7 +182,7 @@ _WRITE_TOOLS = [
             },
             "required": ["domain", "classification", "name", "description"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="write_reference",
@@ -190,7 +190,7 @@ _WRITE_TOOLS = [
             "Record a reference — a pointer to external info worth remembering — without "
             "being asked. Writing to a domain that does not exist will create it automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
@@ -206,7 +206,7 @@ _WRITE_TOOLS = [
             },
             "required": ["domain", "classification", "name", "description"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="write_guide",
@@ -214,7 +214,7 @@ _WRITE_TOOLS = [
             "Record a how-to guide — without being asked. "
             "Writing to a domain that does not exist will create it automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domain": {"type": "string"},
@@ -226,7 +226,7 @@ _WRITE_TOOLS = [
             },
             "required": ["domain", "classification", "name", "description"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
 ]
 
@@ -239,7 +239,7 @@ TIER2_TOOLS = [
             "session end, or when a notification suggests a domain moved — and results "
             "come back newest first, grouped by the session that wrote them."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "domains": {
@@ -283,7 +283,7 @@ TIER2_TOOLS = [
                 },
             },
         },
-        outputSchema={
+        output_schema={
             "type": "object",
             "properties": {
                 "records": {"type": "array", "items": {"type": "object"}},
@@ -305,7 +305,7 @@ TIER2_TOOLS = [
             },
             "required": ["records", "truncated"],
         },
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     ),
     *_WRITE_TOOLS,
     Tool(
@@ -316,7 +316,7 @@ TIER2_TOOLS = [
             "to `limit` per domain — there is no single relevance ranking "
             "across multiple domains, so this is not a global top-N."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "query": {"type": "string"},
@@ -338,7 +338,7 @@ TIER2_TOOLS = [
             },
             "required": ["query"],
         },
-        outputSchema={
+        output_schema={
             "type": "object",
             "properties": {
                 "records": {"type": "array", "items": {"type": "object"}},
@@ -346,13 +346,13 @@ TIER2_TOOLS = [
             },
             "required": ["records", "truncated"],
         },
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     ),
     Tool(
         name="list_domains",
         description="List available domains with record counts and last-updated timestamps.",
-        inputSchema={"type": "object", "properties": {}},
-        outputSchema={
+        input_schema={"type": "object", "properties": {}},
+        output_schema={
             "type": "object",
             "properties": {
                 "server_time": {"type": "string"},
@@ -383,7 +383,7 @@ TIER2_TOOLS = [
             },
             "required": ["server_time", "domains"],
         },
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     ),
     Tool(
         name="get_record_schema",
@@ -393,7 +393,7 @@ TIER2_TOOLS = [
             "optional fields (e.g. date on decisions), or before edit_record to avoid "
             "field-name errors."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "type": {
@@ -403,7 +403,7 @@ TIER2_TOOLS = [
                 },
             },
         },
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     ),
     Tool(
         name="get_record_history",
@@ -413,14 +413,14 @@ TIER2_TOOLS = [
             "before trusting a record's current content when it shows an edit "
             "count, or when a supersession warning points here for prior text."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
             },
             "required": ["record_id"],
         },
-        annotations=ToolAnnotations(readOnlyHint=True),
+        annotations=ToolAnnotations(read_only_hint=True),
     ),
     Tool(
         name="record_outcome",
@@ -430,7 +430,7 @@ TIER2_TOOLS = [
             "ones. Call this proactively after applying a record's guidance and "
             "observing the result, the same way you'd call write_* for a new decision."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
@@ -446,7 +446,7 @@ TIER2_TOOLS = [
             },
             "required": ["record_id", "domain", "status"],
         },
-        annotations=ToolAnnotations(destructiveHint=False),
+        annotations=ToolAnnotations(destructive_hint=False),
     ),
     Tool(
         name="edit_record",
@@ -455,7 +455,7 @@ TIER2_TOOLS = [
             "Writers may only edit their own records; admins may edit any record. "
             "Pass only the fields you want to change."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
@@ -475,7 +475,7 @@ TIER2_TOOLS = [
             },
             "required": ["record_id", "domain"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="delete_record",
@@ -484,7 +484,7 @@ TIER2_TOOLS = [
             "Writers may only delete their own records; admins may delete any record. "
             "If this is the last record in the domain, the domain is removed automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
@@ -492,7 +492,7 @@ TIER2_TOOLS = [
             },
             "required": ["record_id", "domain"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
     Tool(
         name="move_record",
@@ -504,7 +504,7 @@ TIER2_TOOLS = [
             "like the write_* tools do. If this was the last record in the source "
             "domain, the domain is removed automatically."
         ),
-        inputSchema={
+        input_schema={
             "type": "object",
             "properties": {
                 "record_id": {"type": "string", "description": "Record ID (mx-xxxxxx)"},
@@ -513,7 +513,7 @@ TIER2_TOOLS = [
             },
             "required": ["record_id", "domain", "target_domain"],
         },
-        annotations=ToolAnnotations(destructiveHint=True),
+        annotations=ToolAnnotations(destructive_hint=True),
     ),
 ]
 
