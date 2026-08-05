@@ -954,11 +954,13 @@ async def _move_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
 
 
 async def _record_tool_call(name: str, ctx: AuthContext, protocol_version: str) -> None:
-    # protocol_version is accepted here so this task's call_tool call site (which
-    # already reads ctx.protocol_version off the SDK's ServerRequestContext) has a
-    # compatible target — it isn't persisted yet. Task 2 adds the ToolCall.protocol_version
-    # column/migration and wires this parameter through to ToolCall.create(...).
-    await ToolCall.create(project=ctx.project, author=ctx.user, tool=name, client=ctx.client)
+    await ToolCall.create(
+        project=ctx.project,
+        author=ctx.user,
+        tool=name,
+        client=ctx.client,
+        protocol_version=protocol_version,
+    )
 
 
 # ---------------------------------------------------------------------------

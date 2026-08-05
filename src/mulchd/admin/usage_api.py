@@ -64,11 +64,20 @@ async def usage_data(request: Request, org: str, project: str, period: str = "we
         .values("author__username", "n")
     )
 
+    by_protocol_version = (
+        await ToolCall.filter(project=proj, called_at__gte=since)
+        .annotate(n=Count("id"))
+        .group_by("protocol_version")
+        .order_by("-n")
+        .values("protocol_version", "n")
+    )
+
     return JSONResponse(
         {
             "labels": [r["bucket"].strftime(fmt) for r in chart_rows],
             "counts": [r["n"] for r in chart_rows],
             "by_tool": [[r["tool"], r["n"]] for r in by_tool],
             "by_user": [[r["author__username"], r["n"]] for r in by_user],
+            "by_protocol_version": [[r["protocol_version"], r["n"]] for r in by_protocol_version],
         }
     )

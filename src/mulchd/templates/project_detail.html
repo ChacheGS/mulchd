@@ -39,7 +39,7 @@
   <div style="position:relative; height:120px; margin-bottom:16px">
     <canvas id="usage-chart" data-endpoint="/admin/api/usage/{{ project.org.slug }}/{{ project.slug }}"></canvas>
   </div>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px">
     <div>
       <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By tool</div>
       <div id="usage-by-tool"></div>
@@ -47,6 +47,10 @@
     <div>
       <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By user</div>
       <div id="usage-by-user"></div>
+    </div>
+    <div>
+      <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By protocol version</div>
+      <div id="usage-by-protocol"></div>
     </div>
   </div>
 </div>
@@ -191,6 +195,7 @@ function loadUsageChart(period) {
       });
       renderUsageBreakdown('usage-by-tool', data.by_tool);
       renderUsageBreakdown('usage-by-user', data.by_user);
+      renderUsageBreakdown('usage-by-protocol', data.by_protocol_version);
     });
 }
 

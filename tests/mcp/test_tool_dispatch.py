@@ -2,11 +2,14 @@
 list_tools / call_tool dispatch and RecordEvent audit-trail tests.
 """
 
+import asyncio
+from types import SimpleNamespace
+
 import pytest
 
 from mulchd.mcp.context import auth_ctx
 from mulchd.mcp.tier2 import call_tool
-from mulchd.models import Role
+from mulchd.models import Role, ToolCall
 from tests.mcp.conftest import _make_fake_delete, ctx
 
 
@@ -126,3 +129,51 @@ async def test_record_events_written_for_write_edit_delete(team, data_path, fake
 
     events = await RecordEvent.filter(record_id=record_id).values_list("action", flat=True)
     assert set(events) == {"write", "edit", "delete"}
+
+
+async def test_call_tool_records_negotiated_protocol_version(team, data_path):
+    """The ToolCall row created for a dispatch persists whatever protocol
+    version the SDK's ServerRequestContext reports, not a hardcoded default."""
+    from mcp.types import CallToolRequestParams
+
+    t = team
+    fake_sdk_ctx = SimpleNamespace(protocol_version="2026-06-18", request=None)
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
+    try:
+        await call_tool(
+            fake_sdk_ctx,
+            CallToolRequestParams(name="list_domains", arguments={}),
+        )
+    finally:
+        auth_ctx.reset(token)
+
+    # _record_tool_call is scheduled as a fire-and-forget background task;
+    # give the event loop a turn to let it complete before asserting.
+    await asyncio.sleep(0.01)
+
+    call = await ToolCall.filter(project=t.infra, tool="list_domains").order_by("-id").first()
+    assert call is not None
+    assert call.protocol_version == "2026-06-18"
+
+
+async def test_call_tool_records_unknown_protocol_version_without_sdk_context(team, data_path):
+    """When call_tool is invoked without a real SDK context (as in most of
+    this file's direct-dispatch tests), the recorded protocol_version falls
+    back to the "unknown" sentinel rather than crashing."""
+    from mcp.types import CallToolRequestParams
+
+    t = team
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
+    try:
+        await call_tool(
+            None,
+            CallToolRequestParams(name="list_domains", arguments={}),
+        )
+    finally:
+        auth_ctx.reset(token)
+
+    await asyncio.sleep(0.01)
+
+    call = await ToolCall.filter(project=t.infra, tool="list_domains").order_by("-id").first()
+    assert call is not None
+    assert call.protocol_version == "unknown"
