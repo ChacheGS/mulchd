@@ -33,16 +33,20 @@ async def usage_data(request: Request, org: str, project: str, period: str = "we
 
     # date_trunc has no ORM equivalent — raw SQL only for the chart buckets
     conn = connections.get("default")
-    chart_rows: list[dict[str, Any]] = await cast(Any, conn).execute_query_dict(
-        f"""
-        SELECT date_trunc('{trunc}', called_at AT TIME ZONE 'UTC') AS bucket,
-               count(*)::int AS n
-        FROM tool_calls
-        WHERE project_id = $1 AND called_at >= $2
-        GROUP BY bucket ORDER BY bucket
-        """,
-        [proj.id, since],
-    )  # Tortoise's BaseDBAsyncClient.execute_query_dict stub leaves query/values untyped
+    # Tortoise's BaseDBAsyncClient.execute_query_dict stub leaves its return value untyped.
+    chart_rows = cast(
+        "list[dict[str, Any]]",
+        await conn.execute_query_dict(  # pyright: ignore[reportUnknownMemberType]
+            f"""
+            SELECT date_trunc('{trunc}', called_at AT TIME ZONE 'UTC') AS bucket,
+                   count(*)::int AS n
+            FROM tool_calls
+            WHERE project_id = $1 AND called_at >= $2
+            GROUP BY bucket ORDER BY bucket
+            """,
+            [proj.id, since],
+        ),
+    )
 
     by_tool = (
         await ToolCall.filter(project=proj, called_at__gte=since)
