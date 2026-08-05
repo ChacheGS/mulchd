@@ -238,13 +238,14 @@ async def test_read_resource_rejects_unknown_domain(team, data_path):
     used to render both cases identically as "No records in domain 'x' yet.",
     which reads as a live, subscribable domain that just has no content."""
     import pytest
+    from mcp.shared.exceptions import MCPError
     from mcp.types import ReadResourceRequestParams
     from mulchd.mcp.tier2 import read_resource
 
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        with pytest.raises(ValueError, match="Unknown domain"):
+        with pytest.raises(MCPError, match="Unknown domain"):
             await read_resource(
                 None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/never-created")
             )

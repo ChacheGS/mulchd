@@ -9,6 +9,7 @@ the org/project segment.
 from types import SimpleNamespace
 
 import pytest
+from mcp.shared.exceptions import MCPError
 
 from mulchd.mcp.context import auth_ctx
 from mulchd.mcp.tier2 import read_resource, subscribe_resource, unsubscribe_resource
@@ -21,12 +22,23 @@ async def test_read_resource_rejects_uri_for_a_different_project(team, data_path
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        with pytest.raises(ValueError, match="Unknown resource URI"):
+        with pytest.raises(MCPError, match="Unknown resource URI"):
             await read_resource(
                 None, ReadResourceRequestParams(uri="mulchd://other-org/other-project/domain/infra")
             )
     finally:
         auth_ctx.reset(token)
+
+
+async def test_read_resource_rejects_missing_auth_context_as_mcp_error(data_path):
+    """A plain ValueError here would get caught by the SDK's generic
+    handler-exception path, logged with a full traceback (logger.exception)
+    on every occurrence — an expected, client-caused condition shouldn't be
+    that noisy. MCPError skips that path and carries its own error code."""
+    from mcp.types import ReadResourceRequestParams
+
+    with pytest.raises(MCPError, match="No auth context"):
+        await read_resource(None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/infra"))
 
 
 async def test_subscribe_resource_ignores_uri_for_a_different_project(team, data_path):

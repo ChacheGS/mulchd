@@ -12,7 +12,7 @@ _log = logging.getLogger("mulchd.mcp")
 
 import urllib.parse
 
-from mcp_types import INVALID_REQUEST, SubscriptionsListenRequestParams
+from mcp_types import INVALID_PARAMS, INVALID_REQUEST, SubscriptionsListenRequestParams
 from tortoise.exceptions import IntegrityError
 
 from mcp.server import Server, ServerRequestContext
@@ -1193,12 +1193,12 @@ async def read_resource(
 ) -> ReadResourceResult:
     auth = auth_ctx.get()
     if auth is None:
-        raise ValueError("No auth context")
+        raise MCPError(INVALID_REQUEST, "No auth context — use a project token for this connection")
     uri = params.uri
     name = _parse_domain_uri(uri, auth)
     if name is not None:
         if name not in list_domain_names(auth.org.slug, auth.project.slug):
-            raise ValueError(f"Unknown domain: {name}")
+            raise MCPError(INVALID_PARAMS, f"Unknown domain: {name}")
         protocol_version = ctx.protocol_version if ctx is not None else "unknown"
         _t = asyncio.create_task(_record_tool_call("resources/read", auth, protocol_version))
         _background_tasks.add(_t)
@@ -1234,7 +1234,7 @@ async def read_resource(
         return ReadResourceResult(
             contents=[TextResourceContents(uri=uri, text=text, mime_type="text/plain")]
         )
-    raise ValueError(f"Unknown resource URI: {uri}")
+    raise MCPError(INVALID_PARAMS, f"Unknown resource URI: {uri}")
 
 
 async def subscribe_resource(
