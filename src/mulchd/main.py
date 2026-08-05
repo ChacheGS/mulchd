@@ -1,9 +1,11 @@
 import logging
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from importlib.metadata import version as _pkg_version
+from typing import Any, cast
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.routes import (
     build_resource_metadata_url,
     create_auth_routes,
@@ -14,6 +16,7 @@ from mcp.server.sse import SseServerTransport
 from pydantic import AnyHttpUrl
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import Response
+from starlette.types import Receive, Scope, Send
 from tortoise import Tortoise
 
 from .admin import router as admin_router
@@ -41,11 +44,11 @@ def _client_from_request(request: Request) -> str:
 oauth_provider = MulchdOAuthProvider()
 
 
-async def _auth_context_from_access_token(access_token) -> AuthContext | None:
-    user = await User.filter(id=int(access_token.subject), active=True).first()
+async def _auth_context_from_access_token(access_token: AccessToken) -> AuthContext | None:
+    user = await User.filter(id=int(cast(str, access_token.subject)), active=True).first()
     if user is None:
         return None
-    claims = access_token.claims or {}
+    claims: dict[str, Any] = access_token.claims or {}
     project_id = claims.get("project_id")
     project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
@@ -132,7 +135,9 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def _connect_admin_context(request: Request, call_next):
+async def _connect_admin_context(  # pyright: ignore[reportUnusedFunction]  # registered via @app.middleware, not called by name
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """Only /connect pages need to know whether the current user is an admin
     (to show/hide the Admin link) — scoping the extra DB query to this prefix
     keeps every other request (MCP calls, health checks, /admin itself, which
@@ -143,7 +148,9 @@ async def _connect_admin_context(request: Request, call_next):
 
 
 @app.middleware("http")
-async def _admin_project_switcher_context(request: Request, call_next):
+async def _admin_project_switcher_context(  # pyright: ignore[reportUnusedFunction]  # registered via @app.middleware, not called by name
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
     """The sidebar's project switcher (base.html) needs the full project list
     on every /admin page, not just ones that already resolve a `project` —
     computed once here instead of duplicated in every admin route. Gated to
@@ -179,7 +186,9 @@ app.include_router(invite_router)
 
 
 @app.exception_handler(AdminRequired)
-async def _admin_required_handler(request: Request, exc: AdminRequired) -> Response:
+async def _admin_required_handler(  # pyright: ignore[reportUnusedFunction]  # registered via @app.exception_handler, not called by name
+    request: Request, exc: AdminRequired
+) -> Response:
     return redirect_login()
 
 
@@ -224,7 +233,7 @@ class _SseNoop(Response):
     # Both /mcp and /sse transports own their full response lifecycle via the
     # raw send callable. This sentinel tells FastAPI not to send a second
     # response after the transport handler returns.
-    async def __call__(self, scope, receive, send) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         pass
 
 
@@ -235,7 +244,11 @@ async def mcp_endpoint(request: Request) -> Response:
         return _oauth_invalid_token_response()
     if tier == McpTier.TIER2:
         auth_ctx.set(ctx)
-    await tier_managers[tier].handle_request(request.scope, request.receive, request._send)
+    await tier_managers[tier].handle_request(
+        request.scope,
+        request.receive,
+        request._send,  # pyright: ignore[reportPrivateUsage]  # Starlette exposes no public accessor for the raw send callable
+    )
     return _SseNoop()
 
 
@@ -247,7 +260,11 @@ async def sse_endpoint(request: Request) -> Response:
     if tier == McpTier.TIER2:
         auth_ctx.set(ctx)
     server = tier_servers[tier]
-    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
+    async with sse.connect_sse(
+        request.scope,
+        request.receive,
+        request._send,  # pyright: ignore[reportPrivateUsage]  # Starlette exposes no public accessor for the raw send callable
+    ) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())
     return _SseNoop()
 
@@ -258,7 +275,7 @@ app.mount("/messages", app=sse.handle_post_message)
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health() -> dict[str, str]:
     return {"status": "ok", "version": _pkg_version("mulchd")}
 
 

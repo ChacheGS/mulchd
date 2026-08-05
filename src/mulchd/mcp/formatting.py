@@ -166,7 +166,7 @@ def _decorate_header(header: str, r: Record) -> str:
                 header += tag
             if r.get("_superseded_tip_ambiguous"):
                 tips = r["_superseded_tip_ambiguous"]
-                branch_domains = r.get("_superseded_tip_ambiguous_domains") or {}
+                branch_domains: dict[str, str] = r.get("_superseded_tip_ambiguous_domains") or {}
                 shown = [
                     f"{t} (in {branch_domains[t]})" if t in branch_domains else t for t in tips
                 ]
