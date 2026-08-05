@@ -195,7 +195,9 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
     )
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        result = await read_resource(None, ReadResourceRequestParams(uri="mulchd://domain/infra"))
+        result = await read_resource(
+            None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/infra")
+        )
     finally:
         auth_ctx.reset(token)
     text = result.contents[0].text
@@ -212,7 +214,9 @@ async def test_read_resource_no_wrapping_when_no_records(team, data_path):
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
-        result = await read_resource(None, ReadResourceRequestParams(uri="mulchd://domain/infra"))
+        result = await read_resource(
+            None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/infra")
+        )
     finally:
         auth_ctx.reset(token)
     text = result.contents[0].text

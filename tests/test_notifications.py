@@ -24,51 +24,51 @@ def _session(name: str):
 def test_register_and_lookup():
     r = SubscriptionRegistry()
     s1, s2 = _session("a"), _session("b")
-    r.register("s1", s1, "arch")
-    r.register("s2", s2, "arch")
-    assert r.subscribers_for("arch", exclude="s1") == {"s2": s2}
-    assert r.subscribers_for("arch", exclude="s2") == {"s1": s1}
+    r.register("s1", s1, "o", "p", "arch")
+    r.register("s2", s2, "o", "p", "arch")
+    assert r.subscribers_for("o", "p", "arch", exclude="s1") == {"s2": s2}
+    assert r.subscribers_for("o", "p", "arch", exclude="s2") == {"s1": s1}
 
 
 def test_exclude_self_only():
     r = SubscriptionRegistry()
     s = _session("a")
-    r.register("s1", s, "arch")
-    assert r.subscribers_for("arch", exclude="s1") == {}
+    r.register("s1", s, "o", "p", "arch")
+    assert r.subscribers_for("o", "p", "arch", exclude="s1") == {}
 
 
 def test_empty_domain_returns_empty_set():
     r = SubscriptionRegistry()
-    assert r.subscribers_for("nonexistent", exclude="") == {}
+    assert r.subscribers_for("o", "p", "nonexistent", exclude="") == {}
 
 
 def test_unregister_removes_from_all_domains():
     r = SubscriptionRegistry()
     s = _session("a")
-    r.register("s1", s, "arch")
-    r.register("s1", s, "conventions")
+    r.register("s1", s, "o", "p", "arch")
+    r.register("s1", s, "o", "p", "conventions")
     r.unregister_session("s1")
-    assert r.subscribers_for("arch", exclude="") == {}
-    assert r.subscribers_for("conventions", exclude="") == {}
+    assert r.subscribers_for("o", "p", "arch", exclude="") == {}
+    assert r.subscribers_for("o", "p", "conventions", exclude="") == {}
 
 
 def test_multiple_domains_independent():
     r = SubscriptionRegistry()
     s1, s2 = _session("a"), _session("b")
-    r.register("s1", s1, "arch")
-    r.register("s2", s2, "conventions")
-    assert r.subscribers_for("arch", exclude="") == {"s1": s1}
-    assert r.subscribers_for("conventions", exclude="") == {"s2": s2}
+    r.register("s1", s1, "o", "p", "arch")
+    r.register("s2", s2, "o", "p", "conventions")
+    assert r.subscribers_for("o", "p", "arch", exclude="") == {"s1": s1}
+    assert r.subscribers_for("o", "p", "conventions", exclude="") == {"s2": s2}
 
 
 def test_unregister_domain_specific():
     r = SubscriptionRegistry()
     s = _session("a")
-    r.register("s1", s, "arch")
-    r.register("s1", s, "conventions")
-    r.unregister("s1", "arch")
-    assert r.subscribers_for("arch", exclude="") == {}
-    assert r.subscribers_for("conventions", exclude="") == {"s1": s}
+    r.register("s1", s, "o", "p", "arch")
+    r.register("s1", s, "o", "p", "conventions")
+    r.unregister("s1", "o", "p", "arch")
+    assert r.subscribers_for("o", "p", "arch", exclude="") == {}
+    assert r.subscribers_for("o", "p", "conventions", exclude="") == {"s1": s}
 
 
 @pytest.mark.asyncio
@@ -84,7 +84,7 @@ async def test_notify_domain_sends_to_subscribers(monkeypatch, db):
     subscriber = MagicMock()
     subscriber.send_resource_updated = AsyncMock()
     actor_session_id = "s-actor"
-    fake_registry.register("s-subscriber", subscriber, "arch")
+    fake_registry.register("s-subscriber", subscriber, "myorg", "myproj", "arch")
 
     monkeypatch.setattr(tier2_module, "registry", fake_registry)
 
@@ -120,7 +120,7 @@ async def test_notify_domain_skips_actor_session(monkeypatch, db):
     fake_registry = SubscriptionRegistry()
     actor_session = MagicMock()
     actor_session.send_resource_updated = AsyncMock()
-    fake_registry.register("s-actor", actor_session, "arch")
+    fake_registry.register("s-actor", actor_session, "o", "p", "arch")
 
     monkeypatch.setattr(tier2_module, "registry", fake_registry)
 
@@ -148,7 +148,7 @@ async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
     dead_session = MagicMock()
     dead_session.send_resource_updated = AsyncMock(side_effect=Exception("connection closed"))
     actor_session_id = "s-actor"
-    fake_registry.register("s-dead", dead_session, "arch")
+    fake_registry.register("s-dead", dead_session, "o", "p", "arch")
 
     monkeypatch.setattr(tier2_module, "registry", fake_registry)
 
@@ -160,7 +160,7 @@ async def test_notify_domain_cleans_up_dead_sessions(monkeypatch, db):
     record = {"type": "pattern", "classification": "observational", "name": "foo"}
     await _notify_domain("arch", actor_session_id, ctx, "write", record)
 
-    assert fake_registry.subscribers_for("arch", exclude="") == {}
+    assert fake_registry.subscribers_for("o", "p", "arch", exclude="") == {}
 
 
 @pytest.mark.asyncio

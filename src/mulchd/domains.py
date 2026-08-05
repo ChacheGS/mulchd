@@ -75,7 +75,7 @@ async def list_available_domains(org: str, project: str) -> list[dict[str, Any]]
                 "description": description,
                 "record_count": len(records),
                 "last_updated": mod_time.isoformat() if mod_time else None,
-                "uri": f"mulchd://domain/{name}",
+                "uri": f"mulchd://{org}/{project}/domain/{name}",
             }
         )
     return results

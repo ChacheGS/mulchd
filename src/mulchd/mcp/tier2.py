@@ -380,7 +380,9 @@ async def _notify_domain(
     record: Record,
 ) -> None:
     """Fan out notifications/resources/updated to all subscribed sessions except the actor."""
-    subscribers = registry.subscribers_for(domain, exclude=actor_session_id or "")
+    subscribers = registry.subscribers_for(
+        ctx.org.slug, ctx.project.slug, domain, exclude=actor_session_id or ""
+    )
     _log.debug(
         "_notify_domain: domain=%s action=%s subscribers=%d", domain, action, len(subscribers)
     )
@@ -1077,16 +1079,37 @@ async def list_resources(
 async def list_resource_templates(
     ctx: ServerRequestContext, params: PaginatedRequestParams | None
 ) -> ListResourceTemplatesResult:
+    auth = auth_ctx.get()
+    if auth is not None:
+        uri_template = f"mulchd://{auth.org.slug}/{auth.project.slug}/domain/{{name}}"
+    else:
+        # Capability advertisement only, not an authorization path — this branch
+        # shouldn't occur in practice (the handler is only reached over an
+        # authenticated tier2 connection), so an unqualified fallback is harmless.
+        uri_template = "mulchd://domain/{name}"
     return ListResourceTemplatesResult(
         resource_templates=[
             ResourceTemplate(
-                uri_template="mulchd://domain/{name}",
+                uri_template=uri_template,
                 name="Domain records",
                 description="All expertise records in a domain. Substitute {name} with the domain name.",
                 mime_type="text/plain",
             )
         ]
     )
+
+
+def _parse_domain_uri(uri: str, auth: AuthContext) -> str | None:
+    """Extract the domain name from a qualified mulchd://{org}/{project}/domain/{name}
+    URI, verifying the embedded org/project matches the authenticated connection's own.
+    Returns None if the URI doesn't match this shape or names a different org/project —
+    the org/project segment is never trusted as an authorization input on its own; it is
+    cross-checked against auth_ctx here so a URI naming one project's domain can never
+    silently resolve against a different project's data."""
+    prefix = f"mulchd://{auth.org.slug}/{auth.project.slug}/domain/"
+    if uri.startswith(prefix):
+        return uri[len(prefix) :]
+    return None
 
 
 async def read_resource(
@@ -1096,8 +1119,8 @@ async def read_resource(
     if auth is None:
         raise ValueError("No auth context")
     uri = params.uri
-    if uri.startswith("mulchd://domain/"):
-        name = uri[len("mulchd://domain/") :]
+    name = _parse_domain_uri(uri, auth)
+    if name is not None:
         records = await read_domain_records(expertise_path(auth.org.slug, auth.project.slug, name))
         for r in records:
             r["_domain"] = name
@@ -1121,11 +1144,11 @@ async def subscribe_resource(
     if auth is None:
         _log.debug("subscribe_resource: no auth context, skipping")
         return EmptyResult()
-    if params.uri.startswith("mulchd://domain/"):
-        domain = params.uri[len("mulchd://domain/") :]
+    domain = _parse_domain_uri(params.uri, auth)
+    if domain is not None:
         session_id = ctx.request.headers.get("mcp-session-id") if ctx.request is not None else None
         if session_id is not None:
-            registry.register(session_id, ctx.session, domain)
+            registry.register(session_id, ctx.session, auth.org.slug, auth.project.slug, domain)
             _log.debug(
                 "subscribe_resource: registered session %s for domain %s", session_id, domain
             )
@@ -1141,11 +1164,11 @@ async def unsubscribe_resource(
     auth = auth_ctx.get()
     if auth is None:
         return EmptyResult()
-    if params.uri.startswith("mulchd://domain/"):
-        domain = params.uri[len("mulchd://domain/") :]
+    domain = _parse_domain_uri(params.uri, auth)
+    if domain is not None:
         session_id = ctx.request.headers.get("mcp-session-id") if ctx.request is not None else None
         if session_id is not None:
-            registry.unregister(session_id, domain)
+            registry.unregister(session_id, auth.org.slug, auth.project.slug, domain)
             _log.debug(
                 "unsubscribe_resource: unregistered session %s from domain %s", session_id, domain
             )
