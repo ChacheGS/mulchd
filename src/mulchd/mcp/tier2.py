@@ -347,7 +347,7 @@ async def _read_expertise(
         formatted = format_records(page)
     if page:
         formatted = wrap_untrusted(formatted)
-    text = warning + hint_text + formatted
+    text = f"[{ctx.org.slug}/{ctx.project.slug}]\n\n" + warning + hint_text + formatted
     return (
         [TextContent(type="text", text=text)],
         {
@@ -630,7 +630,7 @@ async def _search_expertise(
     formatted = format_records(results)
     if results:
         formatted = wrap_untrusted(formatted)
-    text = warning + formatted
+    text = f"[{ctx.org.slug}/{ctx.project.slug}]\n\n" + warning + formatted
     return (
         [TextContent(type="text", text=text)],
         {"records": results, "truncated": truncated},
@@ -697,13 +697,14 @@ async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[Te
     events whose (at) ordering doesn't line up 1:1 with RecordEdit's, which
     would silently attribute one actor's before-snapshot to another's edit."""
     record_id = args["record_id"]
+    project_tag = f"[{ctx.org.slug}/{ctx.project.slug}]"
     events: list[dict[str, Any]] = (
         await RecordEvent.filter(record_id=record_id, project=ctx.project)
         .order_by("at", "id")
         .values("action", "at", "session_id", "actor__username", "actor__display_name")
     )
     if not events:
-        return [TextContent(type="text", text=f"No history found for {record_id}.")]
+        return [TextContent(type="text", text=f"{project_tag} No history found for {record_id}.")]
 
     edit_rows: list[dict[str, Any]] = (
         await RecordEdit.filter(record_id=record_id, project=ctx.project)
@@ -714,7 +715,7 @@ async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[Te
     for row in edit_rows:
         edit_queues[str(row["session_id"])].append(row["before_snapshot"])
 
-    lines = [f"History for {record_id}:"]
+    lines = [f"{project_tag} History for {record_id}:"]
     for e in events:
         actor = e["actor__display_name"] or e["actor__username"] or "unknown"
         at = e["at"].strftime("%Y-%m-%dT%H:%M:%SZ")

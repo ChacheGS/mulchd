@@ -68,6 +68,9 @@ async def test_get_record_history_no_history_found(team, data_path):
         {"record_id": "mx-neverexisted"}, ctx(t.carlos, t.org, t.infra)
     )
     assert "No history found for mx-neverexisted" in result[0].text
+    # Names the org/project so an agent juggling multiple mulchd connections
+    # can catch a lookup against the wrong target.
+    assert "acme/infra" in result[0].text
 
 
 async def test_get_record_history_matches_snapshots_by_session_not_position(team, data_path):

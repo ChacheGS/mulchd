@@ -36,6 +36,20 @@ def _fake_search_domains(records_by_domain: dict[str, int]):
     return _fake
 
 
+async def test_search_records_names_org_project(team, data_path, monkeypatch):
+    """Names the org/project so an agent juggling multiple mulchd connections
+    can catch a search against the wrong target."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _search_expertise
+
+    t = team
+    monkeypatch.setattr(mcp_tier2, "search_domains", _fake_search_domains({"infra": 1}))
+
+    text_content, _ = await _search_expertise({"query": "x"}, ctx(t.carlos, t.org, t.infra))
+
+    assert "acme/infra" in text_content[0].text
+
+
 async def test_search_caps_each_domain_to_the_default_limit(team, data_path, monkeypatch):
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _search_expertise
