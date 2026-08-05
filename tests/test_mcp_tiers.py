@@ -5,9 +5,9 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 @pytest.mark.no_db
 def test_context_vars_start_as_none():
-    from mulchd.mcp.context import _ctx
+    from mulchd.mcp.context import auth_ctx
 
-    assert _ctx.get() is None
+    assert auth_ctx.get() is None
 
 
 @pytest.mark.no_db

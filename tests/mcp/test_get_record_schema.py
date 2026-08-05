@@ -56,11 +56,11 @@ async def test_get_record_schema_required_none_when_no_required_fields():
     exercise it directly against a type with no required fields."""
     from mulchd.mcp import tier2
 
-    original = tier2._RECORD_SCHEMAS
+    original = tier2.RECORD_SCHEMAS
     try:
-        tier2._RECORD_SCHEMAS = {**original, "guide": {"required": {}, "optional": {}}}
+        tier2.RECORD_SCHEMAS = {**original, "guide": {"required": {}, "optional": {}}}
         result = await tier2._get_record_schema({"type": "guide"})
         text = result[0].text
         assert "required: none" in text
     finally:
-        tier2._RECORD_SCHEMAS = original
+        tier2.RECORD_SCHEMAS = original

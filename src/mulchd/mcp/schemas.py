@@ -7,7 +7,7 @@ which is what the rest of tier2.py does.
 
 from mcp.types import Tool, ToolAnnotations
 
-_RECORD_FIELD_KEYS = frozenset(
+RECORD_FIELD_KEYS = frozenset(
     {
         "content",
         "title",
@@ -509,7 +509,7 @@ TIER2_TOOLS = [
     ),
 ]
 
-_RECORD_SCHEMAS: dict[str, dict] = {
+RECORD_SCHEMAS: dict[str, dict[str, dict[str, str]]] = {
     "convention": {"required": {"content": "string"}, "optional": {}},
     "decision": {
         "required": {"title": "string", "rationale": "string"},
@@ -534,7 +534,7 @@ _RECORD_SCHEMAS: dict[str, dict] = {
 # in place, overwriting the existing record's other fields). Both outcomes
 # omit the record object from ml's --stdin JSON response, which is what the
 # duplicate pre-check in _record_expertise exists to avoid triggering.
-_DEDUP_FIELD_BY_TYPE: dict[str, str] = {
+DEDUP_FIELD_BY_TYPE: dict[str, str] = {
     "convention": "content",
     "decision": "title",
     "failure": "description",

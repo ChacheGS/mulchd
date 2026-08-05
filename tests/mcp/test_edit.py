@@ -383,7 +383,7 @@ async def test_edit_record_no_stale_advisory_without_outcomes(team, data_path, f
 
 
 async def test_edit_record_no_stale_advisory_for_non_content_field(team, data_path, fake_write_record):
-    """Changing only classification (not in _CONTENT_FIELD_KEYS) on a record
+    """Changing only classification (not in CONTENT_FIELD_KEYS) on a record
     with outcomes must not trigger the advisory."""
     import mulchd.mcp.tier2 as mcp_tier2
     from mulchd.mcp.tier2 import _edit_record

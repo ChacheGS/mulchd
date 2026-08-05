@@ -3,7 +3,7 @@ write_record / write_* dispatch tool tests.
 """
 
 from mulchd.domains import list_available_domains
-from mulchd.mcp.context import _ctx
+from mulchd.mcp.context import auth_ctx
 from mulchd.mulch import MulchError
 from pathlib import Path
 import json
@@ -190,7 +190,7 @@ async def test_write_decision_dispatch_creates_decision_record(team, data_path, 
     """The write_decision tool call must inject type='decision' before reaching
     _record_expertise, without the caller having to pass type explicitly."""
     t = team
-    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         result = await call_tool(
             "write_decision",
@@ -202,7 +202,7 @@ async def test_write_decision_dispatch_creates_decision_record(team, data_path, 
             },
         )
     finally:
-        _ctx.reset(token)
+        auth_ctx.reset(token)
     assert isinstance(result, list)
     assert "decision" in result[0].text
 
@@ -215,7 +215,7 @@ async def test_write_convention_dispatch_rejects_missing_content(team, data_path
     validation in _record_expertise even though the schema itself has no
     'type' property for the caller to get wrong."""
     t = team
-    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         with pytest.raises(ValueError, match="requires: content"):
             await call_tool(
@@ -223,7 +223,7 @@ async def test_write_convention_dispatch_rejects_missing_content(team, data_path
                 {"domain": "infra", "classification": "tactical"},
             )
     finally:
-        _ctx.reset(token)
+        auth_ctx.reset(token)
 
 
 async def test_write_record_validates_required_fields(team, data_path, fake_write_record):

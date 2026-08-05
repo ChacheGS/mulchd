@@ -27,7 +27,7 @@ class RecordNotWrittenError(MulchError):
     new one — not a failure of the `ml` call itself, but there's no new
     record object to return. Carries ml's raw summary dict so the caller can
     tell skipped (nothing changed) apart from updated (an existing record was
-    just overwritten). See schemas._DEDUP_FIELD_BY_TYPE for which case each
+    just overwritten). See schemas.DEDUP_FIELD_BY_TYPE for which case each
     record type hits.
     """
 

@@ -6,11 +6,13 @@ import logging
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
+from typing import Any, cast
 from uuid import UUID, uuid7
 
 _log = logging.getLogger("mulchd.mcp")
 
 from mcp.server import Server
+from mcp.server.lowlevel.server import NotificationOptions
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.types import Resource, ResourceTemplate, TextContent, Tool
@@ -21,33 +23,33 @@ from pydantic import AnyUrl
 from tortoise.exceptions import IntegrityError
 
 from ..auth import AuthContext
-from ..domains import expertise_path, list_available_domains, list_domain_names, mulch_dir
-from .project_cache import get_project_records
+from ..domains import (
+    expertise_path,
+    list_available_domains,  # pyright: ignore[reportUnknownVariableType]  # domains.py not yet strict-clean (separate mop-up task)
+    list_domain_names,
+    mulch_dir,
+)
+from .project_cache import get_project_records  # pyright: ignore[reportUnknownVariableType]  # project_cache.py not yet strict-clean (separate mop-up task)
 from .schemas import (
     TIER2_TOOLS,
-    _WRITE_TOOLS,
-    _RECORD_SCHEMAS,
-    _CLASSIFICATION_PROPERTY,
-    _RELATED_RECORD_PROPERTIES,
-    _RECORD_FIELD_KEYS,
-    _DEDUP_FIELD_BY_TYPE,
+    RECORD_SCHEMAS,
+    RECORD_FIELD_KEYS,
+    DEDUP_FIELD_BY_TYPE,
 )
 from .supersession import (
     Classification,
     mark_superseded,
     mark_related_to,
-    cross_domain_supersede_hints,
+    cross_domain_supersede_hints,  # pyright: ignore[reportUnknownVariableType]  # supersession.py not yet strict-clean (separate mop-up task)
     find_incoming_references,
     validate_references,
-    _find_cycles,
+    _find_cycles,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_supersede_cycles.py
     supersede_alerts,
     format_supersession_alerts,
 )
 from .formatting import (
-    _CONTENT_FIELD_KEYS,
-    _format_outcomes_tag,
-    _decorate_header,
-    _format_single,
+    CONTENT_FIELD_KEYS,
+    _format_outcomes_tag,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_outcomes.py
     format_records,
     format_recent,
     wrap_untrusted,
@@ -57,6 +59,7 @@ from .formatting import (
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
     OutcomeStatus,
+    Record,
     delete_record,
     edit_record,
     init_ml_project,
@@ -67,10 +70,10 @@ from ..mulch import (
     write_record,
 )
 from ..records import find_record, read_domain_records
-from .context import _ctx
+from .context import auth_ctx
 from .subscriptions import registry
 
-_background_tasks: set[asyncio.Task] = set()
+_background_tasks: set[asyncio.Task[Any]] = set()
 
 SESSION_WORKFLOW = """\
 mulchd stores shared team expertise for this project. Everything you record is visible \
@@ -203,7 +206,7 @@ def _require_writer(ctx: AuthContext, action: str) -> None:
 
 async def _get_owned_record(
     ctx: AuthContext, domain: str, record_id: str, verb: str, *, owner_check: bool = True
-) -> dict:
+) -> Record:
     from ..models import Role
 
     record = await find_record(expertise_path(ctx.org.slug, ctx.project.slug, domain), record_id)
@@ -221,7 +224,7 @@ def _parse_since(raw: str) -> datetime:
     return since
 
 
-def _recorded_at(r: dict) -> datetime:
+def _recorded_at(r: Record) -> datetime:
     ts = r.get("recorded_at", "2000-01-01T00:00:00+00:00")
     recorded_at = datetime.fromisoformat(ts)
     if recorded_at.tzinfo is None:
@@ -230,7 +233,7 @@ def _recorded_at(r: dict) -> datetime:
 
 
 def _matches_filters(
-    r: dict,
+    r: Record,
     *,
     rtype: str | None,
     classification: str | None,
@@ -243,15 +246,19 @@ def _matches_filters(
         return False
     if file is not None:
         file_lower = file.lower()
-        if not any(file_lower in f.lower() for f in r.get("files") or []):
+        files: list[str] = r.get("files") or []
+        if not any(file_lower in f.lower() for f in files):
             return False
     if outcome_status is not None:
-        if not any(o.get("status") == outcome_status for o in r.get("outcomes") or []):
+        outcomes: list[dict[str, Any]] = r.get("outcomes") or []
+        if not any(o.get("status") == outcome_status for o in outcomes):
             return False
     return True
 
 
-async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
+async def _read_expertise(
+    args: dict[str, Any], ctx: AuthContext
+) -> tuple[list[TextContent], dict[str, Any]]:
     since = _parse_since(args["since"]) if args.get("since") else None
     domains = args.get("domains") or list_domain_names(ctx.org.slug, ctx.project.slug)
     limit = int(args.get("limit", 50))
@@ -261,7 +268,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     warning = ""
     if unknown:
         warning = f"⚠ Unknown domain(s): {', '.join(unknown)} — not in this project\n\n"
-    all_records: list[dict] = []
+    all_records: list[Record] = []
     for domain in domains:
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, domain))
         for r in records:
@@ -315,7 +322,9 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
     await mark_related_to(page, ctx.org.slug, ctx.project.slug)
     await annotate_edits(page, ctx.project.id)
     await annotate_outcome_staleness(page, ctx.project.id)
-    cross_domain_hints = cross_domain_supersede_hints(page)
+    # cross_domain_supersede_hints is untyped (bare `list[dict]` return) until
+    # supersession.py gets its own strict-mode pass (a later task) — cast until then.
+    cross_domain_hints = cast("list[dict[str, Any]]", cross_domain_supersede_hints(page))
     hint_text = ""
     if cross_domain_hints:
         hint_domains = sorted({h["in_domain"] for h in cross_domain_hints})
@@ -325,7 +334,7 @@ async def _read_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextConten
         )
     if since is not None:
         record_ids = [r["id"] for r in page if r.get("id")]
-        meta_rows = (
+        meta_rows: list[dict[str, Any]] = (
             (
                 await RecordMeta.filter(record_id__in=record_ids, project=ctx.project)
                 .prefetch_related("author")
@@ -358,7 +367,7 @@ async def _notify_domain(
     actor_session: object,
     ctx: AuthContext,
     action: str,
-    record: dict,
+    record: Record,
 ) -> None:
     """Fan out notifications/resources/updated to all subscribed sessions except the actor."""
     subscribers = registry.subscribers_for(domain, exclude=actor_session)
@@ -393,7 +402,7 @@ async def _notify_domain(
         registry.unregister_session(s)
 
 
-def _fire_notify(domain: str, ctx: AuthContext, action: str, record: dict) -> None:
+def _fire_notify(domain: str, ctx: AuthContext, action: str, record: Record) -> None:
     """Schedule _notify_domain as a tracked background task. A no-op outside a
     live MCP request (request_context raises LookupError), e.g. in tests."""
     try:
@@ -414,29 +423,31 @@ def _find_similar_domain(domain: str, existing: list[str], cutoff: float = 0.8) 
     return matches[0] if matches else None
 
 
-def _normalize_evidence(evidence: dict) -> dict:
+def _normalize_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
     """ml's own evidence schema only accepts a single string per field
     (additionalProperties: false, no array types) — join any array mulchd's
     more permissive tool schema allowed into one comma-separated string
     before the record is handed to ml."""
-    return {k: ", ".join(v) if isinstance(v, list) else v for k, v in evidence.items()}
+    return {
+        k: ", ".join(cast("list[str]", v)) if isinstance(v, list) else v for k, v in evidence.items()
+    }
 
 
-def _validate_files_supported(rtype: str, args: dict) -> None:
+def _validate_files_supported(rtype: str, args: dict[str, Any]) -> None:
     """ml's own per-type record schema only allows `files` on pattern/reference
-    (see _RECORD_SCHEMAS) — mulchd's tool schema advertises it more broadly, so
+    (see RECORD_SCHEMAS) — mulchd's tool schema advertises it more broadly, so
     a caller can build an args dict ml will reject outright (a "must NOT have
     additional properties" / oneOf-mismatch error that never mentions `files`)
     regardless of whether the list is empty or populated. Reject up front with
     a message that actually names the problem."""
-    if "files" in args and "files" not in _RECORD_SCHEMAS[rtype]["optional"]:
+    if "files" in args and "files" not in RECORD_SCHEMAS[rtype]["optional"]:
         raise ValueError(f"record type '{rtype}' does not support 'files' — only pattern and reference records do")
 
 
-async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "write records")
     rtype = args["type"]
-    required = list(_RECORD_SCHEMAS[rtype]["required"])
+    required = list(RECORD_SCHEMAS[rtype]["required"])
     missing = [f for f in required if not args.get(f)]
     if missing:
         raise ValueError(f"record type '{rtype}' requires: {', '.join(missing)}")
@@ -446,17 +457,19 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     similar_domain = (
         _find_similar_domain(domain, existing_domains) if domain not in existing_domains else None
     )
-    record = {
+    record: Record = {
         "type": rtype,
         "classification": args["classification"],
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "owner": ctx.user.username,
-        **{k: args[k] for k in _RECORD_FIELD_KEYS if k in args},
+        **{k: args[k] for k in RECORD_FIELD_KEYS if k in args},
     }
     if "evidence" in record:
         record["evidence"] = _normalize_evidence(record["evidence"])
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    project_records = await get_project_records(m_dir)
+    # get_project_records() returns list[dict] untyped until project_cache.py
+    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
+    project_records = cast("list[Record]", await get_project_records(m_dir))
     if args.get("supersedes") or args.get("relates_to"):
         live_ids = {r["id"] for r in project_records if r.get("id")}
         validate_references(
@@ -465,7 +478,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
             list(args.get("relates_to") or []),
         )
     domain_file = expertise_path(ctx.org.slug, ctx.project.slug, domain)
-    dedup_field = _DEDUP_FIELD_BY_TYPE[rtype]
+    dedup_field = DEDUP_FIELD_BY_TYPE[rtype]
     # ml's own dedup key and record-ID key are the same field for every built-in
     # type, and ID generation is content-derived (hash of type + this field) with
     # no domain in the mix — so a match here in ANY domain, not just this one,
@@ -577,7 +590,7 @@ async def _record_expertise(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=msg)]
 
 
-def _cap_per_domain(records: list[dict], limit: int) -> tuple[list[dict], bool]:
+def _cap_per_domain(records: list[Record], limit: int) -> tuple[list[Record], bool]:
     """Cap each domain's matches to `limit`, preserving mulch's own
     BM25(+confirmation-boost) rank order within each domain — mulch discards
     the numeric relevance score before returning JSON, but not the order, so
@@ -585,7 +598,7 @@ def _cap_per_domain(records: list[dict], limit: int) -> tuple[list[dict], bool]:
     no merged cross-domain score to rank by, so this caps each matching
     domain independently rather than picking one global top-N."""
     counts: dict[str, int] = {}
-    kept: list[dict] = []
+    kept: list[Record] = []
     truncated = False
     for r in records:
         domain = r.get("_domain", "")
@@ -598,7 +611,9 @@ def _cap_per_domain(records: list[dict], limit: int) -> tuple[list[dict], bool]:
     return kept, truncated
 
 
-async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextContent], dict]:
+async def _search_expertise(
+    args: dict[str, Any], ctx: AuthContext
+) -> tuple[list[TextContent], dict[str, Any]]:
     query = args["query"]
     domains: list[str] | None = args.get("domains") or None
     author_filter = args.get("owner")
@@ -626,8 +641,10 @@ async def _search_expertise(args: dict, ctx: AuthContext) -> tuple[list[TextCont
     )
 
 
-async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
-    domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
+async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict[str, Any]]:
+    # list_available_domains is untyped (bare `list[dict]`) until domains.py
+    # gets its own strict-mode pass — cast until then.
+    domains = cast("list[dict[str, Any]]", await list_available_domains(ctx.org.slug, ctx.project.slug))
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
@@ -647,7 +664,7 @@ async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
         updated = d["last_updated"] or "never"
         lines.append(f"**{d['name']}** — {d['description']}")
         lines.append(f"  {d['record_count']} records, last updated: {updated}, uri: {d['uri']}\n")
-    structured: dict = {
+    structured: dict[str, Any] = {
         "server_time": now,
         "recent_hint": f"Call read_records(since='{now}') at session end to surface teammate activity.",
         "domains": domains,
@@ -660,9 +677,9 @@ async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict]:
     )
 
 
-async def _get_record_schema(args: dict) -> list[TextContent]:
+async def _get_record_schema(args: dict[str, Any]) -> list[TextContent]:
     type_filter = args.get("type")
-    schemas = {type_filter: _RECORD_SCHEMAS[type_filter]} if type_filter else _RECORD_SCHEMAS
+    schemas = {type_filter: RECORD_SCHEMAS[type_filter]} if type_filter else RECORD_SCHEMAS
     lines = ["# Record type schemas\n"]
     for rtype, schema in schemas.items():
         req = ", ".join(f"`{k}` ({v})" for k, v in schema["required"].items())
@@ -675,7 +692,7 @@ async def _get_record_schema(args: dict) -> list[TextContent]:
     return [TextContent(type="text", text="\n".join(lines))]
 
 
-async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
     """Render the write/edit/delete timeline for one record, drawing on the
     existing RecordEvent/RecordEdit audit tables (previously only visible via
     the admin UI's Record activity tab) — no new storage, just a read surface.
@@ -686,7 +703,7 @@ async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]
     events whose (at) ordering doesn't line up 1:1 with RecordEdit's, which
     would silently attribute one actor's before-snapshot to another's edit."""
     record_id = args["record_id"]
-    events = (
+    events: list[dict[str, Any]] = (
         await RecordEvent.filter(record_id=record_id, project=ctx.project)
         .order_by("at", "id")
         .values("action", "at", "session_id", "actor__username", "actor__display_name")
@@ -694,12 +711,12 @@ async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]
     if not events:
         return [TextContent(type="text", text=f"No history found for {record_id}.")]
 
-    edit_rows = (
+    edit_rows: list[dict[str, Any]] = (
         await RecordEdit.filter(record_id=record_id, project=ctx.project)
         .order_by("at", "id")
         .values("session_id", "before_snapshot")
     )
-    edit_queues: dict[str, deque] = defaultdict(deque)
+    edit_queues: dict[str, deque[dict[str, Any] | None]] = defaultdict(deque)
     for row in edit_rows:
         edit_queues[str(row["session_id"])].append(row["before_snapshot"])
 
@@ -717,7 +734,7 @@ async def _get_record_history(args: dict, ctx: AuthContext) -> list[TextContent]
     return [TextContent(type="text", text="\n".join(lines))]
 
 
-async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _edit_record(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "edit records")
     record_id = args["record_id"]
     domain = args["domain"]
@@ -735,14 +752,16 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
         "relates_to",
         "supersedes",
     }
-    updates = {k: args[k] for k in update_keys if k in args}
+    updates: Record = {k: args[k] for k in update_keys if k in args}
     if not updates:
         raise ValueError("no fields to update — pass at least one content field")
-    before_snapshot = {k: record[k] for k in updates if k in record}
+    before_snapshot: Record = {k: record[k] for k in updates if k in record}
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     supersession_alert_text = ""
     if "supersedes" in updates or "relates_to" in updates:
-        project_records = await get_project_records(m_dir)
+        # get_project_records() returns list[dict] untyped until project_cache.py
+        # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
+        project_records = cast("list[Record]", await get_project_records(m_dir))
         live_ids = {r["id"] for r in project_records if r.get("id")}
         validate_references(
             live_ids,
@@ -751,7 +770,9 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             self_id=record_id,
         )
     if "supersedes" in updates:
-        added = [sid for sid in (updates["supersedes"] or []) if sid not in (record.get("supersedes") or [])]
+        new_supersedes: list[str] = updates["supersedes"] or []
+        old_supersedes: list[str] = record.get("supersedes") or []
+        added = [sid for sid in new_supersedes if sid not in old_supersedes]
         if added:
             effective_classification = updates.get("classification", record.get("classification", ""))
             alerts = await supersede_alerts(m_dir, added, effective_classification)
@@ -792,8 +813,8 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
             f"Stop and flag this to the user before continuing."
         )
     msg += supersession_alert_text
-    existing_outcomes = record.get("outcomes") or []
-    if updates.keys() & _CONTENT_FIELD_KEYS and existing_outcomes:
+    existing_outcomes: list[dict[str, Any]] = record.get("outcomes") or []
+    if updates.keys() & CONTENT_FIELD_KEYS and existing_outcomes:
         msg += (
             f"\n\n⚠ OUTCOME TRUST STALE: {len(existing_outcomes)} confirmed outcome(s) describe "
             f"the previous content — they no longer apply to what you just wrote."
@@ -803,15 +824,14 @@ async def _edit_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=msg)]
 
 
-async def _record_outcome(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _record_outcome(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "record outcomes")
     record_id = args["record_id"]
     domain = args["domain"]
     status = OutcomeStatus(args["status"])
     record = await _get_owned_record(ctx, domain, record_id, "record outcomes", owner_check=False)
-    prior_statuses = {
-        o.get("status") for o in record.get("outcomes") or [] if o.get("agent") == ctx.user.username
-    }
+    outcomes: list[dict[str, Any]] = record.get("outcomes") or []
+    prior_statuses = {o.get("status") for o in outcomes if o.get("agent") == ctx.user.username}
     if status.value in prior_statuses:
         return [
             TextContent(
@@ -828,7 +848,7 @@ async def _record_outcome(args: dict, ctx: AuthContext) -> list[TextContent]:
     return [TextContent(type="text", text=f"Recorded {status.value} outcome for {record_id}")]
 
 
-async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _delete_record(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "delete records")
     record_id = args["record_id"]
     domain = args["domain"]
@@ -863,7 +883,7 @@ async def _delete_record(args: dict, ctx: AuthContext) -> list[TextContent]:
     ]
 
 
-async def _move_record(args: dict, ctx: AuthContext) -> list[TextContent]:
+async def _move_record(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
     _require_writer(ctx, "move records")
     record_id = args["record_id"]
     source_domain = args["domain"]
@@ -924,7 +944,7 @@ async def _record_tool_call(name: str, ctx: AuthContext) -> None:
 async def _list_tools() -> list[Tool]:
     from ..models import Role
 
-    ctx = _ctx.get()
+    ctx = auth_ctx.get()
     if ctx is None:
         raise ValueError("No auth context — use a project token for this connection")
     if ctx.role == Role.READER:
@@ -944,9 +964,11 @@ tier2_server.list_tools()(_list_tools)
 list_tools: Callable[[], Awaitable[list[Tool]]] = _list_tools
 
 
-async def _call_tool(name: str, arguments: dict | None) -> list[TextContent] | tuple[list[TextContent], dict]:
+async def _call_tool(
+    name: str, arguments: dict[str, Any] | None
+) -> list[TextContent] | tuple[list[TextContent], dict[str, Any]]:
     args = arguments or {}
-    ctx = _ctx.get()
+    ctx = auth_ctx.get()
     if ctx is None:
         raise ValueError("No auth context — use a project token for this connection")
     _t = asyncio.create_task(_record_tool_call(name, ctx))
@@ -990,17 +1012,19 @@ async def _call_tool(name: str, arguments: dict | None) -> list[TextContent] | t
 # See list_tools' comment above for why this is registered on a private name
 # and re-exposed with an explicit annotation rather than decorated inline.
 tier2_server.call_tool()(_call_tool)
-call_tool: Callable[[str, dict | None], Awaitable[list[TextContent] | tuple[list[TextContent], dict]]] = (
-    _call_tool
-)
+call_tool: Callable[
+    [str, dict[str, Any] | None], Awaitable[list[TextContent] | tuple[list[TextContent], dict[str, Any]]]
+] = _call_tool
 
 
 @tier2_server.list_resources()
 async def list_resources() -> list[Resource]:
-    ctx = _ctx.get()
+    ctx = auth_ctx.get()
     if ctx is None:
         return []
-    domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
+    # list_available_domains is untyped (bare `list[dict]` return) until
+    # domains.py gets its own strict-mode pass (a later task) — cast until then.
+    domains = cast("list[dict[str, Any]]", await list_available_domains(ctx.org.slug, ctx.project.slug))
     return [
         Resource(
             uri=d["uri"],
@@ -1025,7 +1049,7 @@ async def list_resource_templates() -> list[ResourceTemplate]:
 
 
 async def _read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
-    ctx = _ctx.get()
+    ctx = auth_ctx.get()
     if ctx is None:
         raise ValueError("No auth context")
     uri_str = str(uri)
@@ -1053,7 +1077,7 @@ read_resource: Callable[[AnyUrl], Awaitable[list[ReadResourceContents]]] = _read
 @tier2_server.subscribe_resource()
 async def subscribe_resource(uri: AnyUrl) -> None:
     _log.debug("subscribe_resource: uri=%s", uri)
-    ctx = _ctx.get()
+    ctx = auth_ctx.get()
     if ctx is None:
         _log.debug("subscribe_resource: no auth context, skipping")
         return
@@ -1071,7 +1095,7 @@ async def subscribe_resource(uri: AnyUrl) -> None:
 @tier2_server.unsubscribe_resource()
 async def unsubscribe_resource(uri: AnyUrl) -> None:
     _log.debug("unsubscribe_resource: uri=%s", uri)
-    ctx = _ctx.get()
+    ctx = auth_ctx.get()
     if ctx is None:
         return
     uri_str = str(uri)
@@ -1090,7 +1114,9 @@ async def unsubscribe_resource(uri: AnyUrl) -> None:
 _orig_get_capabilities = tier2_server.get_capabilities
 
 
-def _get_capabilities_with_subscribe(notification_options, experimental_capabilities):
+def _get_capabilities_with_subscribe(
+    notification_options: NotificationOptions, experimental_capabilities: dict[str, dict[str, Any]]
+):
     caps = _orig_get_capabilities(notification_options, experimental_capabilities)
     if caps.resources is not None:
         caps.resources.subscribe = True

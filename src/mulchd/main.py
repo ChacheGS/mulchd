@@ -25,7 +25,7 @@ from .connect import get_connect_user_id
 from .connect import router as connect_router
 from .invite import router as invite_router
 from .mcp import McpTier, tier_managers, tier_servers
-from .mcp.context import _ctx
+from .mcp.context import auth_ctx
 from .mcp_auth import MulchdOAuthProvider, is_known_oauth_token
 from .models import Project, Role, User, UserMembership, min_role
 
@@ -234,7 +234,7 @@ async def mcp_endpoint(request: Request) -> Response:
     if tier == McpTier.INVALID_OAUTH_TOKEN:
         return _oauth_invalid_token_response()
     if tier == McpTier.TIER2:
-        _ctx.set(ctx)
+        auth_ctx.set(ctx)
     await tier_managers[tier].handle_request(request.scope, request.receive, request._send)
     return _SseNoop()
 
@@ -245,7 +245,7 @@ async def sse_endpoint(request: Request) -> Response:
     if tier == McpTier.INVALID_OAUTH_TOKEN:
         return _oauth_invalid_token_response()
     if tier == McpTier.TIER2:
-        _ctx.set(ctx)
+        auth_ctx.set(ctx)
     server = tier_servers[tier]
     async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await server.run(streams[0], streams[1], server.create_initialization_options())

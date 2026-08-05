@@ -2,7 +2,7 @@
 wrap_untrusted / untrusted-content boundary tests.
 """
 
-from mulchd.mcp.context import _ctx
+from mulchd.mcp.context import auth_ctx
 from datetime import datetime, timedelta, timezone
 from mulchd.mcp.tier2 import _read_expertise
 from tests.mcp.conftest import ctx, _jot
@@ -163,11 +163,11 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
         data_path, "acme", "infra", "infra",
         type="convention", classification="tactical", content="Resource-fetched rule", owner="carlos",
     )
-    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         contents = await read_resource(AnyUrl("mulchd://domain/infra"))
     finally:
-        _ctx.reset(token)
+        auth_ctx.reset(token)
     text = contents[0].content
     assert isinstance(text, str)
     assert "<record_content>" in text
@@ -181,11 +181,11 @@ async def test_read_resource_no_wrapping_when_no_records(team, data_path):
     from mulchd.mcp.tier2 import read_resource
 
     t = team
-    token = _ctx.set(ctx(t.carlos, t.org, t.infra))
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         contents = await read_resource(AnyUrl("mulchd://domain/infra"))
     finally:
-        _ctx.reset(token)
+        auth_ctx.reset(token)
     text = contents[0].content
     assert isinstance(text, str)
     assert "No records in domain" in text

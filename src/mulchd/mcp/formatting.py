@@ -16,7 +16,7 @@ from ..models import RecordEdit
 from ..mulch import OutcomeStatus, Record
 
 
-_CONTENT_FIELD_KEYS = frozenset({"content", "title", "name", "description", "resolution", "rationale"})
+CONTENT_FIELD_KEYS = frozenset({"content", "title", "name", "description", "resolution", "rationale"})
 
 
 async def annotate_edits(records: list[Record], project_id: int) -> None:
@@ -81,7 +81,7 @@ async def annotate_outcome_staleness(records: list[Record], project_id: int) -> 
         rid = row["record_id"]
         if rid in last_content_edit_at:
             continue  # already have the most recent one, rows are newest-first
-        if _CONTENT_FIELD_KEYS & row["before_snapshot"].keys():
+        if CONTENT_FIELD_KEYS & row["before_snapshot"].keys():
             last_content_edit_at[rid] = row["at"]
             last_content_editor[rid] = row["actor__username"]
     for r in records:
