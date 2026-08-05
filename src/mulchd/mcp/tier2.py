@@ -1020,21 +1020,23 @@ async def _dispatch_call_tool(
 
 
 async def call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
-    from ..mulch import MulchError
-
-    args = params.arguments or {}
-    auth = auth_ctx.get()
-    if auth is None:
-        raise ValueError("No auth context — use a project token for this connection")
-    request = getattr(ctx, "request", None)
-    session_id_ctx.set(request.headers.get("mcp-session-id") if request is not None else None)
-    protocol_version = getattr(ctx, "protocol_version", "unknown")
-    _t = asyncio.create_task(_record_tool_call(params.name, auth, protocol_version))
-    _background_tasks.add(_t)
-    _t.add_done_callback(_background_tasks.discard)
+    # v1's @server.call_tool() decorator auto-caught the entire handler body,
+    # including the "no auth context" check below — not just the dispatch call —
+    # so that check must stay inside this try too, or losing auth context becomes
+    # a raw protocol error instead of the agent-readable result it used to be.
     try:
+        args = params.arguments or {}
+        auth = auth_ctx.get()
+        if auth is None:
+            raise ValueError("No auth context — use a project token for this connection")
+        request = getattr(ctx, "request", None)
+        session_id_ctx.set(request.headers.get("mcp-session-id") if request is not None else None)
+        protocol_version = getattr(ctx, "protocol_version", "unknown")
+        _t = asyncio.create_task(_record_tool_call(params.name, auth, protocol_version))
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
         result = await _dispatch_call_tool(params.name, args, auth)
-    except (ValueError, MulchError) as e:
+    except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=str(e))],
             is_error=True,
