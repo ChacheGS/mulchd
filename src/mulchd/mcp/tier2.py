@@ -12,10 +12,18 @@ _log = logging.getLogger("mulchd.mcp")
 
 import urllib.parse
 
+from mcp_types import INVALID_REQUEST, SubscriptionsListenRequestParams
 from tortoise.exceptions import IntegrityError
 
 from mcp.server import Server, ServerRequestContext
+from mcp.server.context import CallNext, HandlerResult
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.server.subscriptions import (
+    InMemorySubscriptionBus,
+    ListenHandler,
+    ResourceUpdated,
+)
+from mcp.shared.exceptions import MCPError
 from mcp.types import (
     CallToolRequestParams,
     CallToolResult,
@@ -417,12 +425,21 @@ async def _notify_domain(
 
 
 def _fire_notify(domain: str, ctx: AuthContext, action: str, record: Record) -> None:
-    """Schedule _notify_domain as a tracked background task. A no-op outside a
-    live MCP request (no session id was captured for this call), e.g. in tests."""
+    """Schedule both notification paths as tracked background tasks: the old
+    resources/subscribe push (_notify_domain, a no-op outside a live MCP request
+    — no session id was captured for this call, e.g. in tests) and the new
+    subscriptions/listen bus publish (always runs — publishing to an idle bus
+    is a no-op, per the SDK's own design, so no subscriber check is needed here
+    either)."""
     session_id = session_id_ctx.get()
     _t = asyncio.create_task(_notify_domain(domain, session_id, ctx, action, record))
     _background_tasks.add(_t)
     _t.add_done_callback(_background_tasks.discard)
+
+    bus_uri = f"mulchd://{ctx.org.slug}/{ctx.project.slug}/domain/{domain}"
+    _t2 = asyncio.create_task(_subscription_bus.publish(ResourceUpdated(uri=bus_uri)))
+    _background_tasks.add(_t2)
+    _t2.add_done_callback(_background_tasks.discard)
 
 
 def _find_similar_domain(domain: str, existing: list[str], cutoff: float = 0.8) -> str | None:
@@ -1175,6 +1192,30 @@ async def unsubscribe_resource(
     return EmptyResult()
 
 
+async def gate_subscriptions_listen(
+    ctx: ServerRequestContext, call_next: CallNext
+) -> HandlerResult:
+    """Reject a subscriptions/listen request that names a URI outside the
+    caller's own org/project. A connection is already confined to exactly one
+    project by its token, so this is a well-formedness check, not an ACL
+    lookup — the rejection message stays generic so a refusal never confirms
+    or denies which domains exist in another project."""
+    if ctx.method == "subscriptions/listen":
+        auth = auth_ctx.get()
+        if auth is None:
+            raise MCPError(
+                INVALID_REQUEST, "No auth context — use a project token for this connection"
+            )
+        params = SubscriptionsListenRequestParams.model_validate(ctx.params or {}, by_name=False)
+        expected_prefix = f"mulchd://{auth.org.slug}/{auth.project.slug}/domain/"
+        for uri in params.notifications.resource_subscriptions or ():
+            if not uri.startswith(expected_prefix):
+                raise MCPError(INVALID_REQUEST, "not permitted to watch the requested resources")
+    return await call_next(ctx)
+
+
+_subscription_bus = InMemorySubscriptionBus()
+
 tier2_server = Server(
     "mulchd",
     instructions=SESSION_WORKFLOW,
@@ -1185,7 +1226,9 @@ tier2_server = Server(
     on_read_resource=read_resource,
     on_subscribe_resource=subscribe_resource,
     on_unsubscribe_resource=unsubscribe_resource,
+    on_subscriptions_listen=ListenHandler(_subscription_bus),
 )
+tier2_server.middleware.append(gate_subscriptions_listen)
 tier2_manager = StreamableHTTPSessionManager(
     app=tier2_server,
     stateless=False,
