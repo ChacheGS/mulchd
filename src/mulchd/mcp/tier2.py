@@ -163,12 +163,14 @@ has changed. When editing a `foundational` record yourself, prefer writing a sup
 record instead so the change appears in-band.
 
 Domain subscriptions: each domain is exposed as a resource (see the uri field returned \
-by list_domains, or call list_resources). Depending on your client's negotiated protocol \
-version, watch a domain one of two ways: (older clients) after loading a domain with \
-read_records, call resources/subscribe on its uri so the server can push live updates when \
-teammates write, edit, or delete records there — call resources/unsubscribe when done. \
-(Clients on the 2026-07-28 protocol or later) resources/subscribe is not available; instead \
-call subscriptions/listen with resourceSubscriptions set to the domain's uri.
+by list_domains, or call list_resources). list_domains' response also reports your \
+session's negotiated protocol version — check that to pick which of the two subscription \
+mechanisms below applies to you; there's no other way to tell. Watch a domain one of two \
+ways: (protocol versions before 2026-07-28) after loading a domain with read_records, call \
+resources/subscribe on its uri so the server can push live updates when teammates write, \
+edit, or delete records there — call resources/unsubscribe when done. (2026-07-28 or later) \
+resources/subscribe is not available; instead call subscriptions/listen with \
+resourceSubscriptions set to the domain's uri.
 
 Notification handling: when you receive a notifications/resources/updated notification \
 (a mulchd://<org>/<project>/<domain> URI with query parameters appended), parse those \
@@ -688,12 +690,16 @@ async def _search_expertise(
     )
 
 
-async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict[str, Any]]:
+async def _list_domains(
+    ctx: AuthContext, protocol_version: str
+) -> tuple[list[TextContent], dict[str, Any]]:
     domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
         f"**Server time:** {now} — note this for read_records(since=...) at session end.\n",
+        f"**Negotiated protocol version:** {protocol_version} — use this to pick your "
+        "subscription mechanism (see Domain subscriptions below).\n",
     ]
     if ctx.project.knowledge_language:
         lang = ctx.project.knowledge_language
@@ -711,6 +717,7 @@ async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict[str, 
         lines.append(f"  {d['record_count']} records, last updated: {updated}, uri: {d['uri']}\n")
     structured: dict[str, Any] = {
         "server_time": now,
+        "protocol_version": protocol_version,
         "recent_hint": f"Call read_records(since='{now}') at session end to surface teammate activity.",
         "domains": domains,
     }
@@ -1031,7 +1038,7 @@ async def list_tools(
 
 
 async def _dispatch_call_tool(
-    name: str, args: dict[str, Any], auth: AuthContext
+    name: str, args: dict[str, Any], auth: AuthContext, protocol_version: str
 ) -> list[TextContent] | tuple[list[TextContent], dict[str, Any]]:
     match name:
         case "read_records":
@@ -1051,7 +1058,7 @@ async def _dispatch_call_tool(
         case "search_records":
             return await _search_expertise(args, auth)
         case "list_domains":
-            return await _list_domains(auth)
+            return await _list_domains(auth, protocol_version)
         case "get_record_schema":
             return await _get_record_schema(args)
         case "get_record_history":
@@ -1086,7 +1093,7 @@ async def call_tool(
         _t = asyncio.create_task(_record_tool_call(params.name, auth, protocol_version))
         _background_tasks.add(_t)
         _t.add_done_callback(_background_tasks.discard)
-        result = await _dispatch_call_tool(params.name, args, auth)
+        result = await _dispatch_call_tool(params.name, args, auth, protocol_version)
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=str(e))],
