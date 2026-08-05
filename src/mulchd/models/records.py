@@ -80,7 +80,7 @@ class RecordEdit(models.Model):
     actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="record_edits"
     )
-    before_snapshot = fields.JSONField()  # {field: old_value} for fields that changed
+    before_snapshot = fields.JSONField()  # {field: old_value} for fields that changed  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
     client = fields.CharField(max_length=64, default="unknown")
     session_id = fields.UUIDField(null=True)
     at = fields.DatetimeField(auto_now_add=True)
