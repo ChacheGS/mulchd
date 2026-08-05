@@ -16,6 +16,13 @@ class ToolCall(models.Model):
     )
     tool = fields.CharField(max_length=64)
     client = fields.CharField(max_length=64, default="unknown")
+    # mulchd's v1 mcp SDK only ever spoke LATEST_PROTOCOL_VERSION="2025-11-25" —
+    # the default backfills every pre-migration row with that value via the
+    # generated migration's DDL. This is a best-effort label, not a certainty:
+    # the field wasn't tracked before this migration, so there's no way to
+    # confirm whether an older client ever explicitly negotiated down to an
+    # earlier version during its initialize handshake.
+    protocol_version = fields.CharField(max_length=32, default="2025-11-25")
     called_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
