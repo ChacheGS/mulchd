@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from .models import InstanceEvent, InstanceEventCategory, Project, User
 
@@ -32,7 +32,10 @@ def describe_event(event: InstanceEvent) -> str:
     (if any) to already be fetched/select_related by the caller — this function
     does not perform any DB access itself.
     """
-    detail = event.detail or {}
+    detail = cast(
+        "dict[str, Any]",
+        event.detail or {},  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
+    )
     subject_name = event.subject_user.username if event.subject_user else ""
     project_label = (
         f"{event.project.org.slug}/{event.project.slug}" if event.project else ""

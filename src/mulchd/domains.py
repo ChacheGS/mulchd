@@ -1,6 +1,7 @@
 import logging
 import re
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -33,10 +34,11 @@ def _load_domain_descriptions(m_dir: Path) -> dict[str, str]:
     descriptions: dict[str, str] = {}
     if config_path.exists():
         try:
-            data = yaml.safe_load(config_path.read_text()) or {}
-            for name, meta in (data.get("domains") or {}).items():
+            data = cast("dict[str, Any]", yaml.safe_load(config_path.read_text()) or {})
+            domains = cast("dict[str, Any]", data.get("domains") or {})
+            for name, meta in domains.items():
                 if isinstance(meta, dict):
-                    descriptions[name] = meta.get("description", "")
+                    descriptions[name] = cast(dict[str, Any], meta).get("description", "")
                 elif isinstance(meta, str):
                     descriptions[name] = meta
         except Exception:
@@ -53,13 +55,13 @@ def list_domain_names(org: str, project: str) -> list[str]:
     return sorted(p.stem for p in expertise_dir.glob("*.jsonl"))
 
 
-async def list_available_domains(org: str, project: str) -> list[dict]:
+async def list_available_domains(org: str, project: str) -> list[dict[str, Any]]:
     m_dir = mulch_dir(org, project)
     expertise_dir = m_dir / "expertise"
     descriptions = _load_domain_descriptions(m_dir)
     domain_names = list_domain_names(org, project)
 
-    results = []
+    results: list[dict[str, Any]] = []
     for name in domain_names:
         path = expertise_dir / f"{name}.jsonl"
         records = await read_domain_records(path)
