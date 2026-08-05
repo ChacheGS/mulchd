@@ -1207,9 +1207,8 @@ async def gate_subscriptions_listen(
                 INVALID_REQUEST, "No auth context — use a project token for this connection"
             )
         params = SubscriptionsListenRequestParams.model_validate(ctx.params or {}, by_name=False)
-        expected_prefix = f"mulchd://{auth.org.slug}/{auth.project.slug}/domain/"
         for uri in params.notifications.resource_subscriptions or ():
-            if not uri.startswith(expected_prefix):
+            if _parse_domain_uri(uri, auth) is None:
                 raise MCPError(INVALID_REQUEST, "not permitted to watch the requested resources")
     return await call_next(ctx)
 
