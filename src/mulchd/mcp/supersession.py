@@ -8,7 +8,7 @@ with tier2.py re-exporting these names back for its own use.
 
 from enum import IntEnum
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from ..domains import mulch_dir
 from ..records import Record, read_domain_records
@@ -31,9 +31,7 @@ async def mark_superseded(records: list[Record], org_slug: str, project_slug: st
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
-    # get_project_records() returns list[dict] untyped until project_cache.py
-    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
-    project_records = cast("list[Record]", await get_project_records(m_dir))
+    project_records = await get_project_records(m_dir)
     archived_ids = await get_archived_ids(m_dir)
     live_by_id: dict[str, Record] = {r["id"]: r for r in project_records if r.get("id")}
 
@@ -156,7 +154,7 @@ def _resolve_tips(
     return ordered, tips[ordered[0]] if len(ordered) == 1 else 0
 
 
-def cross_domain_supersede_hints(records: list[Record]) -> list[dict]:
+def cross_domain_supersede_hints(records: list[Record]) -> list[dict[str, Any]]:
     """Structured "read this domain next" pointers for records superseded from
     outside their own domain.
 
@@ -169,7 +167,7 @@ def cross_domain_supersede_hints(records: list[Record]) -> list[dict]:
 
     Records must already be annotated by mark_superseded.
     """
-    hints: list[dict] = []
+    hints: list[dict[str, Any]] = []
     for r in records:
         rid = r.get("id")
         if r.get("_superseded_tip_domain"):
@@ -183,7 +181,8 @@ def cross_domain_supersede_hints(records: list[Record]) -> list[dict]:
         elif r.get("_superseded_tip"):
             continue  # tip is in this record's own domain — nothing else to read
         elif r.get("_superseded_tip_ambiguous"):
-            for tid, dom in (r.get("_superseded_tip_ambiguous_domains") or {}).items():
+            ambiguous_domains = cast("dict[str, str]", r.get("_superseded_tip_ambiguous_domains") or {})
+            for tid, dom in ambiguous_domains.items():
                 hints.append({"record_id": rid, "superseded_by": tid, "in_domain": dom})
         elif r.get("_superseder_domain"):
             hints.append(
@@ -209,9 +208,7 @@ async def mark_related_to(records: list[Record], org_slug: str, project_slug: st
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
-    # get_project_records() returns list[dict] untyped until project_cache.py
-    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
-    project_records = cast("list[Record]", await get_project_records(m_dir))
+    project_records = await get_project_records(m_dir)
     archived_ids = await get_archived_ids(m_dir)
     live_ids: set[str] = {r["id"] for r in project_records if r.get("id")}
 
@@ -252,9 +249,7 @@ async def find_incoming_references(m_dir: Path, record_id: str) -> list[Record]:
     cached for mark_related_to/mark_superseded, so it's cheaper and more
     correct to answer this directly than to trust ml's result.
     """
-    # get_project_records() returns list[dict] untyped until project_cache.py
-    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
-    project_records = cast("list[Record]", await get_project_records(m_dir))
+    project_records = await get_project_records(m_dir)
     hits: list[Record] = []
     for r in project_records:
         rid = r.get("id")

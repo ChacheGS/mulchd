@@ -25,11 +25,11 @@ from tortoise.exceptions import IntegrityError
 from ..auth import AuthContext
 from ..domains import (
     expertise_path,
-    list_available_domains,  # pyright: ignore[reportUnknownVariableType]  # domains.py not yet strict-clean (separate mop-up task)
+    list_available_domains,
     list_domain_names,
     mulch_dir,
 )
-from .project_cache import get_project_records  # pyright: ignore[reportUnknownVariableType]  # project_cache.py not yet strict-clean (separate mop-up task)
+from .project_cache import get_project_records
 from .schemas import (
     TIER2_TOOLS,
     RECORD_SCHEMAS,
@@ -40,7 +40,7 @@ from .supersession import (
     Classification,
     mark_superseded,
     mark_related_to,
-    cross_domain_supersede_hints,  # pyright: ignore[reportUnknownVariableType]  # supersession.py not yet strict-clean (separate mop-up task)
+    cross_domain_supersede_hints,
     find_incoming_references,
     validate_references,
     _find_cycles,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_supersede_cycles.py
@@ -322,9 +322,7 @@ async def _read_expertise(
     await mark_related_to(page, ctx.org.slug, ctx.project.slug)
     await annotate_edits(page, ctx.project.id)
     await annotate_outcome_staleness(page, ctx.project.id)
-    # cross_domain_supersede_hints is untyped (bare `list[dict]` return) until
-    # supersession.py gets its own strict-mode pass (a later task) — cast until then.
-    cross_domain_hints = cast("list[dict[str, Any]]", cross_domain_supersede_hints(page))
+    cross_domain_hints = cross_domain_supersede_hints(page)
     hint_text = ""
     if cross_domain_hints:
         hint_domains = sorted({h["in_domain"] for h in cross_domain_hints})
@@ -467,9 +465,7 @@ async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[Text
     if "evidence" in record:
         record["evidence"] = _normalize_evidence(record["evidence"])
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    # get_project_records() returns list[dict] untyped until project_cache.py
-    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
-    project_records = cast("list[Record]", await get_project_records(m_dir))
+    project_records = await get_project_records(m_dir)
     if args.get("supersedes") or args.get("relates_to"):
         live_ids = {r["id"] for r in project_records if r.get("id")}
         validate_references(
@@ -642,9 +638,7 @@ async def _search_expertise(
 
 
 async def _list_domains(ctx: AuthContext) -> tuple[list[TextContent], dict[str, Any]]:
-    # list_available_domains is untyped (bare `list[dict]`) until domains.py
-    # gets its own strict-mode pass — cast until then.
-    domains = cast("list[dict[str, Any]]", await list_available_domains(ctx.org.slug, ctx.project.slug))
+    domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     lines = [
         f"# Domains — {ctx.org.display_name} / {ctx.project.display_name}\n",
@@ -759,9 +753,7 @@ async def _edit_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     supersession_alert_text = ""
     if "supersedes" in updates or "relates_to" in updates:
-        # get_project_records() returns list[dict] untyped until project_cache.py
-        # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
-        project_records = cast("list[Record]", await get_project_records(m_dir))
+        project_records = await get_project_records(m_dir)
         live_ids = {r["id"] for r in project_records if r.get("id")}
         validate_references(
             live_ids,
@@ -1022,9 +1014,7 @@ async def list_resources() -> list[Resource]:
     ctx = auth_ctx.get()
     if ctx is None:
         return []
-    # list_available_domains is untyped (bare `list[dict]` return) until
-    # domains.py gets its own strict-mode pass (a later task) — cast until then.
-    domains = cast("list[dict[str, Any]]", await list_available_domains(ctx.org.slug, ctx.project.slug))
+    domains = await list_available_domains(ctx.org.slug, ctx.project.slug)
     return [
         Resource(
             uri=d["uri"],

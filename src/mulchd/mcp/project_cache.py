@@ -23,6 +23,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TypeVar
 
+from ..mulch import Record
 from ..records import read_domain_records
 
 _T = TypeVar("_T")
@@ -58,18 +59,18 @@ async def _scan_cached_dir(
     return {name: file_entry[name][1] for name in current_files}
 
 
-_project_cache: dict[Path, dict[str, tuple[float, list[dict]]]] = {}
+_project_cache: dict[Path, dict[str, tuple[float, list[Record]]]] = {}
 
 
-async def get_project_records(m_dir: Path) -> list[dict]:
-    async def _parse(path: Path) -> list[dict]:
+async def get_project_records(m_dir: Path) -> list[Record]:
+    async def _parse(path: Path) -> list[Record]:
         records = await read_domain_records(path)
         for r in records:
             r["_domain"] = path.stem
         return records
 
     per_domain = await _scan_cached_dir(_project_cache, m_dir / "expertise", _parse)
-    result: list[dict] = []
+    result: list[Record] = []
     for records in per_domain.values():
         result.extend(records)
     return result
