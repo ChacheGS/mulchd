@@ -53,7 +53,7 @@ async def test_record_outcome_creates_visible_outcome(team, data_path, fake_writ
     finally:
         mcp_tier2.record_outcome = orig
 
-    assert f"Recorded success outcome for {record_id}" in result[0].text
+    assert f"Recorded success outcome for {record_id} — acme/infra" in result[0].text
     records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
     outcomes = records2[1]["records"][0]["outcomes"]
     assert outcomes[0]["status"] == "success"

@@ -837,7 +837,15 @@ async def _record_outcome(args: dict[str, Any], ctx: AuthContext) -> list[TextCo
         ]
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
     await record_outcome(m_dir, domain, record_id, status, args.get("notes"), agent=ctx.user.username)
-    return [TextContent(type="text", text=f"Recorded {status.value} outcome for {record_id}")]
+    return [
+        TextContent(
+            type="text",
+            text=(
+                f"Recorded {status.value} outcome for {record_id} "
+                f"— {ctx.org.slug}/{ctx.project.slug}"
+            ),
+        )
+    ]
 
 
 async def _delete_record(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
