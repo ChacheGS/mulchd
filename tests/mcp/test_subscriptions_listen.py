@@ -14,8 +14,20 @@ import pytest
 
 from mcp.shared.exceptions import MCPError
 from mulchd.mcp.context import auth_ctx
-from mulchd.mcp.tier2 import _fire_notify, _subscription_bus, gate_subscriptions_listen
+from mulchd.mcp.tier2 import (
+    _fire_notify,
+    _subscription_bus,
+    gate_subscriptions_listen,
+    tier2_server,
+)
 from tests.mcp.conftest import ctx
+
+
+def test_gate_is_registered_on_the_server():
+    """Pins the append target: tier2_server.middleware.append(...) is a
+    post-construction list append, not a constructor kwarg — a future SDK
+    change to that shape would silently stop enforcing this check."""
+    assert gate_subscriptions_listen in tier2_server.middleware
 
 
 def _listen_ctx(resource_subscriptions):
