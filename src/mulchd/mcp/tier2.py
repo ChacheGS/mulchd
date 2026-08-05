@@ -161,10 +161,13 @@ A record marked `_edited` has been modified in place since it was first written.
 has changed. When editing a `foundational` record yourself, prefer writing a superseding \
 record instead so the change appears in-band.
 
-Domain subscriptions: this server exposes each domain as a resource at \
-mulchd://domain/<name>. After loading a domain with read_records, subscribe to it via \
-resources/subscribe so the server can push live updates when teammates write, edit, or \
-delete records in that domain. Call resources/unsubscribe when you are done with a domain.
+Domain subscriptions: each domain is exposed as a resource (see the uri field returned \
+by list_domains, or call list_resources). Depending on your client's negotiated protocol \
+version, watch a domain one of two ways: (older clients) after loading a domain with \
+read_records, call resources/subscribe on its uri so the server can push live updates when \
+teammates write, edit, or delete records there — call resources/unsubscribe when done. \
+(Clients on the 2026-07-28 protocol or later) resources/subscribe is not available; instead \
+call subscriptions/listen with resourceSubscriptions set to the domain's uri.
 
 Notification handling: when you receive a notifications/resources/updated notification \
 for a mulchd://domain/<name> URI, parse its query parameters — actor (display name of \
@@ -183,7 +186,17 @@ while and are about to commit a significant change (a git commit, a merge, a dec
 that depends on shared state), call read_records(domains=[<domain>], \
 since=<session_start_timestamp>) once for the domains you're relying on before proceeding, \
 rather than assuming silence means nothing changed. Don't poll on every turn — only before \
-actions that would be costly to get wrong.\
+actions that would be costly to get wrong.
+
+subscriptions/listen notification handling (2026-07-28 clients only): a resource-updated \
+event on this mechanism carries only a uri — no actor, action, type, classification, or \
+timestamp, unlike resources/subscribe's push notifications above. Track your own last-seen \
+timestamp per domain, seeded from the server timestamp list_domains() returned at session \
+start. On any event for a domain you're watching, call \
+read_records(domains=[<domain>], since=<that domain's last-seen timestamp>) — this is bounded \
+to just what changed, not a full domain reload — and update your stored timestamp afterward. \
+Always re-fetch on every event; there is no cheaper way to judge relevance from the event \
+alone under this mechanism.\
 """
 
 # ---------------------------------------------------------------------------
