@@ -43,6 +43,7 @@ from mcp.types import (
     UnsubscribeRequestParams,
 )
 
+from .. import __version__
 from ..auth import AuthContext
 from ..domains import (
     expertise_path,
@@ -1231,6 +1232,7 @@ _subscription_bus = InMemorySubscriptionBus()
 
 tier2_server = Server(
     "mulchd",
+    version=__version__,
     instructions=SESSION_WORKFLOW,
     on_list_tools=list_tools,
     on_call_tool=call_tool,

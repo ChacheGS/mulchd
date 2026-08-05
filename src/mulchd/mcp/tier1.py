@@ -10,6 +10,7 @@ from mcp.types import (
     Tool,
 )
 
+from .. import __version__
 from ..config import settings
 
 TIER1_TOOLS = [
@@ -62,6 +63,7 @@ async def _call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -
 
 tier1_server = Server(
     "mulchd",
+    version=__version__,
     on_list_tools=_list_tools,
     on_call_tool=_call_tool,
 )
