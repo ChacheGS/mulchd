@@ -318,6 +318,32 @@ async def test_cross_domain_hint_points_at_the_tip_not_the_stale_hop(team, data_
     assert hints[0]["superseded_by"] == c["id"]
 
 
+async def test_read_resource_shows_cross_domain_hint_banner(team, data_path):
+    """resources/read must surface the same "read that domain for the full
+    picture" banner as read_records — the per-record superseded-by tag alone
+    doesn't call out which domain to go read next as prominently."""
+    from mcp.types import ReadResourceRequestParams
+
+    from mulchd.mcp.context import auth_ctx
+    from mulchd.mcp.tier2 import read_resource
+    from tests.mcp.conftest import ctx
+
+    t = team
+    _a, _b, c = await _chain(data_path, "guardrails", "guardrails", "policies")
+
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        result = await read_resource(
+            None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/guardrails")
+        )
+    finally:
+        auth_ctx.reset(token)
+    text = result.contents[0].text
+    assert "Cross-domain supersession" in text
+    assert "policies" in text
+    assert c["id"] in text
+
+
 async def test_no_cross_domain_hint_when_the_tip_is_in_scope(team, data_path):
     """An out-of-scope intermediate hop is not worth reading when the tip is local."""
     from mulchd.mcp.tier2 import _read_expertise

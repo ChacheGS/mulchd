@@ -1181,6 +1181,13 @@ def _parse_domain_uri(uri: str, auth: AuthContext) -> str | None:
     return None
 
 
+# resources/read has no request parameters — a client can't pass a limit or
+# cursor the way read_records callers do — so this is a hard cap on a single
+# response, not a default page size. Anything beyond it is only reachable via
+# read_records' real pagination.
+_RESOURCE_READ_LIMIT = 50
+
+
 async def read_resource(
     ctx: ServerRequestContext, params: ReadResourceRequestParams
 ) -> ReadResourceResult:
@@ -1192,15 +1199,36 @@ async def read_resource(
     if name is not None:
         if name not in list_domain_names(auth.org.slug, auth.project.slug):
             raise ValueError(f"Unknown domain: {name}")
+        protocol_version = ctx.protocol_version if ctx is not None else "unknown"
+        _t = asyncio.create_task(_record_tool_call("resources/read", auth, protocol_version))
+        _background_tasks.add(_t)
+        _t.add_done_callback(_background_tasks.discard)
         records = await read_domain_records(expertise_path(auth.org.slug, auth.project.slug, name))
         for r in records:
             r["_domain"] = name
-        await mark_superseded(records, auth.org.slug, auth.project.slug)
-        await mark_related_to(records, auth.org.slug, auth.project.slug)
-        await annotate_edits(records, auth.project.id)
-        await annotate_outcome_staleness(records, auth.project.id)
-        if records:
-            text = wrap_untrusted(format_records(records))
+        records.sort(key=lambda r: (r.get("recorded_at", ""), r.get("id", "")))
+        truncated = len(records) > _RESOURCE_READ_LIMIT
+        page = records[:_RESOURCE_READ_LIMIT]
+        await mark_superseded(page, auth.org.slug, auth.project.slug)
+        await mark_related_to(page, auth.org.slug, auth.project.slug)
+        await annotate_edits(page, auth.project.id)
+        await annotate_outcome_staleness(page, auth.project.id)
+        cross_domain_hints = cross_domain_supersede_hints(page)
+        hint_text = ""
+        if cross_domain_hints:
+            hint_domains = sorted({h["in_domain"] for h in cross_domain_hints})
+            hint_text = (
+                f"⚠ Cross-domain supersession: {len(cross_domain_hints)} record(s) here are "
+                f"superseded by records in: {', '.join(hint_domains)}. Read those domains for "
+                f"the full picture.\n\n"
+            )
+        if page:
+            text = hint_text + wrap_untrusted(format_records(page))
+            if truncated:
+                text += (
+                    f"\n⚠ Showing {len(page)} of {len(records)} records — call "
+                    f"read_records(domains=['{name}']) for the rest.\n"
+                )
         else:
             text = f"No records in domain '{name}' yet."
         return ReadResourceResult(
