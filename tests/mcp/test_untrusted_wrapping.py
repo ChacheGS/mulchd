@@ -208,10 +208,17 @@ async def test_read_resource_wraps_content_when_records_present(team, data_path)
 
 
 async def test_read_resource_no_wrapping_when_no_records(team, data_path):
+    """An existing-but-empty domain (a jsonl file with zero live records) is
+    distinct from a domain that was never created — see
+    test_read_resource_rejects_unknown_domain."""
     from mcp.types import ReadResourceRequestParams
     from mulchd.mcp.tier2 import read_resource
 
     t = team
+    expertise_dir = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    expertise_dir.mkdir(parents=True)
+    (expertise_dir / "infra.jsonl").touch()
+
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         result = await read_resource(
@@ -222,4 +229,24 @@ async def test_read_resource_no_wrapping_when_no_records(team, data_path):
     text = result.contents[0].text
     assert isinstance(text, str)
     assert "No records in domain" in text
-    assert "<record_content>" not in text
+
+
+async def test_read_resource_rejects_unknown_domain(team, data_path):
+    """A domain that was never created (no jsonl file at all) must be
+    distinguishable from an existing-but-empty one — read_records already
+    makes this distinction via its unknown_domains field, but resources/read
+    used to render both cases identically as "No records in domain 'x' yet.",
+    which reads as a live, subscribable domain that just has no content."""
+    import pytest
+    from mcp.types import ReadResourceRequestParams
+    from mulchd.mcp.tier2 import read_resource
+
+    t = team
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        with pytest.raises(ValueError, match="Unknown domain"):
+            await read_resource(
+                None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/never-created")
+            )
+    finally:
+        auth_ctx.reset(token)

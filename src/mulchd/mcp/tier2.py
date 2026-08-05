@@ -1173,6 +1173,8 @@ async def read_resource(
     uri = params.uri
     name = _parse_domain_uri(uri, auth)
     if name is not None:
+        if name not in list_domain_names(auth.org.slug, auth.project.slug):
+            raise ValueError(f"Unknown domain: {name}")
         records = await read_domain_records(expertise_path(auth.org.slug, auth.project.slug, name))
         for r in records:
             r["_domain"] = name
