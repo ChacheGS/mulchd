@@ -2,7 +2,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from importlib.metadata import version as _pkg_version
-from typing import Any, cast
+from typing import Any
 
 from fastapi import FastAPI, Request
 from pydantic import AnyHttpUrl
@@ -46,7 +46,12 @@ oauth_provider = MulchdOAuthProvider()
 
 
 async def _auth_context_from_access_token(access_token: AccessToken) -> AuthContext | None:
-    user = await User.filter(id=int(cast(str, access_token.subject)), active=True).first()
+    # mulchd's own AccessToken constructors (mcp_auth.py) always set subject to the
+    # granting user's id; only a differently-implemented OAuth provider would leave it unset.
+    assert (
+        access_token.subject is not None
+    ), "AccessToken.subject is always set by mulchd's own token issuance"
+    user = await User.filter(id=int(access_token.subject), active=True).first()
     if user is None:
         return None
     claims: dict[str, Any] = access_token.claims or {}
