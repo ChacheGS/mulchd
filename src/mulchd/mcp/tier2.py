@@ -170,7 +170,8 @@ teammates write, edit, or delete records there — call resources/unsubscribe wh
 call subscriptions/listen with resourceSubscriptions set to the domain's uri.
 
 Notification handling: when you receive a notifications/resources/updated notification \
-for a mulchd://domain/<name> URI, parse its query parameters — actor (display name of \
+(a mulchd://<org>/<project>/<domain> URI with query parameters appended), parse those \
+query parameters — actor (display name of \
 the teammate who acted), action (write/edit/delete), type, classification, title, and \
 at (timestamp). Assess relevance before acting: if the actor is a teammate, the type is \
 'decision' or 'convention', the classification is 'foundational' or 'tactical', and the \
