@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
-    "mcp>=1.28,<2",
+    "mcp>=2,<3",
     "tortoise-orm>=0.21",
     "aerich>=0.7",
     "aiofiles>=23.0",
