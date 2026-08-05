@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
@@ -67,8 +68,9 @@ async def bulk_delete_records_action(
                 continue
             if not isinstance(parsed, dict):
                 continue
-            domain = parsed.get("domain")
-            record_id = parsed.get("id")
+            parsed_obj = cast(dict[str, Any], parsed)  # json.loads returns Any; narrowed shape isn't known to pyright
+            domain = parsed_obj.get("domain")
+            record_id = parsed_obj.get("id")
             if not isinstance(domain, str) or not domain or not isinstance(record_id, str) or not record_id:
                 continue
             pairs.append((domain, record_id))
@@ -116,7 +118,7 @@ async def records_page(request: Request, org_slug: str, project_slug: str) -> Re
     if project is None:
         return Response(status_code=404)
 
-    domains_data: list[dict] = []
+    domains_data: list[dict[str, Any]] = []
     expertise_dir = mulch_dir(org_slug, project_slug) / "expertise"
     if expertise_dir.exists():
         for jsonl_file in sorted(expertise_dir.glob("*.jsonl")):

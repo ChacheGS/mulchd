@@ -1,11 +1,12 @@
 from collections import defaultdict, deque
+from typing import Any
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 
 from ..domains import mulch_dir
 from ..models import RecordEdit, RecordEvent, RecordMeta
-from ..mulch import restore_record
+from ..mulch import Record, restore_record
 from ..records import read_domain_records
 from ._shared import (
     parse_project_ref,
@@ -29,7 +30,7 @@ _ACTION_COLORS = {
 _CONTENT_KEYS = ("content", "title", "name", "description", "resolution", "rationale")
 
 
-def _record_summary(r: dict) -> str:
+def _record_summary(r: Record) -> str:
     for key in _CONTENT_KEYS:
         if r.get(key):
             val = str(r[key])
@@ -37,9 +38,9 @@ def _record_summary(r: dict) -> str:
     return ""
 
 
-async def _load_record_map(org_slug: str, project_slug: str) -> dict[str, dict]:
+async def _load_record_map(org_slug: str, project_slug: str) -> dict[str, Record]:
     m_dir = mulch_dir(org_slug, project_slug)
-    result: dict[str, dict] = {}
+    result: dict[str, Record] = {}
     expertise_dir = m_dir / "expertise"
     if expertise_dir.exists():
         for f in expertise_dir.glob("*.jsonl"):
@@ -67,35 +68,31 @@ async def record_activity_page(
     if project is None:
         return Response(status_code=404)
 
-    events: list[dict] = []
-    archived_domains: list[dict] = []
+    events: list[dict[str, Any]] = []
+    archived_domains: list[dict[str, Any]] = []
 
     qs = RecordEvent.filter(project=project)
     if action:
         qs = qs.filter(action=action)
     if domain:
         qs = qs.filter(domain__icontains=domain)
-    rows = (
-        await qs.order_by("-at")
-        .limit(200)
-        .values(
-            "id",
-            "record_id",
-            "domain",
-            "source_domain",
-            "action",
-            "client",
-            "at",
-            "session_id",
-            "actor__username",
-            "actor__display_name",
-        )
+    rows: list[dict[str, Any]] = await qs.order_by("-at").limit(200).values(
+        "id",
+        "record_id",
+        "domain",
+        "source_domain",
+        "action",
+        "client",
+        "at",
+        "session_id",
+        "actor__username",
+        "actor__display_name",
     )
 
     # RecordMeta gives us the original author of each record (may be absent
     # for records created before this table existed).
     all_record_ids = [r["record_id"] for r in rows]
-    meta_rows = (
+    meta_rows: list[dict[str, Any]] = (
         (
             await RecordMeta.filter(
                 record_id__in=all_record_ids, project=project
@@ -114,23 +111,25 @@ async def record_activity_page(
 
     # RecordEdit rows per (record_id, session_id), oldest-first.
     # Each edit event pops one entry from its queue.
-    edit_rows = (
+    edit_rows: list[dict[str, Any]] = (
         await RecordEdit.filter(project=project)
         .order_by("at")
         .values("record_id", "session_id", "before_snapshot")
     )
-    edit_queues: dict[tuple, deque] = defaultdict(deque)
+    edit_queues: dict[tuple[str, str], deque[Record]] = defaultdict(deque)
     for e in edit_rows:
         edit_queues[(e["record_id"], str(e["session_id"]))].append(e["before_snapshot"])
 
     # Process events oldest-first so queue pops match the right edit,
     # then reverse for newest-first display.
     record_map = await _load_record_map(org_slug, project_slug)
-    classification_map = {rid: r.get("classification", "") for rid, r in record_map.items()}
-    edit_consumed: dict[tuple, int] = defaultdict(int)
-    processed = []
+    classification_map: dict[str, str] = {
+        rid: r.get("classification", "") for rid, r in record_map.items()
+    }
+    edit_consumed: dict[tuple[str, str], int] = defaultdict(int)
+    processed: list[dict[str, Any]] = []
     for r in reversed(rows):
-        before_snap = None
+        before_snap: Record | None = None
         if r["action"] == "edit":
             key = (r["record_id"], str(r["session_id"]))
             q = edit_queues.get(key)
@@ -157,7 +156,8 @@ async def record_activity_page(
             new_rank = Classification.of(new_cls)
             highest_old: Classification | None = None
             highest_old_str = ""
-            for sid in rec.get("supersedes") or []:
+            supersedes: list[str] = rec.get("supersedes") or []
+            for sid in supersedes:
                 old_cls = classification_map.get(sid, "")
                 old_rank = Classification.of(old_cls)
                 if old_rank == Classification.foundational or old_rank > new_rank:
