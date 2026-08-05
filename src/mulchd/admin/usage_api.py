@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -32,7 +33,7 @@ async def usage_data(request: Request, org: str, project: str, period: str = "we
 
     # date_trunc has no ORM equivalent — raw SQL only for the chart buckets
     conn = connections.get("default")
-    chart_rows = await conn.execute_query_dict(
+    chart_rows: list[dict[str, Any]] = await cast(Any, conn).execute_query_dict(
         f"""
         SELECT date_trunc('{trunc}', called_at AT TIME ZONE 'UTC') AS bucket,
                count(*)::int AS n
@@ -41,7 +42,7 @@ async def usage_data(request: Request, org: str, project: str, period: str = "we
         GROUP BY bucket ORDER BY bucket
         """,
         [proj.id, since],
-    )
+    )  # Tortoise's BaseDBAsyncClient.execute_query_dict stub leaves query/values untyped
 
     by_tool = (
         await ToolCall.filter(project=proj, called_at__gte=since)

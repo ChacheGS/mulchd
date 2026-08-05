@@ -69,7 +69,7 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
         .order_by("-created_at")
         .all()
     )
-    uses_by_invite: dict[int, list] = {inv.id: [] for inv in invites}
+    uses_by_invite: dict[int, list[InviteUse]] = {inv.id: [] for inv in invites}
     if invites:
         uses = (
             await InviteUse.filter(invite_id__in=[inv.id for inv in invites])
