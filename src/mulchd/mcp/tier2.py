@@ -1158,6 +1158,8 @@ async def read_resource(
             r["_domain"] = name
         await mark_superseded(records, auth.org.slug, auth.project.slug)
         await mark_related_to(records, auth.org.slug, auth.project.slug)
+        await annotate_edits(records, auth.project.id)
+        await annotate_outcome_staleness(records, auth.project.id)
         if records:
             text = wrap_untrusted(format_records(records))
         else:

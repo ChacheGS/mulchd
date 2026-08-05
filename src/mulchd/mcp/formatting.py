@@ -224,6 +224,13 @@ def format_records(records: list[Record]) -> str:
         lines.append(header)
         if body:
             lines.append(f"  {body}")
+        files = r.get("files")
+        if files:
+            lines.append(f"  files: {', '.join(files)}")
+        evidence = r.get("evidence")
+        if evidence:
+            evidence_str = ", ".join(f"{k}={v}" for k, v in evidence.items())
+            lines.append(f"  evidence: {evidence_str}")
         lines.append("")
     return "\n".join(lines)
 
