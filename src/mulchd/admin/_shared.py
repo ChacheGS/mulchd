@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ..admin_grants import is_superadmin
-from ..connect import _get_connect_user_id
+from ..connect import get_connect_user_id
 from ..models import Project, User
 
 # Matches the pattern already declared (but never enforced server-side) on the
@@ -25,12 +25,12 @@ def is_valid_slug(slug: str) -> bool:
 
 # Templates live at src/mulchd/templates/, one level above this package.
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
-templates.env.globals["mulchd_version"] = _pkg_version("mulchd")
+templates.env.globals["mulchd_version"] = _pkg_version("mulchd")  # pyright: ignore[reportArgumentType]  # jinja2's Environment.globals stub types values as its own builtin-global set, not arbitrary str
 
 
 async def get_admin_user(request: Request) -> User | None:
     """Resolve the authenticated User for this request, if they hold an active SUPERADMIN grant."""
-    user_id = _get_connect_user_id(request)
+    user_id = get_connect_user_id(request)
     if user_id is None:
         return None
     user = await User.filter(id=user_id, active=True).first()

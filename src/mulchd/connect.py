@@ -111,7 +111,7 @@ def _set_connect_cookie(response: Response, user_id: int, remember: bool) -> Non
     )
 
 
-def _get_connect_user_id(request: Request) -> int | None:
+def get_connect_user_id(request: Request) -> int | None:
     raw = request.cookies.get(_CONNECT_COOKIE, "")
     if not raw:
         return None
@@ -129,7 +129,7 @@ async def _require_user(request: Request) -> User | None:
     Extract and validate the user from the connect cookie.
     Returns User if valid and active, None otherwise.
     """
-    user_id = _get_connect_user_id(request)
+    user_id = get_connect_user_id(request)
     if user_id is None:
         return None
     return await User.filter(id=user_id, active=True).first()

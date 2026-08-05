@@ -21,7 +21,7 @@ from .admin._shared import AdminRequired, is_admin, redirect_login
 from .api import router as api_router
 from .auth import AuthContext, authenticate_project_token
 from .config import TORTOISE_ORM, settings
-from .connect import _get_connect_user_id
+from .connect import get_connect_user_id
 from .connect import router as connect_router
 from .invite import router as invite_router
 from .mcp import McpTier, tier_managers, tier_servers
@@ -156,7 +156,7 @@ async def _admin_project_switcher_context(request: Request, call_next):
     unauthenticated scanning traffic) skip the query too — require_admin
     would reject them anyway once this middleware hands off, so there's no
     point paying for a project list that will never be rendered. This is a
-    cheap local signature check (_get_connect_user_id), not a DB call —
+    cheap local signature check (get_connect_user_id), not a DB call —
     a forged or expired cookie still costs one query, same as a logged-in
     non-admin user, matching the tradeoff already accepted for
     _connect_admin_context above."""
@@ -166,7 +166,7 @@ async def _admin_project_switcher_context(request: Request, call_next):
         and path.startswith("/admin")
         and not path.startswith("/admin/api/")
         and path != "/admin/records/count"
-        and _get_connect_user_id(request) is not None
+        and get_connect_user_id(request) is not None
     ):
         request.state.all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
     return await call_next(request)
