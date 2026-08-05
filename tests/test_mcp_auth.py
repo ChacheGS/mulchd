@@ -33,7 +33,7 @@ def secrets_suffix() -> str:
 async def test_exchange_authorization_code_issues_tokens(db):
     from datetime import UTC, datetime, timedelta
 
-    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.mcp_auth import MulchdOAuthProvider, hash_token
     from mulchd.models import OAuthCode, OAuthToken
 
     user, project, client_row, grant = await _make_client_grant()
@@ -43,7 +43,7 @@ async def test_exchange_authorization_code_issues_tokens(db):
     assert client.client_id is not None
 
     code_row = await OAuthCode.create(
-        code_hash=_hash("raw-code-1"),
+        code_hash=hash_token("raw-code-1"),
         client_id=client_row.client_id,
         grant=grant,
         redirect_uri="http://localhost/cb",
@@ -67,7 +67,7 @@ async def test_exchange_authorization_code_issues_tokens(db):
     assert await provider.load_authorization_code(client, "raw-code-1") is None
 
     # regression: OAuthToken.client_id must be the string client_id, not grant's raw FK int
-    issued = await OAuthToken.get(access_token_hash=_hash(tokens.access_token))
+    issued = await OAuthToken.get(access_token_hash=hash_token(tokens.access_token))
     assert issued.client_id == client_row.client_id
 
 
@@ -152,7 +152,7 @@ async def test_revoke_token_accepts_refresh_token(db):
 async def test_load_access_token_rejects_expired_token(db):
     from datetime import UTC, datetime, timedelta
 
-    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.mcp_auth import MulchdOAuthProvider, hash_token
     from mulchd.models import OAuthToken
 
     user, project, client_row, grant = await _make_client_grant()
@@ -163,7 +163,7 @@ async def test_load_access_token_rejects_expired_token(db):
     tokens = await provider._issue_tokens(client.client_id, grant, ["mulchd"])
     assert tokens.refresh_token is not None
 
-    row = await OAuthToken.get(access_token_hash=_hash(tokens.access_token))
+    row = await OAuthToken.get(access_token_hash=hash_token(tokens.access_token))
     row.access_expires_at = datetime.now(UTC) - timedelta(minutes=1)
     await row.save()
 
@@ -180,7 +180,7 @@ async def test_load_refresh_token_reports_expiry_but_does_not_self_reject(db):
     """
     from datetime import UTC, datetime, timedelta
 
-    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.mcp_auth import MulchdOAuthProvider, hash_token
     from mulchd.models import OAuthToken
 
     user, project, client_row, grant = await _make_client_grant()
@@ -192,7 +192,7 @@ async def test_load_refresh_token_reports_expiry_but_does_not_self_reject(db):
     assert tokens.refresh_token is not None
 
     past_expiry = datetime.now(UTC) - timedelta(minutes=1)
-    row = await OAuthToken.get(refresh_token_hash=_hash(tokens.refresh_token))
+    row = await OAuthToken.get(refresh_token_hash=hash_token(tokens.refresh_token))
     row.refresh_expires_at = past_expiry
     await row.save()
 

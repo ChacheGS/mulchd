@@ -81,7 +81,7 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
     (no-op) if the grant no longer exists, or if it's the last active SUPERADMIN
     grant — never leave zero admins.
 
-    Re-fetches the grant under a row lock (like invite._claim_invite) so two
+    Re-fetches the grant under a row lock (like invite.claim_invite) so two
     concurrent revokes of the last two admins can't both read "not last" and
     both proceed, which would leave the instance with zero admins.
     """

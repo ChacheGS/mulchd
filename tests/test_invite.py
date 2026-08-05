@@ -141,17 +141,17 @@ async def test_token_login_with_pending_invite_claims(client, invite_fixture, db
 
 async def test_claim_invite_returns_false_when_exhausted(invite_fixture, db):
     from mulchd.auth import create_user
-    from mulchd.invite import _claim_invite
+    from mulchd.invite import claim_invite
 
     invite, project = invite_fixture
     invite.max_uses = 1
     await invite.save()
 
     first, _ = await create_user("first", "First", email="first@company.com")
-    assert await _claim_invite(invite, first) is True
+    assert await claim_invite(invite, first) is True
 
     second, _ = await create_user("second", "Second", email="second@company.com")
-    assert await _claim_invite(invite, second) is False
+    assert await claim_invite(invite, second) is False
     await invite.refresh_from_db()
     assert invite.use_count == 1
 
@@ -238,7 +238,7 @@ async def test_token_login_with_domain_restricted_invite_denies_silently_but_fla
 
 async def test_claim_invite_logs_membership_added(db):
     from mulchd.auth import create_user
-    from mulchd.invite import _claim_invite
+    from mulchd.invite import claim_invite
     from mulchd.models import InstanceEvent, InstanceEventCategory, InviteLink, Organization, Project
 
     org = await Organization.create(slug="claimlogorg", display_name="Claim Log Org")
@@ -246,7 +246,7 @@ async def test_claim_invite_logs_membership_added(db):
     invite = await InviteLink.create(token="claimlogtoken", project=project, role="writer")
     user, _ = await create_user("claimloguser", "Claim Log User")
 
-    result = await _claim_invite(invite, user)
+    result = await claim_invite(invite, user)
 
     assert result is True
     event = await InstanceEvent.get(category=InstanceEventCategory.MEMBERSHIP_ADDED)
@@ -258,7 +258,7 @@ async def test_claim_invite_logs_membership_added(db):
 
 async def test_claim_invite_already_member_does_not_relog(db):
     from mulchd.auth import create_user
-    from mulchd.invite import _claim_invite
+    from mulchd.invite import claim_invite
     from mulchd.models import (
         InstanceEvent,
         InstanceEventCategory,
@@ -275,7 +275,7 @@ async def test_claim_invite_already_member_does_not_relog(db):
     user, _ = await create_user("claimloguser2", "Claim Log User 2")
     await UserMembership.create(user=user, project=project, role=Role.WRITER)
 
-    result = await _claim_invite(invite, user)
+    result = await claim_invite(invite, user)
 
     assert result is True
     count = await InstanceEvent.filter(category=InstanceEventCategory.MEMBERSHIP_ADDED).count()

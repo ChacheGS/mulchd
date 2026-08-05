@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -18,14 +19,14 @@ from .auth import (
     generate_token,
 )
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
-from .instance_events import log_event
+from .instance_events import log_event  # pyright: ignore[reportUnknownVariableType]  # instance_events.py's bare `dict` detail param is fixed in a later strict-mode task
 from .invite import (
-    _SESSION_KEY as _INVITE_SESSION_KEY,
-    _claim_invite,
-    _validate_invite,
+    SESSION_KEY as _INVITE_SESSION_KEY,
+    claim_invite,
     matches_allowed_domains,
+    validate_invite,
 )
-from .mcp_auth import AUTH_CODE_TTL, _hash
+from .mcp_auth import AUTH_CODE_TTL, hash_token
 from .models import (
     InstanceEventCategory,
     OAuthClient,
@@ -58,7 +59,7 @@ def _slug_to_env(s: str) -> str:
     return s.upper().replace("-", "_")
 
 
-def build_connect_snippets(base_url: str, org: str, project: str, token: str) -> dict:
+def build_connect_snippets(base_url: str, org: str, project: str, token: str) -> dict[str, str]:
     env_var = f"MULCHD_TOKEN_{_slug_to_env(org)}_{_slug_to_env(project)}"
     mcp_json = (
         "{\n"
@@ -185,7 +186,7 @@ async def _maybe_log_first_login(user: User, provider: str) -> None:
     accounts, which set it directly in create_user_from_oauth (this call is
     then a harmless no-op for them, not a duplicate log entry).
     """
-    if user.first_login_at is not None:
+    if user.first_login_at is not None:  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's DatetimeField(null=True) stub doesn't expose Optional here
         return
     user.first_login_at = datetime.now(UTC)
     await user.save(update_fields=["first_login_at"])
@@ -211,12 +212,13 @@ async def _claim_pending_invite(request: Request, user: User) -> str | None:
     pending_invite_token = request.session.pop(_INVITE_SESSION_KEY, None)
     if not pending_invite_token:
         return None
-    invite = await _validate_invite(pending_invite_token)
+    invite = await validate_invite(pending_invite_token)
     if invite is None:
         return "invalid"
-    if invite.allowed_email_domains and not matches_allowed_domains(user.email or "", invite.allowed_email_domains):
+    domains_ok = matches_allowed_domains(user.email or "", invite.allowed_email_domains)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+    if invite.allowed_email_domains and not domains_ok:  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
         return "domain_denied"
-    claimed = await _claim_invite(invite, user)
+    claimed = await claim_invite(invite, user)
     return "claimed" if claimed else "invalid"
 
 
@@ -368,12 +370,13 @@ async def connect_revoke_token(
 
 
 @router.get("/auth/{provider}/start")
-async def oauth_start(request: Request, provider: str):
+async def oauth_start(request: Request, provider: str) -> Response:
     configured = {p.key for p in get_configured_providers()}
     if provider not in configured:
         raise HTTPException(status_code=404)
     redirect_uri = f"{settings.resolved_base_url}/connect/auth/{provider}/callback"
-    return await oauth.create_client(provider).authorize_redirect(request, redirect_uri)
+    client = cast(Any, oauth.create_client(provider))  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+    return await client.authorize_redirect(request, redirect_uri)
 
 
 @router.get("/auth/{provider}/callback")
@@ -383,7 +386,8 @@ async def oauth_callback(request: Request, provider: str):
         raise HTTPException(status_code=404)
 
     try:
-        token = await oauth.create_client(provider).authorize_access_token(request)
+        auth_client = cast(Any, oauth.create_client(provider))  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+        token = await auth_client.authorize_access_token(request)
     except OAuthError:
         return templates.TemplateResponse(
             request,
@@ -394,7 +398,7 @@ async def oauth_callback(request: Request, provider: str):
 
     # Extract sub and email per provider
     if provider == "github":
-        client = oauth.create_client("github")
+        client = cast(Any, oauth.create_client("github"))  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
         user_resp = await client.get("https://api.github.com/user", token=token)
         if user_resp.status_code != 200:
             return templates.TemplateResponse(
@@ -446,7 +450,7 @@ async def oauth_callback(request: Request, provider: str):
     if user is None:
         if pending_invite_token:
             # New user arriving via invite — create account from OAuth data
-            invite = await _validate_invite(pending_invite_token)
+            invite = await validate_invite(pending_invite_token)
             if invite is None:
                 request.session.pop(_INVITE_SESSION_KEY, None)
                 return templates.TemplateResponse(
@@ -455,7 +459,8 @@ async def oauth_callback(request: Request, provider: str):
                     {"error": "The invite link is no longer valid.", "providers": get_configured_providers()},
                     status_code=403,
                 )
-            if invite.allowed_email_domains and not matches_allowed_domains(email or "", invite.allowed_email_domains):
+            domains_ok = matches_allowed_domains(email or "", invite.allowed_email_domains)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+            if invite.allowed_email_domains and not domains_ok:  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
                 request.session.pop(_INVITE_SESSION_KEY, None)
                 return templates.TemplateResponse(
                     request,
@@ -496,7 +501,7 @@ def _redirect_uri_registered(oauth_client: OAuthClient, redirect_uri: str) -> bo
     would let a logged-in user's "Allow" click hand the authorization code to that
     attacker instead of the real client.
     """
-    return redirect_uri in (oauth_client.client_metadata.get("redirect_uris") or [])
+    return redirect_uri in (oauth_client.client_metadata.get("redirect_uris") or [])  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
 
 
 async def _issue_oauth_code(
@@ -508,7 +513,7 @@ async def _issue_oauth_code(
     # caller's already-loaded OAuthClient row's .client_id avoids that trap.
     code = generate_token()
     await OAuthCode.create(
-        code_hash=_hash(code),
+        code_hash=hash_token(code),
         client_id=client_id,
         grant=grant,
         redirect_uri=redirect_uri,
@@ -556,7 +561,7 @@ async def oauth_consent_page(
         "connect/oauth_consent.html",
         {
             "user": user,
-            "client_name": oauth_client.client_metadata.get("client_name") or client_id,
+            "client_name": oauth_client.client_metadata.get("client_name") or client_id,  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
             "memberships": memberships,
             "role_options": {m.project.id: roles_up_to(m.role) for m in memberships},
             "client_id": client_id,

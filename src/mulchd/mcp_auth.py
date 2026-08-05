@@ -23,7 +23,7 @@ REFRESH_TOKEN_TTL = timedelta(days=30)
 AUTH_CODE_TTL = timedelta(minutes=5)
 
 
-def _hash(value: str) -> str:
+def hash_token(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
 
@@ -64,7 +64,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
     ) -> AuthorizationCode | None:
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
-            await OAuthCode.filter(code_hash=_hash(authorization_code), client_id=client.client_id, used=False)
+            await OAuthCode.filter(code_hash=hash_token(authorization_code), client_id=client.client_id, used=False)
             .select_related("grant")
             .first()
         )
@@ -89,7 +89,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
     ) -> SdkOAuthToken:
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
-            await OAuthCode.filter(code_hash=_hash(authorization_code.code), client_id=client.client_id)
+            await OAuthCode.filter(code_hash=hash_token(authorization_code.code), client_id=client.client_id)
             .select_related("grant")
             .first()
         )
@@ -110,7 +110,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthToken.filter(
-                refresh_token_hash=_hash(refresh_token), client_id=client.client_id, revoked=False
+                refresh_token_hash=hash_token(refresh_token), client_id=client.client_id, revoked=False
             )
             .select_related("grant")
             .first()
@@ -136,7 +136,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthToken.filter(
-                refresh_token_hash=_hash(refresh_token.token), client_id=client.client_id, revoked=False
+                refresh_token_hash=hash_token(refresh_token.token), client_id=client.client_id, revoked=False
             )
             .select_related("grant")
             .first()
@@ -152,7 +152,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         return await self._issue_tokens(client.client_id, row.grant, scopes or refresh_token.scopes)
 
     async def load_access_token(self, token: str) -> AccessToken | None:
-        row = await OAuthToken.filter(access_token_hash=_hash(token), revoked=False).select_related("grant").first()
+        row = await OAuthToken.filter(access_token_hash=hash_token(token), revoked=False).select_related("grant").first()
         if row is None:
             return None
         expires_at = row.access_expires_at
@@ -169,7 +169,7 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         )
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
-        token_hash = _hash(token.token)
+        token_hash = hash_token(token.token)
         await OAuthToken.filter(access_token_hash=token_hash).update(revoked=True)
         await OAuthToken.filter(refresh_token_hash=token_hash).update(revoked=True)
 
@@ -183,8 +183,8 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         now = datetime.now(UTC)
         scope_str = " ".join(scopes) if scopes else None
         await OAuthToken.create(
-            access_token_hash=_hash(access_token),
-            refresh_token_hash=_hash(refresh_token),
+            access_token_hash=hash_token(access_token),
+            refresh_token_hash=hash_token(refresh_token),
             client_id=client_id,
             grant=grant,
             scope=scope_str,
@@ -206,4 +206,4 @@ async def is_known_oauth_token(token: str) -> bool:
     but it's no longer valid" (→ 401 invalid_token, so OAuth clients know to refresh)
     from "mulchd never issued this" (→ existing tier1 fallback, unchanged).
     """
-    return await OAuthToken.filter(access_token_hash=_hash(token)).exists()
+    return await OAuthToken.filter(access_token_hash=hash_token(token)).exists()

@@ -16,7 +16,7 @@ from .oauth import get_configured_providers
 router = APIRouter(prefix="/invite")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-_SESSION_KEY = "pending_invite"
+SESSION_KEY = "pending_invite"
 
 
 def generate_invite_token() -> str:
@@ -54,7 +54,7 @@ def _get_invite_user_id(request: Request) -> int | None:
         return None
 
 
-async def _validate_invite(token: str) -> InviteLink | None:
+async def validate_invite(token: str) -> InviteLink | None:
     """Steps 1-4: existence, revoked, expired, exhausted. Returns None for any failure.
 
     Reuses InviteLink.status (added in Task 2, src/mulchd/models/identity.py) instead of
@@ -73,7 +73,7 @@ async def _validate_invite(token: str) -> InviteLink | None:
     return invite
 
 
-async def _claim_invite(invite: InviteLink, user: User) -> bool:
+async def claim_invite(invite: InviteLink, user: User) -> bool:
     """
     Atomically claim an invite for a user.
     Returns True if claimed (or already a member), False if exhausted by a concurrent claim.
@@ -103,7 +103,7 @@ async def _claim_invite(invite: InviteLink, user: User) -> bool:
 
 @router.get("/{token}")
 async def invite_landing(request: Request, token: str) -> Response:
-    invite = await _validate_invite(token)
+    invite = await validate_invite(token)
     if invite is None:
         return templates.TemplateResponse(
             request,
@@ -130,7 +130,7 @@ async def invite_landing(request: Request, token: str) -> Response:
                     "invite.html",
                     {"error": "Your email is not authorized for this invite.", "invite": None},
                 )
-            claimed = await _claim_invite(invite, user)
+            claimed = await claim_invite(invite, user)
             if not claimed:
                 return templates.TemplateResponse(
                     request,
@@ -142,7 +142,7 @@ async def invite_landing(request: Request, token: str) -> Response:
                 status_code=303,
             )
 
-    request.session[_SESSION_KEY] = token
+    request.session[SESSION_KEY] = token
     return templates.TemplateResponse(
         request,
         "invite.html",

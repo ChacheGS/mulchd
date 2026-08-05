@@ -69,7 +69,7 @@ async def test_mcp_expired_oauth_token_returns_401_with_www_authenticate(client,
     from datetime import UTC, datetime, timedelta
 
     from mulchd.auth import create_user
-    from mulchd.mcp_auth import MulchdOAuthProvider, _hash
+    from mulchd.mcp_auth import MulchdOAuthProvider, hash_token
     from mulchd.models import OAuthClient, OAuthGrant, OAuthToken, Organization, Project, UserMembership
 
     user, _ = await create_user("dana", "Dana")
@@ -82,7 +82,7 @@ async def test_mcp_expired_oauth_token_returns_401_with_www_authenticate(client,
     provider = MulchdOAuthProvider()
     tokens = await provider._issue_tokens(client_row.client_id, grant, ["mulchd"])
     # simulate expiry
-    row = await OAuthToken.get(access_token_hash=_hash(tokens.access_token))
+    row = await OAuthToken.get(access_token_hash=hash_token(tokens.access_token))
     row.access_expires_at = datetime.now(UTC) - timedelta(minutes=1)
     await row.save()
 
