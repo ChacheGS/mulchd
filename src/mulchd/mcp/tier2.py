@@ -807,7 +807,7 @@ async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[Te
         at = e["at"].strftime("%Y-%m-%dT%H:%M:%SZ")
         lines.append(f"  {at}  {e['action']}  by {actor}")
         if e["action"] == "move":
-            lines.append(f"    {e['source_domain'] or '?'} → {e['domain']}")
+            lines.append(f"    {e['source_domain'] or '(unknown)'} → {e['domain']}")
         if e["action"] == "edit":
             queue = edit_queues.get(str(e["session_id"]))
             before_snapshot = queue.popleft() if queue else None

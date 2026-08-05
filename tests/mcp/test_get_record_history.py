@@ -137,7 +137,7 @@ async def test_get_record_history_move_with_no_source_domain_shows_placeholder(
     result = await _get_record_history({"record_id": record["id"]}, ctx(t.carlos, t.org, t.infra))
     text = result[0].text
     assert "None → architecture" not in text
-    assert "? → architecture" in text
+    assert "(unknown) → architecture" in text
 
 
 async def test_get_record_history_no_history_found(team, data_path):
