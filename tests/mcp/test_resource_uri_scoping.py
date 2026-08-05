@@ -32,20 +32,37 @@ async def test_read_resource_rejects_uri_for_a_different_project(team, data_path
 async def test_subscribe_resource_ignores_uri_for_a_different_project(team, data_path):
     """subscribe_resource silently no-ops on a mismatched URI (matching the
     existing behavior for an unrecognized URI shape — resources/subscribe has
-    no error path, per the spec, only silent non-registration)."""
+    no error path, per the spec, only silent non-registration). Uses a real
+    fake_ctx (not None) so this actually exercises the org/project check —
+    with ctx=None, registration would never happen regardless of that check,
+    since the session-id lookup itself would crash first.
+
+    Checks the caller's OWN (acme/infra) bucket, not other-org/other-project:
+    subscribe_resource always registers under the authenticated caller's real
+    org/project (auth.org.slug/auth.project.slug), never anything derived
+    from the URI, so a mismatched URI's own org/project bucket would stay
+    empty regardless of whether the check works — that's not the signal that
+    the check actually ran. What proves the check ran is that the caller's
+    own bucket, which a broken check would populate, stays empty too."""
     from mcp.types import SubscribeRequestParams
     from mulchd.mcp.subscriptions import registry
+
+    fake_ctx = SimpleNamespace(
+        request=SimpleNamespace(headers={"mcp-session-id": "test-session"}),
+        session=object(),
+    )
 
     t = team
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
     try:
         await subscribe_resource(
-            None, SubscribeRequestParams(uri="mulchd://other-org/other-project/domain/infra")
+            fake_ctx, SubscribeRequestParams(uri="mulchd://other-org/other-project/domain/infra")
         )
-        subs = registry.subscribers_for("other-org", "other-project", "infra", exclude="")
+        subs = registry.subscribers_for("acme", "infra", "infra", exclude="")
         assert subs == {}
     finally:
         auth_ctx.reset(token)
+        registry.unregister_session("test-session")
 
 
 async def test_unsubscribe_resource_ignores_uri_for_a_different_project(team, data_path):
