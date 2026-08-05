@@ -26,9 +26,9 @@ def is_valid_slug(slug: str) -> bool:
 
 # Templates live at src/mulchd/templates/, one level above this package.
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
-templates.env.globals["mulchd_version"] = _pkg_version(
-    "mulchd"
-)  # pyright: ignore[reportArgumentType]  # jinja2's Environment.globals stub types values as its own builtin-global set, not arbitrary str
+_mulchd_version = _pkg_version("mulchd")
+# jinja2's Environment.globals stub types values as its own builtin-global set, not arbitrary str.
+templates.env.globals["mulchd_version"] = _mulchd_version  # pyright: ignore[reportArgumentType]
 
 
 async def get_admin_user(request: Request) -> User | None:

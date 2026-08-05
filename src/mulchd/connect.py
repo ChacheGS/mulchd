@@ -19,9 +19,7 @@ from .auth import (
     generate_token,
 )
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
-from .instance_events import (
-    log_event,  # pyright: ignore[reportUnknownVariableType]  # instance_events.py's bare `dict` detail param is fixed in a later strict-mode task
-)
+from .instance_events import log_event
 from .invite import SESSION_KEY as _INVITE_SESSION_KEY
 from .invite import (
     claim_invite,
@@ -221,12 +219,14 @@ async def _claim_pending_invite(request: Request, user: User) -> str | None:
     invite = await validate_invite(pending_invite_token)
     if invite is None:
         return "invalid"
+    # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores.
+    allowed_email_domains = (  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        invite.allowed_email_domains
+    )
     domains_ok = matches_allowed_domains(
-        user.email or "", invite.allowed_email_domains
-    )  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
-    if (
-        invite.allowed_email_domains and not domains_ok
-    ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+        user.email or "", allowed_email_domains  # pyright: ignore[reportUnknownArgumentType]
+    )
+    if allowed_email_domains and not domains_ok:
         return "domain_denied"
     claimed = await claim_invite(invite, user)
     return "claimed" if claimed else "invalid"
@@ -387,9 +387,8 @@ async def oauth_start(request: Request, provider: str) -> Response:
     if provider not in configured:
         raise HTTPException(status_code=404)
     redirect_uri = f"{settings.resolved_base_url}/connect/auth/{provider}/callback"
-    client = cast(
-        Any, oauth.create_client(provider)
-    )  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+    # authlib's OAuth client registry isn't typed.
+    client = cast(Any, oauth.create_client(provider))  # pyright: ignore[reportUnknownMemberType]
     return await client.authorize_redirect(request, redirect_uri)
 
 
@@ -400,9 +399,10 @@ async def oauth_callback(request: Request, provider: str):
         raise HTTPException(status_code=404)
 
     try:
+        # authlib's OAuth client registry isn't typed.
         auth_client = cast(
-            Any, oauth.create_client(provider)
-        )  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+            Any, oauth.create_client(provider)  # pyright: ignore[reportUnknownMemberType]
+        )
         token = await auth_client.authorize_access_token(request)
     except OAuthError:
         return templates.TemplateResponse(
@@ -417,9 +417,10 @@ async def oauth_callback(request: Request, provider: str):
 
     # Extract sub and email per provider
     if provider == "github":
+        # authlib's OAuth client registry isn't typed.
         client = cast(
-            Any, oauth.create_client("github")
-        )  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+            Any, oauth.create_client("github")  # pyright: ignore[reportUnknownMemberType]
+        )
         user_resp = await client.get("https://api.github.com/user", token=token)
         if user_resp.status_code != 200:
             return templates.TemplateResponse(
@@ -486,12 +487,14 @@ async def oauth_callback(request: Request, provider: str):
                     },
                     status_code=403,
                 )
+            # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores.
+            allowed_email_domains = (  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+                invite.allowed_email_domains
+            )
             domains_ok = matches_allowed_domains(
-                email or "", invite.allowed_email_domains
-            )  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
-            if (
-                invite.allowed_email_domains and not domains_ok
-            ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+                email or "", allowed_email_domains  # pyright: ignore[reportUnknownArgumentType]
+            )
+            if allowed_email_domains and not domains_ok:
                 request.session.pop(_INVITE_SESSION_KEY, None)
                 return templates.TemplateResponse(
                     request,
@@ -538,9 +541,13 @@ def _redirect_uri_registered(oauth_client: OAuthClient, redirect_uri: str) -> bo
     would let a logged-in user's "Allow" click hand the authorization code to that
     attacker instead of the real client.
     """
+    # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores.
+    client_metadata = (  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        oauth_client.client_metadata
+    )
     return redirect_uri in (
-        oauth_client.client_metadata.get("redirect_uris") or []
-    )  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
+        client_metadata.get("redirect_uris") or []  # pyright: ignore[reportUnknownMemberType]
+    )
 
 
 async def _issue_oauth_code(
@@ -600,13 +607,19 @@ async def oauth_consent_page(
         )
 
     memberships = await UserMembership.filter(user=user).select_related("project__org").all()
+    # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores.
+    client_metadata = (  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        oauth_client.client_metadata
+    )
     return templates.TemplateResponse(
         request,
         "connect/oauth_consent.html",
         {
             "user": user,
-            "client_name": oauth_client.client_metadata.get("client_name")
-            or client_id,  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
+            "client_name": client_metadata.get(  # pyright: ignore[reportUnknownMemberType]
+                "client_name"
+            )
+            or client_id,
             "memberships": memberships,
             "role_options": {m.project.id: roles_up_to(m.role) for m in memberships},
             "client_id": client_id,

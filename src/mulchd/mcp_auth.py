@@ -42,9 +42,11 @@ class MulchdOAuthProvider(
         # row.client_id is the authoritative business key; the stored client_metadata
         # blob may carry a stale or placeholder value (e.g. captured before the real
         # client_id was assigned), so it must not be trusted over the row itself.
-        metadata = cast(
-            dict[str, Any], row.client_metadata
-        )  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
+        # Tortoise JSONField stub doesn't parametrize its value type.
+        raw_metadata = (  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+            row.client_metadata
+        )
+        metadata = cast(dict[str, Any], raw_metadata)
         return OAuthClientInformationFull.model_validate({**metadata, "client_id": row.client_id})
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:

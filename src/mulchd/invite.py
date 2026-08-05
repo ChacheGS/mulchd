@@ -80,13 +80,18 @@ async def claim_invite(invite: InviteLink, user: User) -> bool:
     if existing is not None:
         return True  # already a member — silent skip, no increment
 
-    async with (
-        transactions.in_transaction()
-    ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
+    # Tortoise's in_transaction isn't generic-parametrized in its stub.
+    txn = (  # pyright: ignore[reportUnknownVariableType]
+        transactions.in_transaction()  # pyright: ignore[reportUnknownMemberType]
+    )
+    async with txn:
         fresh = await InviteLink.select_for_update().get(id=invite.id)
-        if (
-            fresh.max_uses is not None and fresh.use_count >= fresh.max_uses
-        ):  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's IntField(null=True) stub doesn't expose Optional here
+        # Tortoise's IntField(null=True) stub doesn't expose Optional here.
+        max_uses_reached = (
+            fresh.max_uses is not None  # pyright: ignore[reportUnnecessaryComparison]
+            and fresh.use_count >= fresh.max_uses
+        )
+        if max_uses_reached:
             return False
         fresh.use_count += 1
         await fresh.save(update_fields=["use_count"])

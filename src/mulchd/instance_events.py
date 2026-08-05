@@ -32,11 +32,9 @@ def describe_event(event: InstanceEvent) -> str:
     (if any) to already be fetched/select_related by the caller — this function
     does not perform any DB access itself.
     """
-    detail = cast(
-        "dict[str, Any]",
-        event.detail
-        or {},  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
-    )
+    # Tortoise JSONField stub doesn't parametrize its value type.
+    raw_detail = event.detail  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+    detail = cast("dict[str, Any]", raw_detail or {})
     subject_name = event.subject_user.username if event.subject_user else ""
     project_label = f"{event.project.org.slug}/{event.project.slug}" if event.project else ""
 
