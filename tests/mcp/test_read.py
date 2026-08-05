@@ -43,6 +43,17 @@ async def test_read_records_unknown_domain_warns(team, data_path):
     assert "nonexistent-domain" in text_content[0].text
 
 
+async def test_read_records_rejects_garbage_cursor(team, data_path):
+    """An invalid cursor must raise a clear, actionable error instead of
+    leaking a raw base64/JSON decoder exception message."""
+    t = team
+    with pytest.raises(ValueError, match="Invalid cursor"):
+        await _read_expertise(
+            {"domains": ["infra"], "cursor": "not-a-real-cursor"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
 async def test_read_records_cursor_pagination(team, data_path):
     """Cursor-based pagination returns pages in recorded_at order with an opaque next_cursor."""
     import base64

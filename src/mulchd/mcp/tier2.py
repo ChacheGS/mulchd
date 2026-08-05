@@ -334,7 +334,10 @@ async def _read_expertise(
         key=lambda r: (r.get("recorded_at", ""), r.get("id", "")), reverse=since is not None
     )
     if cursor:
-        cursor_ts, cursor_id = json.loads(base64.b64decode(cursor))
+        try:
+            cursor_ts, cursor_id = json.loads(base64.b64decode(cursor))
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid cursor: {cursor!r} — pass a cursor from next_cursor") from e
         cursor_key = (cursor_ts, cursor_id)
         if since is not None:
             all_records = [
