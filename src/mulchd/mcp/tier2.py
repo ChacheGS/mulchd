@@ -1019,7 +1019,9 @@ async def _dispatch_call_tool(
             raise ValueError(f"Unknown tool: {name}")
 
 
-async def call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) -> CallToolResult:
+async def call_tool(
+    ctx: ServerRequestContext | None, params: CallToolRequestParams
+) -> CallToolResult:
     # v1's @server.call_tool() decorator auto-caught the entire handler body,
     # including the "no auth context" check below — not just the dispatch call —
     # so that check must stay inside this try too, or losing auth context becomes
@@ -1029,9 +1031,9 @@ async def call_tool(ctx: ServerRequestContext, params: CallToolRequestParams) ->
         auth = auth_ctx.get()
         if auth is None:
             raise ValueError("No auth context — use a project token for this connection")
-        request = getattr(ctx, "request", None)
+        request = ctx.request if ctx is not None else None
         session_id_ctx.set(request.headers.get("mcp-session-id") if request is not None else None)
-        protocol_version = getattr(ctx, "protocol_version", "unknown")
+        protocol_version = ctx.protocol_version if ctx is not None else "unknown"
         _t = asyncio.create_task(_record_tool_call(params.name, auth, protocol_version))
         _background_tasks.add(_t)
         _t.add_done_callback(_background_tasks.discard)
