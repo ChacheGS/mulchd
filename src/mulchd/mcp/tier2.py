@@ -341,6 +341,21 @@ async def _read_expertise(
         except (ValueError, TypeError) as e:
             raise ValueError(f"Invalid cursor: {cursor!r} — pass a cursor from next_cursor") from e
         cursor_key = (cursor_ts, cursor_id)
+        if not any(
+            (r.get("recorded_at", ""), r.get("id", "")) == cursor_key for r in all_records
+        ):
+            # No record anchors this cursor — either it never came from a real
+            # next_cursor, or the record it anchored on was since deleted, moved
+            # out of the queried domain(s), or edited in a way that changed its
+            # recorded_at. Any of those make forward position unknowable, and a
+            # silent empty page here would be indistinguishable from genuinely
+            # reaching the end of pagination — so this must be reported, not
+            # swallowed into a plain empty result.
+            raise ValueError(
+                "Cursor expired: no record matches its anchor — the record it was built from "
+                "may have been deleted, moved, or edited since. Restart pagination by omitting "
+                "cursor."
+            )
         if since is not None:
             all_records = [
                 r for r in all_records if (r.get("recorded_at", ""), r.get("id", "")) < cursor_key

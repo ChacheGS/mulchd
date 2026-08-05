@@ -54,6 +54,83 @@ async def test_read_records_rejects_garbage_cursor(team, data_path):
         )
 
 
+async def test_read_records_rejects_forged_cursor(team, data_path):
+    """A well-formed cursor (valid base64/JSON shape) that doesn't anchor to
+    any real record must be reported as expired, not silently treated as
+    "past the end of the data" — a forged or out-of-range cursor and a
+    genuinely exhausted pagination both currently look identical (an empty
+    page), which hides the difference from the caller."""
+    import base64
+    import json
+
+    t = team
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="only record",
+        owner="carlos",
+    )
+    forged_cursor = base64.b64encode(
+        json.dumps(["2099-01-01T00:00:00+00:00", "mx-doesnotexist"]).encode()
+    ).decode()
+
+    with pytest.raises(ValueError, match="Cursor expired"):
+        await _read_expertise(
+            {"domains": ["infra"], "cursor": forged_cursor},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_read_records_rejects_cursor_after_anchor_deleted(team, data_path):
+    """A cursor that was genuinely issued by a previous page becomes
+    unusable once the record it anchors on is gone — silently returning an
+    empty page there would look like "nothing changed" when really the
+    caller's position is unknowable."""
+    from mulchd.domains import expertise_path
+
+    t = team
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="first",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="second",
+        owner="carlos",
+    )
+
+    _, structured = await _read_expertise(
+        {"domains": ["infra"], "limit": 1},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    cursor = structured["next_cursor"]
+    assert cursor is not None
+
+    # Remove the anchor record from the domain entirely.
+    expertise_path("acme", "infra", "infra").write_text("")
+
+    with pytest.raises(ValueError, match="Cursor expired"):
+        await _read_expertise(
+            {"domains": ["infra"], "cursor": cursor},
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
 async def test_read_records_cursor_pagination(team, data_path):
     """Cursor-based pagination returns pages in recorded_at order with an opaque next_cursor."""
     import base64
