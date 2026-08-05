@@ -105,6 +105,41 @@ async def test_get_record_history_renders_move_source_and_destination(
     assert "scratch → correct" in text
 
 
+async def test_get_record_history_move_with_no_source_domain_shows_placeholder(
+    team, data_path
+):
+    """A legacy move row written before source_domain was tracked has it as
+    NULL — rendering must not leak the literal Python "None" into user-facing
+    text."""
+    from mulchd.mcp.tier2 import _get_record_history
+
+    t = team
+    record = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "architecture",
+        type="convention",
+        classification="tactical",
+        content="moved in from somewhere untracked",
+        owner="carlos",
+    )
+    await RecordEvent.create(
+        record_id=record["id"],
+        project=t.infra,
+        domain="architecture",
+        source_domain=None,
+        actor=t.carlos,
+        action="move",
+        client="test",
+    )
+
+    result = await _get_record_history({"record_id": record["id"]}, ctx(t.carlos, t.org, t.infra))
+    text = result[0].text
+    assert "None → architecture" not in text
+    assert "? → architecture" in text
+
+
 async def test_get_record_history_no_history_found(team, data_path):
     """A record with zero RecordEvent rows returns a plain message, not an error."""
     from mulchd.mcp.tier2 import _get_record_history
