@@ -1,8 +1,6 @@
 async def test_usage_data_includes_breakdowns(admin_client):
-    """usage_data()'s chart_rows bucket comes from a raw date_trunc(...) query
-    that's Postgres-only syntax (tests run against sqlite), so that part is
-    stubbed out here — this test exercises the real ORM-backed by_tool/by_user/
-    by_protocol_version aggregations, which is what this change actually touches."""
+    """usage_data() returns by_tool, by_user, and by_protocol_version breakdowns
+    reflecting the ToolCall rows for the project."""
     from unittest.mock import AsyncMock, patch
 
     from mulchd.auth import create_user
@@ -27,6 +25,9 @@ async def test_usage_data_includes_breakdowns(admin_client):
         protocol_version="2026-06-18",
     )
 
+    # chart_rows uses a raw date_trunc(...) query, Postgres-only syntax that
+    # doesn't run against the test suite's sqlite backend — stub just that,
+    # the by_tool/by_user/by_protocol_version breakdowns below run for real.
     with patch("mulchd.admin.usage_api.connections") as mock_connections:
         mock_connections.get.return_value.execute_query_dict = AsyncMock(return_value=[])
         resp = await admin_client.get(f"/admin/api/usage/{org.slug}/{project.slug}")
