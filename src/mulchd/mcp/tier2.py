@@ -752,7 +752,15 @@ async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[Te
     events: list[dict[str, Any]] = (
         await RecordEvent.filter(record_id=record_id, project=ctx.project)
         .order_by("at", "id")
-        .values("action", "at", "session_id", "actor__username", "actor__display_name")
+        .values(
+            "action",
+            "at",
+            "session_id",
+            "domain",
+            "source_domain",
+            "actor__username",
+            "actor__display_name",
+        )
     )
     if not events:
         return [TextContent(type="text", text=f"{project_tag} No history found for {record_id}.")]
@@ -771,6 +779,8 @@ async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[Te
         actor = e["actor__display_name"] or e["actor__username"] or "unknown"
         at = e["at"].strftime("%Y-%m-%dT%H:%M:%SZ")
         lines.append(f"  {at}  {e['action']}  by {actor}")
+        if e["action"] == "move":
+            lines.append(f"    {e['source_domain']} → {e['domain']}")
         if e["action"] == "edit":
             queue = edit_queues.get(str(e["session_id"]))
             before_snapshot = queue.popleft() if queue else None

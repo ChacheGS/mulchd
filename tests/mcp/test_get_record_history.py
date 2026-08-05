@@ -5,7 +5,7 @@ get_record_history tests.
 import uuid
 
 from mulchd.models import RecordEdit, RecordEvent, Role
-from tests.mcp.conftest import ctx
+from tests.mcp.conftest import _jot, _make_fake_move, ctx
 
 
 async def test_get_record_history_renders_write_edit_delete_timeline(
@@ -58,6 +58,51 @@ async def test_get_record_history_renders_write_edit_delete_timeline(
     write_idx = text.index("write")
     edit_idx = text.index("edit")
     assert write_idx < edit_idx
+
+
+async def test_get_record_history_renders_move_source_and_destination(
+    team, data_path, monkeypatch
+):
+    """A move entry must show which domain the record came from and went to,
+    not just "move by <actor>" — get_record_history is otherwise the only
+    place an agent can see this without cross-referencing the JSONL files."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _get_record_history, _move_record
+
+    t = team
+    expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
+    record = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="misplaced",
+        owner="carlos",
+    )
+    _jot(
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
+    )
+    monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
+    await _move_record(
+        {"record_id": record["id"], "domain": "scratch", "target_domain": "correct"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    result = await _get_record_history(
+        {"record_id": record["id"]}, ctx(t.carlos, t.org, t.infra)
+    )
+    text = result[0].text
+    assert "move" in text
+    assert "scratch → correct" in text
 
 
 async def test_get_record_history_no_history_found(team, data_path):
