@@ -85,7 +85,7 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
     concurrent revokes of the last two admins can't both read "not last" and
     both proceed, which would leave the instance with zero admins.
     """
-    async with transactions.in_transaction():
+    async with transactions.in_transaction():  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
         try:
             fresh = await AdminGrant.select_for_update().get(id=grant.id)
         except DoesNotExist:

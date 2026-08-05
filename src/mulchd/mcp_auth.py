@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from urllib.parse import urlencode
 
 from pydantic import AnyUrl
@@ -31,7 +32,7 @@ def _generate_secret() -> str:
     return secrets.token_urlsafe(32)
 
 
-class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
+class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]):
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         row = await OAuthClient.filter(client_id=client_id).first()
         if row is None:
@@ -39,7 +40,8 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider):
         # row.client_id is the authoritative business key; the stored client_metadata
         # blob may carry a stale or placeholder value (e.g. captured before the real
         # client_id was assigned), so it must not be trusted over the row itself.
-        return OAuthClientInformationFull.model_validate({**row.client_metadata, "client_id": row.client_id})
+        metadata = cast(dict[str, Any], row.client_metadata)  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
+        return OAuthClientInformationFull.model_validate({**metadata, "client_id": row.client_id})
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         await OAuthClient.create(

@@ -60,7 +60,7 @@ def _discover_oidc_providers() -> list[_OidcProviderConfig]:
 
 
 if settings.github_client_id and settings.github_client_secret:
-    oauth.register(
+    oauth.register(  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth.register isn't fully typed
         name="github",
         client_id=settings.github_client_id,
         client_secret=settings.github_client_secret,
@@ -70,7 +70,7 @@ if settings.github_client_id and settings.github_client_secret:
     )
 
 for _p in _discover_oidc_providers():
-    oauth.register(
+    oauth.register(  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth.register isn't fully typed
         name=f"oidc_{_p['slug']}",
         client_id=_p["client_id"],
         client_secret=_p["client_secret"],

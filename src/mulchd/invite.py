@@ -1,5 +1,6 @@
 import secrets
 from pathlib import Path
+from typing import cast
 
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse, Response
@@ -83,9 +84,9 @@ async def claim_invite(invite: InviteLink, user: User) -> bool:
     if existing is not None:
         return True  # already a member — silent skip, no increment
 
-    async with transactions.in_transaction():
+    async with transactions.in_transaction():  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
         fresh = await InviteLink.select_for_update().get(id=invite.id)
-        if fresh.max_uses is not None and fresh.use_count >= fresh.max_uses:
+        if fresh.max_uses is not None and fresh.use_count >= fresh.max_uses:  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's IntField(null=True) stub doesn't expose Optional here
             return False
         fresh.use_count += 1
         await fresh.save(update_fields=["use_count"])
@@ -118,12 +119,14 @@ async def invite_landing(request: Request, token: str) -> Response:
             already_member = await UserMembership.filter(
                 user=user, project=invite.project
             ).exists()
+            allowed_domains = cast(
+                "list[str] | None",
+                invite.allowed_email_domains,  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
+            )
             if (
                 not already_member
-                and invite.allowed_email_domains
-                and not matches_allowed_domains(
-                    user.email or "", invite.allowed_email_domains
-                )
+                and allowed_domains
+                and not matches_allowed_domains(user.email or "", allowed_domains)
             ):
                 return templates.TemplateResponse(
                     request,

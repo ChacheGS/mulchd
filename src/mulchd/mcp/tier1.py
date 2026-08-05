@@ -1,3 +1,5 @@
+from typing import Any
+
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
@@ -45,7 +47,7 @@ async def _get_setup_instructions() -> list[TextContent]:
 
 
 @tier1_server.call_tool()
-async def call_tool(name: str, arguments: dict | None) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
     if name == "get_setup_instructions":
         return await _get_setup_instructions()
     raise ValueError(f"Unknown tool: {name}")
