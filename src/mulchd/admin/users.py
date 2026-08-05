@@ -8,7 +8,7 @@ from ..admin_grants import (
     is_superadmin,
     revoke_superadmin,
 )
-from ..auth import _hash_token, create_user, generate_token
+from ..auth import create_user, generate_token, hash_token
 from ..config import settings
 from ..instance_events import log_event
 from ..models import (
@@ -158,7 +158,7 @@ async def reset_user_token(
     if user is None:
         return Response(status_code=404)
     token = generate_token()
-    await User.filter(id=user_id).update(token_hash=_hash_token(token))
+    await User.filter(id=user_id).update(token_hash=hash_token(token))
     await log_event(InstanceEventCategory.TOKEN_RESET, actor=admin, subject_user=user)
     request.session["pending_token"] = {
         "username": user.username,

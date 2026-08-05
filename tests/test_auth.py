@@ -11,12 +11,12 @@ Role is resolved dynamically from UserMembership at every request, so changes
 import pytest
 
 from mulchd.auth import (
-    _hash_token,
     authenticate_global_token,
     authenticate_project_token,
     create_project_token,
     create_user,
     generate_token,
+    hash_token,
 )
 from mulchd.models import (
     Organization,

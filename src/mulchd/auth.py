@@ -25,7 +25,7 @@ class AuthContext:
     client: str = "unknown"
 
 
-def _hash_token(token: str) -> str:
+def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -42,7 +42,7 @@ async def authenticate_project_token(token: str) -> AuthContext | None:
     from the membership at request time so changes take effect immediately.
     """
     pt = (
-        await ProjectToken.filter(token_hash=_hash_token(token), active=True)
+        await ProjectToken.filter(token_hash=hash_token(token), active=True)
         .select_related("user", "project__org")
         .first()
     )
@@ -61,7 +61,7 @@ async def authenticate_global_token(token: str) -> User | None:
     Resolve a global (user-level) token. Used only by self-service API endpoints
     (list projects, mint project tokens). Rejected on /sse.
     """
-    return await User.filter(token_hash=_hash_token(token), active=True).first()
+    return await User.filter(token_hash=hash_token(token), active=True).first()
 
 
 async def create_user(username: str, display_name: str, email: str | None = None) -> tuple[User, str]:
@@ -70,7 +70,7 @@ async def create_user(username: str, display_name: str, email: str | None = None
         username=username,
         display_name=display_name,
         email=email,
-        token_hash=_hash_token(token),
+        token_hash=hash_token(token),
     )
     return user, token
 
@@ -98,7 +98,7 @@ async def create_user_from_oauth(
         username=attempt,
         display_name=display_name or attempt,
         email=email,
-        token_hash=_hash_token(token),
+        token_hash=hash_token(token),
         active=True,
         first_login_at=datetime.now(UTC),
     )
@@ -116,7 +116,7 @@ async def create_project_token(
     pt = await ProjectToken.create(
         user=user,
         project=project,
-        token_hash=_hash_token(token),
+        token_hash=hash_token(token),
         label=label,
     )
     return pt, token
