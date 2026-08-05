@@ -1,3 +1,5 @@
+from typing import Any
+
 from .models import InstanceEvent, InstanceEventCategory, Project, User
 
 
@@ -6,7 +8,7 @@ async def log_event(
     actor: User,
     subject_user: User | None = None,
     project: Project | None = None,
-    detail: dict | None = None,
+    detail: dict[str, Any] | None = None,
 ) -> InstanceEvent:
     """
     Record an account/access-level activity event. Blocking (not fire-and-forget)
