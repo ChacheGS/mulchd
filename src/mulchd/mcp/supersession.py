@@ -31,6 +31,8 @@ async def mark_superseded(records: list[Record], org_slug: str, project_slug: st
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
+    # get_project_records() returns list[dict] untyped until project_cache.py
+    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
     project_records = cast("list[Record]", await get_project_records(m_dir))
     archived_ids = await get_archived_ids(m_dir)
     live_by_id: dict[str, Record] = {r["id"]: r for r in project_records if r.get("id")}
@@ -207,6 +209,8 @@ async def mark_related_to(records: list[Record], org_slug: str, project_slug: st
     if not records:
         return
     m_dir = mulch_dir(org_slug, project_slug)
+    # get_project_records() returns list[dict] untyped until project_cache.py
+    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
     project_records = cast("list[Record]", await get_project_records(m_dir))
     archived_ids = await get_archived_ids(m_dir)
     live_ids: set[str] = {r["id"] for r in project_records if r.get("id")}
@@ -248,6 +252,8 @@ async def find_incoming_references(m_dir: Path, record_id: str) -> list[Record]:
     cached for mark_related_to/mark_superseded, so it's cheaper and more
     correct to answer this directly than to trust ml's result.
     """
+    # get_project_records() returns list[dict] untyped until project_cache.py
+    # gets its own strict-mode pass (a later task in this cleanup) — cast until then.
     project_records = cast("list[Record]", await get_project_records(m_dir))
     hits: list[Record] = []
     for r in project_records:
