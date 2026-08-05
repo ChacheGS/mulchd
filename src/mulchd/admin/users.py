@@ -137,16 +137,12 @@ async def grant_admin_route(
 async def revoke_admin_route(
     request: Request, user_id: int, revoker: User = Depends(get_current_admin)
 ) -> Response:
-    grant = await AdminGrant.filter(
-        user_id=user_id, role=AdminRole.SUPERADMIN, org=None
-    ).first()
+    grant = await AdminGrant.filter(user_id=user_id, role=AdminRole.SUPERADMIN, org=None).first()
     if grant is None:
         return Response(status_code=404)
     ok = await revoke_superadmin(grant, revoked_by=revoker)
     if not ok:
-        return RedirectResponse(
-            f"/admin/users/{user_id}?error=last_admin", status_code=303
-        )
+        return RedirectResponse(f"/admin/users/{user_id}?error=last_admin", status_code=303)
     return RedirectResponse(f"/admin/users/{user_id}", status_code=303)
 
 

@@ -31,6 +31,7 @@ async def test_resolve_oauth_identity_creates_link_on_email_match(db):
 
 async def test_resolve_oauth_identity_returns_none_for_unknown_email(db):
     from mulchd.connect import _resolve_oauth_identity
+
     result = await _resolve_oauth_identity("github", "gh-999", "nobody@example.com")
     assert result is None
 
@@ -52,7 +53,9 @@ async def test_create_user_from_oauth_sets_first_login_and_logs_event(db):
     from mulchd.auth import create_user_from_oauth
     from mulchd.models import InstanceEvent, InstanceEventCategory
 
-    user = await create_user_from_oauth("github", "gh-1", "new@company.com", "newperson", "New Person")
+    user = await create_user_from_oauth(
+        "github", "gh-1", "new@company.com", "newperson", "New Person"
+    )
 
     assert user.first_login_at is not None
     event = await InstanceEvent.get(category=InstanceEventCategory.FIRST_LOGIN)
@@ -91,9 +94,9 @@ async def test_resolve_oauth_identity_existing_link_does_not_relog(db):
 
 
 async def test_oauth_login_bootstraps_matching_admin_email(db, monkeypatch):
+    import mulchd.config as config_mod
     from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
     from mulchd.auth import create_user
-    import mulchd.config as config_mod
 
     monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "founder@acme.com")
     user, _ = await create_user("founder", "Founder", email="founder@acme.com")

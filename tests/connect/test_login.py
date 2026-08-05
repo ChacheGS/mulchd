@@ -129,7 +129,8 @@ async def test_connect_entry_page_shows_configured_oidc_logo(client, monkeypatch
 
 async def test_connect_entry_page_falls_back_to_generic_icon_without_logo_url(client, monkeypatch):
     monkeypatch.setenv(
-        "MULCHD_OIDC_OKTA_DISCOVERY_URL", "https://okta.example.com/.well-known/openid-configuration"
+        "MULCHD_OIDC_OKTA_DISCOVERY_URL",
+        "https://okta.example.com/.well-known/openid-configuration",
     )
     monkeypatch.setenv("MULCHD_OIDC_OKTA_CLIENT_ID", "cid")
     monkeypatch.setenv("MULCHD_OIDC_OKTA_CLIENT_SECRET", "csec")

@@ -45,14 +45,10 @@ async def grant_superadmin(user: User, granted_by: User) -> AdminGrant:
     if existing is not None:
         return existing
     try:
-        grant = await AdminGrant.create(
-            user=user, role=AdminRole.SUPERADMIN, granted_by=granted_by
-        )
+        grant = await AdminGrant.create(user=user, role=AdminRole.SUPERADMIN, granted_by=granted_by)
     except IntegrityError:
         return await AdminGrant.get(user=user, role=AdminRole.SUPERADMIN, org=None)
-    await log_event(
-        InstanceEventCategory.ADMIN_GRANTED, actor=granted_by, subject_user=user
-    )
+    await log_event(InstanceEventCategory.ADMIN_GRANTED, actor=granted_by, subject_user=user)
     return grant
 
 
@@ -85,7 +81,9 @@ async def revoke_superadmin(grant: AdminGrant, revoked_by: User) -> bool:
     concurrent revokes of the last two admins can't both read "not last" and
     both proceed, which would leave the instance with zero admins.
     """
-    async with transactions.in_transaction():  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
+    async with (
+        transactions.in_transaction()
+    ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
         try:
             fresh = await AdminGrant.select_for_update().get(id=grant.id)
         except DoesNotExist:

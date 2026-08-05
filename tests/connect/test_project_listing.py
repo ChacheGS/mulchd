@@ -3,7 +3,6 @@ import pytest
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 from mulchd.models import Organization, Project
-
 from tests.connect.conftest import _authed_client
 
 # ── projects ────────────────────────────────────────────────────────────────

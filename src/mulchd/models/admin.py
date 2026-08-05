@@ -77,10 +77,16 @@ class InstanceEvent(models.Model):
     )
     subject_user_id: int | None
     project: fields.ForeignKeyRelation[Project] | None = fields.ForeignKeyField(
-        "models.Project", related_name="instance_events", null=True, default=None, on_delete=fields.RESTRICT
+        "models.Project",
+        related_name="instance_events",
+        null=True,
+        default=None,
+        on_delete=fields.RESTRICT,
     )
     project_id: int | None
-    detail = fields.JSONField(null=True, default=None)  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
+    detail = fields.JSONField(
+        null=True, default=None
+    )  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
     at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

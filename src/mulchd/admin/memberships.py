@@ -48,7 +48,9 @@ async def _render_memberships(
 async def memberships_page(
     request: Request, user: str = "", error: str = "", project: str = ""
 ) -> Response:
-    return await _render_memberships(request, preselect_user=user, error=error, project_filter=project)
+    return await _render_memberships(
+        request, preselect_user=user, error=error, project_filter=project
+    )
 
 
 @router.post("/memberships")

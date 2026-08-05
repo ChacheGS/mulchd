@@ -12,7 +12,11 @@ async def test_oauth_consent_redirects_to_login_when_unauthenticated(client, db)
 
     await OAuthClient.create(
         client_id="cli-a",
-        client_metadata={"client_id": "cli-a", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli A"},
+        client_metadata={
+            "client_id": "cli-a",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli A",
+        },
     )
     resp = await client.get(
         "/connect/oauth-consent",
@@ -102,7 +106,11 @@ async def test_oauth_consent_page_shows_project_picker(client, alice_and_project
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-b",
-        client_metadata={"client_id": "cli-b", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli B"},
+        client_metadata={
+            "client_id": "cli-b",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli B",
+        },
     )
     resp = await client.get(
         "/connect/oauth-consent",
@@ -125,7 +133,11 @@ async def test_oauth_consent_deny_redirects_with_error(client, alice_and_project
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-c",
-        client_metadata={"client_id": "cli-c", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli C"},
+        client_metadata={
+            "client_id": "cli-c",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli C",
+        },
     )
     resp = await client.post(
         "/connect/oauth-consent",
@@ -151,7 +163,11 @@ async def test_oauth_consent_allow_creates_grant_and_redirects_with_code(client,
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-d",
-        client_metadata={"client_id": "cli-d", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli D"},
+        client_metadata={
+            "client_id": "cli-d",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli D",
+        },
     )
     resp = await client.post(
         "/connect/oauth-consent",
@@ -191,7 +207,11 @@ async def test_oauth_consent_allow_nonexistent_project_returns_403(client, alice
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-noproj",
-        client_metadata={"client_id": "cli-noproj", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli NoProj"},
+        client_metadata={
+            "client_id": "cli-noproj",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli NoProj",
+        },
     )
     resp = await client.post(
         "/connect/oauth-consent",
@@ -215,7 +235,9 @@ async def test_oauth_consent_allow_non_member_project_returns_403(client, alice_
     user, token, org, project = alice_and_project
     await _authed_client(client, token)
     other_org = await Organization.create(slug="other-org", display_name="Other Org")
-    other_project = await Project.create(slug="other-proj", display_name="Other Proj", org=other_org)
+    other_project = await Project.create(
+        slug="other-proj", display_name="Other Proj", org=other_org
+    )
     await OAuthClient.create(
         client_id="cli-notmember",
         client_metadata={
@@ -248,7 +270,11 @@ async def test_oauth_consent_allow_second_time_skips_picker(client, alice_and_pr
     await _authed_client(client, token)
     oc = await OAuthClient.create(
         client_id="cli-e",
-        client_metadata={"client_id": "cli-e", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli E"},
+        client_metadata={
+            "client_id": "cli-e",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli E",
+        },
     )
     await OAuthGrant.create(client=oc, user=user, project=project)
 
@@ -283,7 +309,11 @@ async def test_oauth_consent_login_round_trip_returns_to_pending_authorization(
     user, token, org, project = alice_and_project
     await OAuthClient.create(
         client_id="cli-f",
-        client_metadata={"client_id": "cli-f", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli F"},
+        client_metadata={
+            "client_id": "cli-f",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli F",
+        },
     )
 
     consent_resp = await client.get(
@@ -333,7 +363,11 @@ async def test_oauth_consent_page_offers_only_roles_up_to_membership(client, ali
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-roles",
-        client_metadata={"client_id": "cli-roles", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli Roles"},
+        client_metadata={
+            "client_id": "cli-roles",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli Roles",
+        },
     )
     resp = await client.get(
         "/connect/oauth-consent",
@@ -358,7 +392,11 @@ async def test_oauth_consent_allow_stores_chosen_role(client, alice_and_project)
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-store-role",
-        client_metadata={"client_id": "cli-store-role", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli Role"},
+        client_metadata={
+            "client_id": "cli-store-role",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli Role",
+        },
     )
     resp = await client.post(
         "/connect/oauth-consent",
@@ -389,7 +427,11 @@ async def test_oauth_consent_allow_ignores_role_above_membership(client, alice_a
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-tamper",
-        client_metadata={"client_id": "cli-tamper", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli Tamper"},
+        client_metadata={
+            "client_id": "cli-tamper",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli Tamper",
+        },
     )
     resp = await client.post(
         "/connect/oauth-consent",
@@ -410,7 +452,9 @@ async def test_oauth_consent_allow_ignores_role_above_membership(client, alice_a
     assert grant.granted_role == Role.WRITER
 
 
-async def test_oauth_consent_allow_missing_role_field_defaults_to_membership_role(client, alice_and_project):
+async def test_oauth_consent_allow_missing_role_field_defaults_to_membership_role(
+    client, alice_and_project
+):
     """Omitting role_<id> entirely (e.g. an older cached form) must not blow up —
     it should fall back to the membership's own role, same as pre-feature behavior."""
     from mulchd.models import OAuthClient, OAuthGrant, Role
@@ -419,7 +463,11 @@ async def test_oauth_consent_allow_missing_role_field_defaults_to_membership_rol
     await _authed_client(client, token)
     await OAuthClient.create(
         client_id="cli-no-role-field",
-        client_metadata={"client_id": "cli-no-role-field", "redirect_uris": ["http://localhost/cb"], "client_name": "Cli NoRole"},
+        client_metadata={
+            "client_id": "cli-no-role-field",
+            "redirect_uris": ["http://localhost/cb"],
+            "client_name": "Cli NoRole",
+        },
     )
     resp = await client.post(
         "/connect/oauth-consent",

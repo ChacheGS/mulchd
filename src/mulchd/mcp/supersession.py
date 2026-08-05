@@ -181,7 +181,9 @@ def cross_domain_supersede_hints(records: list[Record]) -> list[dict[str, Any]]:
         elif r.get("_superseded_tip"):
             continue  # tip is in this record's own domain — nothing else to read
         elif r.get("_superseded_tip_ambiguous"):
-            ambiguous_domains = cast("dict[str, str]", r.get("_superseded_tip_ambiguous_domains") or {})
+            ambiguous_domains = cast(
+                "dict[str, str]", r.get("_superseded_tip_ambiguous_domains") or {}
+            )
             for tid, dom in ambiguous_domains.items():
                 hints.append({"record_id": rid, "superseded_by": tid, "in_domain": dom})
         elif r.get("_superseder_domain"):

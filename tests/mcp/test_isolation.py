@@ -3,8 +3,9 @@ Cross-project / cross-user isolation tests.
 """
 
 from datetime import datetime, timedelta, timezone
+
 from mulchd.mcp.tier2 import _read_expertise
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_read_isolation_different_projects(team, data_path):

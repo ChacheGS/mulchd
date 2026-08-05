@@ -41,6 +41,8 @@ async def create_org(
     try:
         org = await Organization.create(slug=slug, display_name=display_name.strip())
     except IntegrityError:
-        return await _render_orgs(request, error=f"Org slug '{slug}' already exists.", status_code=409)
+        return await _render_orgs(
+            request, error=f"Org slug '{slug}' already exists.", status_code=409
+        )
     await log_event(InstanceEventCategory.ORG_CREATED, actor=admin, detail={"org_slug": org.slug})
     return RedirectResponse("/admin/orgs", status_code=303)

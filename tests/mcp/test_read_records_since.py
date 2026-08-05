@@ -4,9 +4,10 @@ read_records(since=...) timestamp-filtering tests.
 
 import uuid
 from datetime import datetime, timedelta, timezone
+
 from mulchd.mcp.tier2 import _read_expertise
 from mulchd.models import RecordMeta
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_read_records_since_excludes_old_records(team, data_path):

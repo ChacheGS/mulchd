@@ -124,6 +124,7 @@ async def test_admin_create_user_with_email(admin_client):
     )
     assert resp.status_code == 303
     from mulchd.models import User
+
     user = await User.get(username="withmail")
     assert user is not None
     assert user.email == "wm@example.com"
@@ -131,6 +132,7 @@ async def test_admin_create_user_with_email(admin_client):
 
 async def test_admin_user_detail_page(admin_client):
     from mulchd.auth import create_user
+
     user, _ = await create_user("detailuser", "Detail User", email="d@example.com")
     resp = await admin_client.get(f"/admin/users/{user.id}")
     assert resp.status_code == 200
@@ -141,6 +143,7 @@ async def test_admin_user_detail_page(admin_client):
 async def test_admin_unlink_identity(admin_client):
     from mulchd.auth import create_user
     from mulchd.models import OAuthIdentity
+
     user, _ = await create_user("unlinkme", "Unlink Me")
     identity = await OAuthIdentity.create(user=user, provider="github", sub="777")
     resp = await admin_client.post(
@@ -156,9 +159,7 @@ async def test_grant_admin_access(admin_client):
     from mulchd.auth import create_user
 
     target, _ = await create_user("newadmin", "New Admin")
-    resp = await admin_client.post(
-        f"/admin/users/{target.id}/grant-admin", follow_redirects=False
-    )
+    resp = await admin_client.post(f"/admin/users/{target.id}/grant-admin", follow_redirects=False)
     assert resp.status_code == 303
     assert resp.headers["location"] == f"/admin/users/{target.id}"
     assert await is_superadmin(target) is True
@@ -173,9 +174,7 @@ async def test_revoke_admin_access(admin_client):
     admin_user = await User.get(username="admin")
     await grant_superadmin(target, granted_by=admin_user)
 
-    resp = await admin_client.post(
-        f"/admin/users/{target.id}/revoke-admin", follow_redirects=False
-    )
+    resp = await admin_client.post(f"/admin/users/{target.id}/revoke-admin", follow_redirects=False)
     assert resp.status_code == 303
     assert resp.headers["location"] == f"/admin/users/{target.id}"
     assert await is_superadmin(target) is False
@@ -255,9 +254,7 @@ async def test_deactivate_user_logs_event(admin_client):
 
     target, _ = await create_user("logdeactivate", "Log Deactivate")
 
-    resp = await admin_client.post(
-        f"/admin/users/{target.id}/deactivate", follow_redirects=False
-    )
+    resp = await admin_client.post(f"/admin/users/{target.id}/deactivate", follow_redirects=False)
     assert resp.status_code == 303
 
     event = await InstanceEvent.get(category=InstanceEventCategory.USER_DEACTIVATED)
@@ -270,9 +267,7 @@ async def test_reset_token_logs_event(admin_client):
 
     target, _ = await create_user("logreset", "Log Reset")
 
-    resp = await admin_client.post(
-        f"/admin/users/{target.id}/reset-token", follow_redirects=False
-    )
+    resp = await admin_client.post(f"/admin/users/{target.id}/reset-token", follow_redirects=False)
     assert resp.status_code == 303
 
     event = await InstanceEvent.get(category=InstanceEventCategory.TOKEN_RESET)

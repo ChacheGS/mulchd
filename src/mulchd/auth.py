@@ -64,7 +64,9 @@ async def authenticate_global_token(token: str) -> User | None:
     return await User.filter(token_hash=hash_token(token), active=True).first()
 
 
-async def create_user(username: str, display_name: str, email: str | None = None) -> tuple[User, str]:
+async def create_user(
+    username: str, display_name: str, email: str | None = None
+) -> tuple[User, str]:
     token = generate_token()
     user = await User.create(
         username=username,
@@ -104,7 +106,10 @@ async def create_user_from_oauth(
     )
     await OAuthIdentity.create(user=user, provider=provider, sub=sub)
     await log_event(
-        InstanceEventCategory.FIRST_LOGIN, actor=user, subject_user=user, detail={"provider": provider}
+        InstanceEventCategory.FIRST_LOGIN,
+        actor=user,
+        subject_user=user,
+        detail={"provider": provider},
     )
     return user
 

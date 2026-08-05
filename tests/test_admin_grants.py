@@ -158,9 +158,9 @@ async def test_grant_superadmin_idempotent(db):
 
 
 async def test_maybe_bootstrap_admin_grants_when_email_matches(db, monkeypatch):
+    import mulchd.config as config_mod
     from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
     from mulchd.auth import create_user
-    import mulchd.config as config_mod
 
     monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "boot@company.com")
     user, _ = await create_user("bootuser", "Boot User", email="boot@company.com")
@@ -172,9 +172,9 @@ async def test_maybe_bootstrap_admin_grants_when_email_matches(db, monkeypatch):
 
 
 async def test_maybe_bootstrap_admin_noop_when_email_does_not_match(db, monkeypatch):
+    import mulchd.config as config_mod
     from mulchd.admin_grants import is_superadmin, maybe_bootstrap_admin
     from mulchd.auth import create_user
-    import mulchd.config as config_mod
 
     monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "boot@company.com")
     user, _ = await create_user("wronguser", "Wrong User", email="other@company.com")
@@ -186,9 +186,9 @@ async def test_maybe_bootstrap_admin_noop_when_email_does_not_match(db, monkeypa
 
 
 async def test_maybe_bootstrap_admin_noop_when_grants_already_exist(db, monkeypatch):
+    import mulchd.config as config_mod
     from mulchd.admin_grants import grant_superadmin, maybe_bootstrap_admin
     from mulchd.auth import create_user
-    import mulchd.config as config_mod
 
     monkeypatch.setattr(config_mod.settings, "bootstrap_admin_email", "boot@company.com")
     existing, _ = await create_user("existingadmin", "Existing")

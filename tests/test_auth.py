@@ -209,17 +209,22 @@ async def test_user_email_nullable(db):
 
 async def test_oauth_identity_links_to_user(db):
     from mulchd.models import OAuthIdentity
+
     user, _ = await create_user("alice", "Alice")
     identity = await OAuthIdentity.create(user=user, provider="github", sub="12345")
-    fetched = await OAuthIdentity.filter(provider="github", sub="12345").select_related("user").first()
+    fetched = (
+        await OAuthIdentity.filter(provider="github", sub="12345").select_related("user").first()
+    )
     assert fetched is not None
     assert fetched.user.id == user.id
 
 
 async def test_oauth_identity_provider_sub_unique(db):
     import pytest
-    from mulchd.models import OAuthIdentity
     from tortoise.exceptions import IntegrityError
+
+    from mulchd.models import OAuthIdentity
+
     user, _ = await create_user("alice2", "Alice2")
     await OAuthIdentity.create(user=user, provider="github", sub="99999")
     with pytest.raises(IntegrityError):
@@ -229,6 +234,7 @@ async def test_oauth_identity_provider_sub_unique(db):
 async def test_create_user_from_oauth_creates_user_and_identity(db):
     from mulchd.auth import create_user_from_oauth
     from mulchd.models import OAuthIdentity
+
     user = await create_user_from_oauth("github", "12345", "new@company.com", "newuser", "New User")
     assert user.username == "newuser"
     assert user.email == "new@company.com"
@@ -238,6 +244,9 @@ async def test_create_user_from_oauth_creates_user_and_identity(db):
 
 async def test_create_user_from_oauth_suffixes_on_username_collision(db):
     from mulchd.auth import create_user_from_oauth
+
     await create_user("taken", "Existing User")
-    user = await create_user_from_oauth("github", "999", "another@company.com", "taken", "Another User")
+    user = await create_user_from_oauth(
+        "github", "999", "another@company.com", "taken", "Another User"
+    )
     assert user.username == "taken_2"

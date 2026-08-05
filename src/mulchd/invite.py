@@ -62,11 +62,7 @@ async def validate_invite(token: str) -> InviteLink | None:
     re-deriving revoked/expired/exhausted here, so the admin UI and this claim
     path can't drift out of sync.
     """
-    invite = (
-        await InviteLink.filter(token=token)
-        .select_related("project__org")
-        .first()
-    )
+    invite = await InviteLink.filter(token=token).select_related("project__org").first()
     if invite is None:
         return None
     if invite.status != "active":
@@ -84,9 +80,13 @@ async def claim_invite(invite: InviteLink, user: User) -> bool:
     if existing is not None:
         return True  # already a member — silent skip, no increment
 
-    async with transactions.in_transaction():  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
+    async with (
+        transactions.in_transaction()
+    ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's in_transaction isn't generic-parametrized in its stub
         fresh = await InviteLink.select_for_update().get(id=invite.id)
-        if fresh.max_uses is not None and fresh.use_count >= fresh.max_uses:  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's IntField(null=True) stub doesn't expose Optional here
+        if (
+            fresh.max_uses is not None and fresh.use_count >= fresh.max_uses
+        ):  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's IntField(null=True) stub doesn't expose Optional here
             return False
         fresh.use_count += 1
         await fresh.save(update_fields=["use_count"])
@@ -116,9 +116,7 @@ async def invite_landing(request: Request, token: str) -> Response:
     if user_id is not None:
         user = await User.filter(id=user_id, active=True).first()
         if user is not None:
-            already_member = await UserMembership.filter(
-                user=user, project=invite.project
-            ).exists()
+            already_member = await UserMembership.filter(user=user, project=invite.project).exists()
             allowed_domains = cast(
                 "list[str] | None",
                 invite.allowed_email_domains,  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type

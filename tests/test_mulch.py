@@ -20,7 +20,8 @@ from mulchd.models import (
 )
 
 ml_available = pytest.mark.skipif(
-    not shutil.which("ml"), reason="ml not in PATH — run via: make test (or mise x -- uv run pytest)"
+    not shutil.which("ml"),
+    reason="ml not in PATH — run via: make test (or mise x -- uv run pytest)",
 )
 
 
@@ -101,11 +102,21 @@ async def test_live_audit_corpus_with_domain_filter(team, data_path):
 
     t = team
     await _record_expertise(
-        {"domain": "scoped-a", "type": "convention", "classification": "tactical", "content": "rule a"},
+        {
+            "domain": "scoped-a",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "rule a",
+        },
         ctx(t.carlos, t.org, t.infra),
     )
     await _record_expertise(
-        {"domain": "scoped-b", "type": "convention", "classification": "tactical", "content": "rule b"},
+        {
+            "domain": "scoped-b",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "rule b",
+        },
         ctx(t.carlos, t.org, t.infra),
     )
     result = await audit_corpus(mulch_dir("acme", "infra"), domain="scoped-a")
@@ -148,7 +159,9 @@ async def test_run_kills_process_and_raises_on_timeout(monkeypatch, tmp_path):
         coro.close()
         raise TimeoutError
 
-    monkeypatch.setattr(mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec
+    )
     monkeypatch.setattr(mulch_module.asyncio, "wait_for", _fake_wait_for)
 
     with pytest.raises(MulchError, match="timed out"):
@@ -164,7 +177,9 @@ async def test_run_raises_mulch_error_with_json_stderr(monkeypatch, tmp_path):
     async def _fake_create_subprocess_exec(*args, **kwargs):
         return _FakeProc(1, stderr=b'{"error": "domain not found"}')
 
-    monkeypatch.setattr(mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec
+    )
 
     with pytest.raises(MulchError, match="domain not found"):
         await _run(tmp_path, ["search", "query"])
@@ -179,7 +194,9 @@ async def test_run_raises_mulch_error_with_non_json_stderr(monkeypatch, tmp_path
     async def _fake_create_subprocess_exec(*args, **kwargs):
         return _FakeProc(1, stderr=b"boom: something broke")
 
-    monkeypatch.setattr(mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec
+    )
 
     with pytest.raises(MulchError, match="boom: something broke"):
         await _run(tmp_path, ["search", "query"])
@@ -192,7 +209,9 @@ async def test_run_returns_empty_dict_for_blank_stdout(monkeypatch, tmp_path):
     async def _fake_create_subprocess_exec(*args, **kwargs):
         return _FakeProc(0, stdout=b"   ")
 
-    monkeypatch.setattr(mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec
+    )
 
     assert await _run(tmp_path, ["init"]) == {}
 
@@ -204,7 +223,9 @@ async def test_run_parses_json_stdout_on_success(monkeypatch, tmp_path):
     async def _fake_create_subprocess_exec(*args, **kwargs):
         return _FakeProc(0, stdout=b'{"success": true, "count": 3}')
 
-    monkeypatch.setattr(mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec)
+    monkeypatch.setattr(
+        mulch_module.asyncio, "create_subprocess_exec", _fake_create_subprocess_exec
+    )
 
     assert await _run(tmp_path, ["status"]) == {"success": True, "count": 3}
 
@@ -297,7 +318,9 @@ def test_find_written_record_skips_malformed_lines_and_finds_newest_match(tmp_pa
         "\n"
         "not json at all\n"
     )
-    result = _find_written_record(jsonl, {"recorded_at": "t1", "owner": "carlos", "type": "convention"})
+    result = _find_written_record(
+        jsonl, {"recorded_at": "t1", "owner": "carlos", "type": "convention"}
+    )
     assert result is not None
     assert result["id"] == "mx-target"
 
@@ -347,7 +370,12 @@ async def test_live_edit_record_joins_list_valued_field(data_path):
     target = await write_record(
         m_dir,
         "infra",
-        {"type": "convention", "classification": "tactical", "content": "target", "owner": "carlos"},
+        {
+            "type": "convention",
+            "classification": "tactical",
+            "content": "target",
+            "owner": "carlos",
+        },
     )
     other = await write_record(
         m_dir,
@@ -448,9 +476,9 @@ async def test_live_delete_record_archives_it(data_path):
         {"type": "convention", "classification": "tactical", "content": "v1", "owner": "carlos"},
     )
     await delete_record(m_dir, "infra", written["id"])
-    live = (m_dir / "expertise" / "infra.jsonl")
+    live = m_dir / "expertise" / "infra.jsonl"
     assert not live.exists() or written["id"] not in live.read_text()
-    archive = (m_dir / "archive" / "infra.jsonl")
+    archive = m_dir / "archive" / "infra.jsonl"
     assert archive.exists()
     assert written["id"] in archive.read_text()
 
@@ -458,7 +486,12 @@ async def test_live_delete_record_archives_it(data_path):
 @ml_available
 async def test_live_restore_record_moves_it_back_to_expertise(data_path):
     from mulchd.domains import mulch_dir
-    from mulchd.mulch import delete_record, init_ml_project, restore_record, write_record
+    from mulchd.mulch import (
+        delete_record,
+        init_ml_project,
+        restore_record,
+        write_record,
+    )
 
     m_dir = mulch_dir("acme", "wraptest3")
     await init_ml_project(m_dir)
@@ -470,14 +503,19 @@ async def test_live_restore_record_moves_it_back_to_expertise(data_path):
     await delete_record(m_dir, "infra", written["id"])
     result = await restore_record(m_dir, written["id"])
     assert result["id"] == written["id"]
-    live = (m_dir / "expertise" / "infra.jsonl")
+    live = m_dir / "expertise" / "infra.jsonl"
     assert written["id"] in live.read_text()
 
 
 @ml_available
 async def test_live_record_outcome_appends_to_record(data_path):
     from mulchd.domains import mulch_dir
-    from mulchd.mulch import OutcomeStatus, init_ml_project, record_outcome, write_record
+    from mulchd.mulch import (
+        OutcomeStatus,
+        init_ml_project,
+        record_outcome,
+        write_record,
+    )
 
     m_dir = mulch_dir("acme", "wraptest4")
     await init_ml_project(m_dir)
@@ -558,12 +596,22 @@ async def test_live_search_domains_scoped_to_specific_domains(data_path):
     await write_record(
         m_dir,
         "infra",
-        {"type": "convention", "classification": "tactical", "content": "deploy rule", "owner": "carlos"},
+        {
+            "type": "convention",
+            "classification": "tactical",
+            "content": "deploy rule",
+            "owner": "carlos",
+        },
     )
     await write_record(
         m_dir,
         "ops",
-        {"type": "convention", "classification": "tactical", "content": "deploy rule", "owner": "carlos"},
+        {
+            "type": "convention",
+            "classification": "tactical",
+            "content": "deploy rule",
+            "owner": "carlos",
+        },
     )
     results = await search_domains(m_dir, "deploy rule", domains=["infra"])
     assert all(r["_domain"] == "infra" for r in results)

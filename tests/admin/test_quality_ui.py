@@ -14,7 +14,8 @@ import pytest
 from mulchd.models import Organization, Project, Role, User, UserMembership
 
 ml_available = pytest.mark.skipif(
-    not shutil.which("ml"), reason="ml not in PATH — run via: make test (or mise x -- uv run pytest)"
+    not shutil.which("ml"),
+    reason="ml not in PATH — run via: make test (or mise x -- uv run pytest)",
 )
 
 
@@ -112,7 +113,9 @@ async def test_quality_page_renders_real_audit_report(admin_client, tmp_path, mo
 
 
 @ml_available
-async def test_quality_page_renders_when_no_conventions_recorded(admin_client, tmp_path, monkeypatch):
+async def test_quality_page_renders_when_no_conventions_recorded(
+    admin_client, tmp_path, monkeypatch
+):
     """ml audit returns signals.rule_density as null (not omitted) when the
     corpus has zero convention-type records — any brand-new project or a
     domain filter that excludes conventions hits this. Must not 500."""
@@ -190,8 +193,18 @@ def _fake_report(**overrides) -> dict:
                 },
             ],
             "signals": {
-                "evidence_coverage": {"verdict": "PASS", "value": 0.6, "threshold": 0.5, "warn_threshold": 0.3},
-                "rule_density": {"verdict": "WARN", "value": 0.2, "threshold": 0.25, "warn_threshold": 0.15},
+                "evidence_coverage": {
+                    "verdict": "PASS",
+                    "value": 0.6,
+                    "threshold": 0.5,
+                    "warn_threshold": 0.3,
+                },
+                "rule_density": {
+                    "verdict": "WARN",
+                    "value": 0.2,
+                    "threshold": 0.25,
+                    "warn_threshold": 0.15,
+                },
                 "floater_rate": {"verdict": "FAIL", "value": 0.9, "threshold": 0.2},
             },
             "failures": ["floater_rate"],
@@ -266,7 +279,9 @@ async def test_quality_page_renders_suggestions(admin_client, tmp_path, monkeypa
     assert "<button" not in suggestion_block
 
 
-async def test_quality_page_forwards_domain_filter_to_audit_corpus(admin_client, tmp_path, monkeypatch):
+async def test_quality_page_forwards_domain_filter_to_audit_corpus(
+    admin_client, tmp_path, monkeypatch
+):
     """The domain= query param must reach audit_corpus, and the Clear link
     must be present so the filter can be removed."""
     import mulchd.admin.quality as quality_module

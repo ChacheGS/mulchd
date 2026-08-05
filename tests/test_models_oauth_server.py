@@ -19,8 +19,9 @@ async def test_oauth_client_roundtrip(db):
 
 
 async def test_oauth_client_id_unique(db):
-    from mulchd.models import OAuthClient
     from tortoise.exceptions import IntegrityError
+
+    from mulchd.models import OAuthClient
 
     await OAuthClient.create(client_id="dup", client_metadata={})
     with pytest.raises(IntegrityError):
@@ -28,9 +29,10 @@ async def test_oauth_client_id_unique(db):
 
 
 async def test_oauth_grant_unique_per_client_and_user(db):
+    from tortoise.exceptions import IntegrityError
+
     from mulchd.auth import create_user
     from mulchd.models import OAuthClient, OAuthGrant, Organization, Project
-    from tortoise.exceptions import IntegrityError
 
     user, _ = await create_user("alice", "Alice")
     org = await Organization.create(slug="acme", display_name="Acme")
@@ -46,7 +48,14 @@ async def test_oauth_code_and_token_link_to_grant(db):
     from datetime import UTC, datetime, timedelta
 
     from mulchd.auth import create_user
-    from mulchd.models import OAuthClient, OAuthCode, OAuthGrant, OAuthToken, Organization, Project
+    from mulchd.models import (
+        OAuthClient,
+        OAuthCode,
+        OAuthGrant,
+        OAuthToken,
+        Organization,
+        Project,
+    )
 
     user, _ = await create_user("bob", "Bob")
     org = await Organization.create(slug="acme2", display_name="Acme2")
@@ -78,9 +87,10 @@ async def test_oauth_code_and_token_link_to_grant(db):
 async def test_oauth_code_hash_unique(db):
     from datetime import UTC, datetime, timedelta
 
+    from tortoise.exceptions import IntegrityError
+
     from mulchd.auth import create_user
     from mulchd.models import OAuthClient, OAuthCode, OAuthGrant, Organization, Project
-    from tortoise.exceptions import IntegrityError
 
     user, _ = await create_user("carol", "Carol")
     org = await Organization.create(slug="acme3", display_name="Acme3")
@@ -104,9 +114,10 @@ async def test_oauth_code_hash_unique(db):
 async def test_oauth_token_hashes_unique(db):
     from datetime import UTC, datetime, timedelta
 
+    from tortoise.exceptions import IntegrityError
+
     from mulchd.auth import create_user
     from mulchd.models import OAuthClient, OAuthGrant, OAuthToken, Organization, Project
-    from tortoise.exceptions import IntegrityError
 
     user, _ = await create_user("dave", "Dave")
     org = await Organization.create(slug="acme4", display_name="Acme4")
@@ -176,6 +187,8 @@ async def test_oauth_grant_granted_role_explicit_value_roundtrips(db):
     project = await Project.create(slug="demo7", display_name="Demo7", org=org)
     client = await OAuthClient.create(client_id="client-7", client_metadata={})
 
-    grant = await OAuthGrant.create(client=client, user=user, project=project, granted_role=Role.READER)
+    grant = await OAuthGrant.create(
+        client=client, user=user, project=project, granted_role=Role.READER
+    )
     fetched = await OAuthGrant.get(id=grant.id)
     assert fetched.granted_role == Role.READER

@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from tests.mcp.conftest import ctx, _jot, _make_fake_delete
+from tests.mcp.conftest import _jot, _make_fake_delete, ctx
 
 
 async def test_delete_confirmation_names_org_and_project(team, data_path, monkeypatch):

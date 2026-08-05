@@ -3,12 +3,14 @@ record_outcome, outcome tag formatting, and staleness annotation tests.
 """
 
 import json
-import pytest
 import uuid
 from datetime import datetime, timezone
-from mulchd.models import Role
+
+import pytest
+
 from mulchd.mcp.tier2 import _read_expertise
-from tests.mcp.conftest import ctx, _jot
+from mulchd.models import Role
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_record_outcome_creates_visible_outcome(team, data_path, fake_write_record):
@@ -47,20 +49,29 @@ async def test_record_outcome_creates_visible_outcome(team, data_path, fake_writ
     mcp_tier2.record_outcome = _fake_outcome
     try:
         result = await _record_outcome(
-            {"record_id": record_id, "domain": "infra", "status": "success", "notes": "worked great"},
+            {
+                "record_id": record_id,
+                "domain": "infra",
+                "status": "success",
+                "notes": "worked great",
+            },
             ctx(t.carlos, t.org, t.infra),
         )
     finally:
         mcp_tier2.record_outcome = orig
 
     assert f"Recorded success outcome for {record_id} — acme/infra" in result[0].text
-    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    records2 = await mcp_tier2._read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     outcomes = records2[1]["records"][0]["outcomes"]
     assert outcomes[0]["status"] == "success"
     assert outcomes[0]["notes"] == "worked great"
 
 
-async def test_record_outcome_duplicate_status_from_same_agent_rejected(team, data_path, fake_write_record):
+async def test_record_outcome_duplicate_status_from_same_agent_rejected(
+    team, data_path, fake_write_record
+):
     """Recording the same status twice from the same agent doesn't append a
     second outcome — closes the unbounded-boost-spam vector, since ml's
     confirmation score is an uncapped count of success/partial outcomes."""
@@ -107,11 +118,15 @@ async def test_record_outcome_duplicate_status_from_same_agent_rejected(team, da
 
     assert result is not None
     assert "already recorded a success outcome" in result[0].text
-    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    records2 = await mcp_tier2._read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     assert len(records2[1]["records"][0]["outcomes"]) == 1
 
 
-async def test_record_outcome_status_change_from_same_agent_allowed(team, data_path, fake_write_record):
+async def test_record_outcome_status_change_from_same_agent_allowed(
+    team, data_path, fake_write_record
+):
     """A genuinely different status from the same agent (a change of
     assessment) is still recorded, not blocked as a duplicate."""
     import mulchd.mcp.tier2 as mcp_tier2
@@ -153,7 +168,9 @@ async def test_record_outcome_status_change_from_same_agent_allowed(team, data_p
 
     assert f"Recorded success outcome for {record_id}" in r1[0].text
     assert f"Recorded failure outcome for {record_id}" in r2[0].text
-    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    records2 = await mcp_tier2._read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     statuses = [o["status"] for o in records2[1]["records"][0]["outcomes"]]
     assert statuses == ["success", "failure"]
 
@@ -202,7 +219,9 @@ async def test_record_outcome_same_status_different_agents_both_allowed(
 
     assert f"Recorded success outcome for {record_id}" in r1[0].text
     assert f"Recorded success outcome for {record_id}" in r2[0].text
-    records2 = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    records2 = await mcp_tier2._read_expertise(
+        {"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra)
+    )
     assert len(records2[1]["records"][0]["outcomes"]) == 2
 
 
@@ -301,13 +320,24 @@ async def test_annotate_outcome_staleness_flags_edit_after_outcome(team, data_pa
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v2", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v2",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
     )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "v1"},
+        client="test",
+        session_id=uuid.uuid4(),
     )
     records = [r.copy()]
     await annotate_outcome_staleness(records, t.infra.id)
@@ -323,13 +353,24 @@ async def test_annotate_outcome_staleness_handles_z_suffix_timestamp(team, data_
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v2", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v2",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00Z"}],
     )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "v1"},
+        client="test",
+        session_id=uuid.uuid4(),
         at=datetime(2026, 7, 28, 0, 0, 1, tzinfo=timezone.utc),
     )
     records = [r.copy()]
@@ -345,13 +386,24 @@ async def test_annotate_outcome_staleness_not_flagged_when_outcome_is_newer(team
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v2", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v2",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T23:59:59+00:00"}],
     )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "v1"},
+        client="test",
+        session_id=uuid.uuid4(),
         at=datetime(2026, 7, 28, 0, 0, tzinfo=timezone.utc),
     )
     records = [r.copy()]
@@ -367,13 +419,24 @@ async def test_annotate_outcome_staleness_ignores_non_content_edits(team, data_p
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
     )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"classification": "observational"}, client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"classification": "observational"},
+        client="test",
+        session_id=uuid.uuid4(),
     )
     records = [r.copy()]
     await annotate_outcome_staleness(records, t.infra.id)
@@ -386,12 +449,23 @@ async def test_annotate_outcome_staleness_skips_records_without_outcomes(team, d
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v2", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v2",
+        owner="carlos",
     )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "v1"},
+        client="test",
+        session_id=uuid.uuid4(),
     )
     records = [r.copy()]
     await annotate_outcome_staleness(records, t.infra.id)
@@ -404,12 +478,22 @@ async def test_edit_then_self_confirm_does_not_clear_stale_flag(team, data_path,
     edits a record's content, then immediately confirms their own edit,
     should not end up with a record that reads as freshly re-validated."""
     import mulchd.mcp.tier2 as mcp_tier2
-    from mulchd.mcp.tier2 import annotate_outcome_staleness, _edit_record, _record_outcome
+    from mulchd.mcp.tier2 import (
+        _edit_record,
+        _record_outcome,
+        annotate_outcome_staleness,
+    )
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
     )
 
@@ -462,12 +546,22 @@ async def test_edit_then_third_party_confirm_clears_stale_flag(team, data_path, 
     proves the fix distinguishes self- from third-party confirmation rather
     than just never clearing at all."""
     import mulchd.mcp.tier2 as mcp_tier2
-    from mulchd.mcp.tier2 import annotate_outcome_staleness, _edit_record, _record_outcome
+    from mulchd.mcp.tier2 import (
+        _edit_record,
+        _record_outcome,
+        annotate_outcome_staleness,
+    )
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
     )
 
@@ -520,13 +614,26 @@ async def test_outcome_with_no_agent_field_still_clears_stale_flag(team, data_pa
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v2", owner="carlos",
-        outcomes=[{"status": "success", "recorded_at": "2026-07-30T00:00:00+00:00"}],  # no "agent" key
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v2",
+        owner="carlos",
+        outcomes=[
+            {"status": "success", "recorded_at": "2026-07-30T00:00:00+00:00"}
+        ],  # no "agent" key
     )
     await RecordEdit.create(
-        record_id=r["id"], project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"content": "v1"}, client="test", session_id=uuid.uuid4(),
+        record_id=r["id"],
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "v1"},
+        client="test",
+        session_id=uuid.uuid4(),
         at=datetime(2026, 7, 29, tzinfo=timezone.utc),
     )
 
@@ -551,8 +658,14 @@ async def test_read_records_renders_outcomes_tag(team, data_path):
     read without ever going through record_outcome itself."""
     t = team
     _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
     )
     text_content, _ = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))

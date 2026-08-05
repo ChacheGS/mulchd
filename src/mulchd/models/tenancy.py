@@ -25,7 +25,9 @@ def min_role(a: Role, b: Role) -> Role:
 
 def roles_up_to(ceiling: Role) -> list[Role]:
     """All roles at or below `ceiling`, ordered from most to least privileged."""
-    return [r for r in (Role.ADMIN, Role.WRITER, Role.READER) if _ROLE_RANK[r] <= _ROLE_RANK[ceiling]]
+    return [
+        r for r in (Role.ADMIN, Role.WRITER, Role.READER) if _ROLE_RANK[r] <= _ROLE_RANK[ceiling]
+    ]
 
 
 class Organization(models.Model):

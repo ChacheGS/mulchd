@@ -31,8 +31,12 @@ async def test_revoke_token_action_deactivates_token(admin_client):
 
     org = await Organization.create(slug="acme", display_name="Acme")
     project = await Project.create(slug="demo", display_name="Demo", org=org)
-    user = await User.create(username="tokenowner2", display_name="Token Owner", token_hash="h-tok2")
-    token = await ProjectToken.create(user=user, project=project, token_hash="th-2", label="CI token")
+    user = await User.create(
+        username="tokenowner2", display_name="Token Owner", token_hash="h-tok2"
+    )
+    token = await ProjectToken.create(
+        user=user, project=project, token_hash="th-2", label="CI token"
+    )
 
     resp = await admin_client.post(
         f"/admin/project-tokens/{token.id}/revoke", follow_redirects=False

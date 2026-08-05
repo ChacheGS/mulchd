@@ -3,12 +3,12 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote
 
+from authlib.integrations.base_client import OAuthError
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
 
-from authlib.integrations.base_client import OAuthError
 from mcp.server.auth.provider import construct_redirect_uri
 
 from .admin_grants import maybe_bootstrap_admin
@@ -19,9 +19,11 @@ from .auth import (
     generate_token,
 )
 from .config import CONNECT_COOKIE_NAME, CONNECT_COOKIE_SALT, settings
-from .instance_events import log_event  # pyright: ignore[reportUnknownVariableType]  # instance_events.py's bare `dict` detail param is fixed in a later strict-mode task
+from .instance_events import (
+    log_event,  # pyright: ignore[reportUnknownVariableType]  # instance_events.py's bare `dict` detail param is fixed in a later strict-mode task
+)
+from .invite import SESSION_KEY as _INVITE_SESSION_KEY
 from .invite import (
-    SESSION_KEY as _INVITE_SESSION_KEY,
     claim_invite,
     matches_allowed_domains,
     validate_invite,
@@ -159,11 +161,7 @@ async def _resolve_oauth_identity(provider: str, sub: str, email: str | None) ->
     Returns None for unknown identity, email mismatch, and inactive users —
     callers show the same generic error for all three.
     """
-    identity = (
-        await OAuthIdentity.filter(provider=provider, sub=sub)
-        .select_related("user")
-        .first()
-    )
+    identity = await OAuthIdentity.filter(provider=provider, sub=sub).select_related("user").first()
     if identity is not None:
         return identity.user if identity.user.active else None
 
@@ -174,7 +172,10 @@ async def _resolve_oauth_identity(provider: str, sub: str, email: str | None) ->
         return None
     await OAuthIdentity.create(user=user, provider=provider, sub=sub)
     await log_event(
-        InstanceEventCategory.OAUTH_LINKED, actor=user, subject_user=user, detail={"provider": provider}
+        InstanceEventCategory.OAUTH_LINKED,
+        actor=user,
+        subject_user=user,
+        detail={"provider": provider},
     )
     return user
 
@@ -186,12 +187,17 @@ async def _maybe_log_first_login(user: User, provider: str) -> None:
     accounts, which set it directly in create_user_from_oauth (this call is
     then a harmless no-op for them, not a duplicate log entry).
     """
-    if user.first_login_at is not None:  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's DatetimeField(null=True) stub doesn't expose Optional here
+    if (
+        user.first_login_at is not None
+    ):  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's DatetimeField(null=True) stub doesn't expose Optional here
         return
     user.first_login_at = datetime.now(UTC)
     await user.save(update_fields=["first_login_at"])
     await log_event(
-        InstanceEventCategory.FIRST_LOGIN, actor=user, subject_user=user, detail={"provider": provider}
+        InstanceEventCategory.FIRST_LOGIN,
+        actor=user,
+        subject_user=user,
+        detail={"provider": provider},
     )
 
 
@@ -215,8 +221,12 @@ async def _claim_pending_invite(request: Request, user: User) -> str | None:
     invite = await validate_invite(pending_invite_token)
     if invite is None:
         return "invalid"
-    domains_ok = matches_allowed_domains(user.email or "", invite.allowed_email_domains)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
-    if invite.allowed_email_domains and not domains_ok:  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+    domains_ok = matches_allowed_domains(
+        user.email or "", invite.allowed_email_domains
+    )  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+    if (
+        invite.allowed_email_domains and not domains_ok
+    ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
         return "domain_denied"
     claimed = await claim_invite(invite, user)
     return "claimed" if claimed else "invalid"
@@ -231,7 +241,9 @@ async def connect_login_page(request: Request, return_to: str | None = None):
     if safe_return_to is not None:
         request.session["return_to"] = safe_return_to
     if await _require_user(request) is not None:
-        return RedirectResponse(request.session.pop("return_to", "/connect/projects"), status_code=303)
+        return RedirectResponse(
+            request.session.pop("return_to", "/connect/projects"), status_code=303
+        )
     return templates.TemplateResponse(
         request, "connect/entry.html", {"providers": get_configured_providers()}
     )
@@ -375,7 +387,9 @@ async def oauth_start(request: Request, provider: str) -> Response:
     if provider not in configured:
         raise HTTPException(status_code=404)
     redirect_uri = f"{settings.resolved_base_url}/connect/auth/{provider}/callback"
-    client = cast(Any, oauth.create_client(provider))  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+    client = cast(
+        Any, oauth.create_client(provider)
+    )  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
     return await client.authorize_redirect(request, redirect_uri)
 
 
@@ -386,19 +400,26 @@ async def oauth_callback(request: Request, provider: str):
         raise HTTPException(status_code=404)
 
     try:
-        auth_client = cast(Any, oauth.create_client(provider))  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+        auth_client = cast(
+            Any, oauth.create_client(provider)
+        )  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
         token = await auth_client.authorize_access_token(request)
     except OAuthError:
         return templates.TemplateResponse(
             request,
             "connect/entry.html",
-            {"error": "Authentication failed. Please try again.", "providers": get_configured_providers()},
+            {
+                "error": "Authentication failed. Please try again.",
+                "providers": get_configured_providers(),
+            },
             status_code=400,
         )
 
     # Extract sub and email per provider
     if provider == "github":
-        client = cast(Any, oauth.create_client("github"))  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
+        client = cast(
+            Any, oauth.create_client("github")
+        )  # pyright: ignore[reportUnknownMemberType]  # authlib's OAuth client registry isn't typed
         user_resp = await client.get("https://api.github.com/user", token=token)
         if user_resp.status_code != 200:
             return templates.TemplateResponse(
@@ -440,7 +461,10 @@ async def oauth_callback(request: Request, provider: str):
         return templates.TemplateResponse(
             request,
             "connect/entry.html",
-            {"error": "Provider did not return a verified email address.", "providers": get_configured_providers()},
+            {
+                "error": "Provider did not return a verified email address.",
+                "providers": get_configured_providers(),
+            },
             status_code=400,
         )
 
@@ -456,16 +480,26 @@ async def oauth_callback(request: Request, provider: str):
                 return templates.TemplateResponse(
                     request,
                     "connect/entry.html",
-                    {"error": "The invite link is no longer valid.", "providers": get_configured_providers()},
+                    {
+                        "error": "The invite link is no longer valid.",
+                        "providers": get_configured_providers(),
+                    },
                     status_code=403,
                 )
-            domains_ok = matches_allowed_domains(email or "", invite.allowed_email_domains)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
-            if invite.allowed_email_domains and not domains_ok:  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+            domains_ok = matches_allowed_domains(
+                email or "", invite.allowed_email_domains
+            )  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
+            if (
+                invite.allowed_email_domains and not domains_ok
+            ):  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the list[str] this field actually stores
                 request.session.pop(_INVITE_SESSION_KEY, None)
                 return templates.TemplateResponse(
                     request,
                     "connect/entry.html",
-                    {"error": "Your email is not authorized for this invite.", "providers": get_configured_providers()},
+                    {
+                        "error": "Your email is not authorized for this invite.",
+                        "providers": get_configured_providers(),
+                    },
                     status_code=403,
                 )
             # username/display_name derived from provider profile data above
@@ -474,7 +508,10 @@ async def oauth_callback(request: Request, provider: str):
             return templates.TemplateResponse(
                 request,
                 "connect/entry.html",
-                {"error": "No account found for this identity. Ask an admin to create one.", "providers": get_configured_providers()},
+                {
+                    "error": "No account found for this identity. Ask an admin to create one.",
+                    "providers": get_configured_providers(),
+                },
                 status_code=403,
             )
 
@@ -501,11 +538,18 @@ def _redirect_uri_registered(oauth_client: OAuthClient, redirect_uri: str) -> bo
     would let a logged-in user's "Allow" click hand the authorization code to that
     attacker instead of the real client.
     """
-    return redirect_uri in (oauth_client.client_metadata.get("redirect_uris") or [])  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
+    return redirect_uri in (
+        oauth_client.client_metadata.get("redirect_uris") or []
+    )  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
 
 
 async def _issue_oauth_code(
-    grant: OAuthGrant, client_id: str, redirect_uri: str, code_challenge: str, scope: str, state: str = ""
+    grant: OAuthGrant,
+    client_id: str,
+    redirect_uri: str,
+    code_challenge: str,
+    scope: str,
+    state: str = "",
 ) -> RedirectResponse:
     # client_id must be OAuthClient.client_id (the SDK-facing string business key),
     # not grant.client_id — Tortoise's raw FK attribute on grant.client is the related
@@ -561,7 +605,8 @@ async def oauth_consent_page(
         "connect/oauth_consent.html",
         {
             "user": user,
-            "client_name": oauth_client.client_metadata.get("client_name") or client_id,  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
+            "client_name": oauth_client.client_metadata.get("client_name")
+            or client_id,  # pyright: ignore[reportUnknownMemberType]  # Tortoise's JSONField stub doesn't expose the dict shape this field actually stores
             "memberships": memberships,
             "role_options": {m.project.id: roles_up_to(m.role) for m in memberships},
             "client_id": client_id,
@@ -601,7 +646,9 @@ async def oauth_consent_submit(
         )
 
     project = await Project.filter(id=project_id).first()
-    membership = await UserMembership.filter(user=user, project=project).first() if project else None
+    membership = (
+        await UserMembership.filter(user=user, project=project).first() if project else None
+    )
     if project is None or membership is None:
         return Response(status_code=403)
 
@@ -621,7 +668,9 @@ async def oauth_consent_submit(
 
     grant = await OAuthGrant.filter(client=oauth_client, user=user).first()
     if grant is None:
-        grant = await OAuthGrant.create(client=oauth_client, user=user, project=project, granted_role=granted_role)
+        grant = await OAuthGrant.create(
+            client=oauth_client, user=user, project=project, granted_role=granted_role
+        )
     elif grant.project_id != project.id:
         # Re-consenting for a different project only; if project_id is unchanged, an
         # updated role selection is NOT persisted here. This mirrors the pre-existing
@@ -631,7 +680,9 @@ async def oauth_consent_submit(
         grant.granted_role = granted_role
         await grant.save()
 
-    return await _issue_oauth_code(grant, oauth_client.client_id, redirect_uri, code_challenge, scope, state)
+    return await _issue_oauth_code(
+        grant, oauth_client.client_id, redirect_uri, code_challenge, scope, state
+    )
 
 
 @router.post("/apps/{grant_id}/revoke")

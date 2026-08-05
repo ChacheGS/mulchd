@@ -14,9 +14,7 @@ async def test_activity_page_shows_events(admin_client):
     admin = await User.get(username="admin")
     org = await Organization.create(slug="activityorg", display_name="Activity Org")
     project = await Project.create(slug="activityproj", display_name="Activity Proj", org=org)
-    await log_event(
-        InstanceEventCategory.PROJECT_CREATED, actor=admin, project=project
-    )
+    await log_event(InstanceEventCategory.PROJECT_CREATED, actor=admin, project=project)
 
     resp = await admin_client.get("/admin/activity")
     assert resp.status_code == 200

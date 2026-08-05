@@ -45,7 +45,10 @@ def _discover_oidc_providers() -> list[_OidcProviderConfig]:
         if not client_id or not client_secret:
             continue
         slug = slug_upper.lower()
-        display_name = os.environ.get(f"MULCHD_OIDC_{slug_upper}_DISPLAY_NAME") or slug.replace("_", " ").title()
+        display_name = (
+            os.environ.get(f"MULCHD_OIDC_{slug_upper}_DISPLAY_NAME")
+            or slug.replace("_", " ").title()
+        )
         found.append(
             {
                 "slug": slug,
@@ -87,6 +90,8 @@ def get_configured_providers() -> list[ProviderInfo]:
         providers.append(ProviderInfo(key="github", display_name="GitHub", logo_url=None))
     for p in _discover_oidc_providers():
         providers.append(
-            ProviderInfo(key=f"oidc_{p['slug']}", display_name=p["display_name"], logo_url=p["logo_url"])
+            ProviderInfo(
+                key=f"oidc_{p['slug']}", display_name=p["display_name"], logo_url=p["logo_url"]
+            )
         )
     return providers

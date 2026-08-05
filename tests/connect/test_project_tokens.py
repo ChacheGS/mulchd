@@ -3,7 +3,6 @@ import pytest
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 from mulchd.auth import create_project_token, create_user
-
 from tests.connect.conftest import _authed_client
 
 # ── mint ────────────────────────────────────────────────────────────────────

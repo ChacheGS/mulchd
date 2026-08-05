@@ -8,7 +8,7 @@ import json
 import pytest
 
 from mulchd.models import RecordEvent, Role
-from tests.mcp.conftest import ctx, _jot, _make_fake_move
+from tests.mcp.conftest import _jot, _make_fake_move, ctx
 
 
 async def test_move_confirmation_names_org_and_project(team, data_path, monkeypatch):
@@ -20,12 +20,24 @@ async def test_move_confirmation_names_org_and_project(team, data_path, monkeypa
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="misplaced", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="misplaced",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -45,12 +57,24 @@ async def test_move_relocates_record_between_domains(team, data_path, monkeypatc
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="misplaced", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="misplaced",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -73,12 +97,24 @@ async def test_move_records_source_domain_on_the_event(team, data_path, monkeypa
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="misplaced", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="misplaced",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -100,12 +136,24 @@ async def test_move_last_record_removes_source_domain(team, data_path, monkeypat
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="only record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="only record",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -125,16 +173,34 @@ async def test_move_non_last_record_preserves_source_domain(team, data_path, mon
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="first", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="first",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="second", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="second",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -152,8 +218,14 @@ async def test_move_target_domain_must_already_exist(team, data_path):
 
     t = team
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
 
     with pytest.raises(ValueError, match="target domain 'nonexistent' does not exist"):
@@ -168,8 +240,14 @@ async def test_move_source_equals_target_rejected(team, data_path):
 
     t = team
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
 
     with pytest.raises(ValueError, match="source and target domain are the same"):
@@ -185,12 +263,24 @@ async def test_move_non_owner_writer_rejected(team, data_path):
 
     t = team
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
 
     with pytest.raises(ValueError, match="you can only move your own records"):
@@ -208,12 +298,24 @@ async def test_move_admin_can_move_any_record(team, data_path, monkeypatch):
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -230,8 +332,14 @@ async def test_move_reader_role_rejected(team, data_path):
 
     t = team
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
 
     with pytest.raises(ValueError, match="reader role cannot move records"):
@@ -253,17 +361,36 @@ async def test_move_reports_incoming_references_same_domain(team, data_path, mon
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "scratch", type="decision",
-        classification="tactical", title="refers to v1", rationale="see v1",
-        relates_to=[record["id"]], owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="decision",
+        classification="tactical",
+        title="refers to v1",
+        rationale="see v1",
+        relates_to=[record["id"]],
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 
@@ -285,12 +412,24 @@ async def test_move_rolls_back_jsonl_when_db_event_fails(team, data_path, monkey
     t = team
     expertise = data_path / "acme" / "infra" / ".mulch" / "expertise"
     record = _jot(
-        data_path, "acme", "infra", "scratch", type="convention",
-        classification="foundational", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "scratch",
+        type="convention",
+        classification="foundational",
+        content="v1",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "correct", type="convention",
-        classification="foundational", content="existing target record", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "correct",
+        type="convention",
+        classification="foundational",
+        content="existing target record",
+        owner="carlos",
     )
     monkeypatch.setattr(mcp_tier2, "move_record", _make_fake_move(expertise))
 

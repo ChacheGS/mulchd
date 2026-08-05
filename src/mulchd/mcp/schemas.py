@@ -79,7 +79,10 @@ _EVIDENCE_PROPERTIES = {
             "commit": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Git commit hash(es)"},
             "date": {"type": "string", "description": "ISO 8601 date the evidence applies to"},
             "issue": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Generic issue reference(s)"},
-            "file": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Specific file path(s) this evidence points to"},
+            "file": {
+                **_EVIDENCE_STRING_OR_ARRAY,
+                "description": "Specific file path(s) this evidence points to",
+            },
             "bead": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Bead tracker ID(s)"},
             "seeds": {**_EVIDENCE_STRING_OR_ARRAY, "description": "Seeds tracker issue ID(s)"},
             "gh": {**_EVIDENCE_STRING_OR_ARRAY, "description": "GitHub issue or PR reference(s)"},
@@ -169,7 +172,10 @@ _WRITE_TOOLS = [
                 "domain": {"type": "string"},
                 "classification": _CLASSIFICATION_PROPERTY,
                 "name": {"type": "string", "description": "Short name for the pattern."},
-                "description": {"type": "string", "description": "What the pattern is and how to use it."},
+                "description": {
+                    "type": "string",
+                    "description": "What the pattern is and how to use it.",
+                },
                 **_RELATED_RECORD_PROPERTIES,
                 **_FILES_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
@@ -190,7 +196,10 @@ _WRITE_TOOLS = [
                 "domain": {"type": "string"},
                 "classification": _CLASSIFICATION_PROPERTY,
                 "name": {"type": "string", "description": "Short name for the reference."},
-                "description": {"type": "string", "description": "What it points to and why it matters."},
+                "description": {
+                    "type": "string",
+                    "description": "What it points to and why it matters.",
+                },
                 **_RELATED_RECORD_PROPERTIES,
                 **_FILES_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
@@ -323,8 +332,7 @@ TIER2_TOOLS = [
                 "limit": {
                     "type": "integer",
                     "description": (
-                        "Max results per matching domain (not a global total). "
-                        "Defaults to 20."
+                        "Max results per matching domain (not a global total). " "Defaults to 20."
                     ),
                 },
             },

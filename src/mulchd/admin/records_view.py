@@ -64,14 +64,21 @@ async def bulk_delete_records_action(
         for item in items:
             try:
                 parsed = json.loads(item)
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError, TypeError:
                 continue
             if not isinstance(parsed, dict):
                 continue
-            parsed_obj = cast(dict[str, Any], parsed)  # json.loads returns Any; narrowed shape isn't known to pyright
+            parsed_obj = cast(
+                dict[str, Any], parsed
+            )  # json.loads returns Any; narrowed shape isn't known to pyright
             domain = parsed_obj.get("domain")
             record_id = parsed_obj.get("id")
-            if not isinstance(domain, str) or not domain or not isinstance(record_id, str) or not record_id:
+            if (
+                not isinstance(domain, str)
+                or not domain
+                or not isinstance(record_id, str)
+                or not record_id
+            ):
                 continue
             pairs.append((domain, record_id))
 
@@ -87,9 +94,7 @@ async def bulk_delete_records_action(
         )
         for (domain, record_id), result in zip(pairs, results):
             if isinstance(result, MulchError):
-                _log.warning(
-                    "bulk delete failed for %s/%s: %s", domain, record_id, result
-                )
+                _log.warning("bulk delete failed for %s/%s: %s", domain, record_id, result)
             elif isinstance(result, BaseException):
                 raise result
     return RedirectResponse(f"/admin/p/{project}/records", status_code=303)

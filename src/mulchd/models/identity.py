@@ -26,10 +26,12 @@ class OAuthIdentity(models.Model):
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User", related_name="oauth_identities"
     )
-    provider = fields.CharField(max_length=64)   # "github" | "oidc_<provider-slug>", e.g. "oidc_google" —
+    provider = fields.CharField(
+        max_length=64
+    )  # "github" | "oidc_<provider-slug>", e.g. "oidc_google" —
     # 64 (not 32) because the slug is now operator-chosen from an env var name and can be long;
     # matches OAuthClient.client_id's max_length=64 precedent for similar operator-controlled strings.
-    sub = fields.CharField(max_length=255)        # provider's immutable user ID
+    sub = fields.CharField(max_length=255)  # provider's immutable user ID
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:
@@ -48,7 +50,9 @@ class InviteLink(models.Model):
     max_uses = fields.IntField(null=True, default=None)
     use_count = fields.IntField(default=0)
     expires_at = fields.DatetimeField(null=True, default=None)
-    allowed_email_domains = fields.JSONField(null=True, default=None)  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
+    allowed_email_domains = fields.JSONField(
+        null=True, default=None
+    )  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
     revoked = fields.BooleanField(default=False)
     created_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User", related_name="created_invites", null=True, default=None
@@ -60,13 +64,17 @@ class InviteLink(models.Model):
     def status(self) -> str:
         if self.revoked:
             return "revoked"
-        if self.expires_at is not None:  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's DatetimeField(null=True) stub doesn't expose Optional here
+        if (
+            self.expires_at is not None
+        ):  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's DatetimeField(null=True) stub doesn't expose Optional here
             expires = self.expires_at
             if expires.tzinfo is None:
                 expires = expires.replace(tzinfo=UTC)
             if expires < datetime.now(UTC):
                 return "expired"
-        if self.max_uses is not None and self.use_count >= self.max_uses:  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's IntField(null=True) stub doesn't expose Optional here
+        if (
+            self.max_uses is not None and self.use_count >= self.max_uses
+        ):  # pyright: ignore[reportUnnecessaryComparison]  # Tortoise's IntField(null=True) stub doesn't expose Optional here
             return "exhausted"
         return "active"
 

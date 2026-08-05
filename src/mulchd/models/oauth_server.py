@@ -16,7 +16,9 @@ class OAuthClient(models.Model):
     # clients only; public clients register with token_endpoint_auth_method="none"
     # and get no secret). The SDK's own ClientAuthenticator compares this value
     # directly via hmac.compare_digest, so it cannot be stored hashed.
-    client_metadata = fields.JSONField()  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
+    client_metadata = (
+        fields.JSONField()
+    )  # pyright: ignore[reportUnknownVariableType]  # Tortoise JSONField stub doesn't parametrize its value type
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

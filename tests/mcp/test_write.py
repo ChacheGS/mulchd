@@ -2,18 +2,19 @@
 write_record / write_* dispatch tool tests.
 """
 
-from mulchd.domains import list_available_domains
-from mulchd.mcp.context import auth_ctx
-from mulchd.mulch import MulchError
-from pathlib import Path
 import json
 import uuid
+from pathlib import Path
+
 import pytest
-from mulchd.models import Role, UserMembership
-from mulchd.mcp.tier2 import _read_expertise, _record_expertise, call_tool
+
+from mulchd.domains import list_available_domains
+from mulchd.mcp.context import auth_ctx
 from mulchd.mcp.schemas import TIER2_TOOLS
-from mulchd.models import RecordMeta
-from tests.mcp.conftest import _make_fake_delete, ctx, _jot, ml_available
+from mulchd.mcp.tier2 import _read_expertise, _record_expertise, call_tool
+from mulchd.models import RecordMeta, Role, UserMembership
+from mulchd.mulch import MulchError
+from tests.mcp.conftest import _jot, _make_fake_delete, ctx, ml_available
 
 
 def _tool_by_name(name):
@@ -138,7 +139,9 @@ async def test_write_convention_with_evidence(team, data_path, fake_write_record
     assert record["evidence"] == {"commit": "abc1234", "gh": "org/repo#42"}
 
 
-async def test_write_convention_with_evidence_array_values_joined(team, data_path, fake_write_record):
+async def test_write_convention_with_evidence_array_values_joined(
+    team, data_path, fake_write_record
+):
     """mulchd accepts multiple PRs/tickets/etc per evidence field (an ergonomic
     mulchd extends beyond ml's own scalar-only evidence schema), but ml itself
     only accepts a single string per field — so arrays must be joined into one
@@ -210,7 +213,9 @@ async def test_write_decision_dispatch_creates_decision_record(team, data_path, 
     assert "IMDSv2" in text_content[0].text
 
 
-async def test_write_convention_dispatch_rejects_missing_content(team, data_path, fake_write_record):
+async def test_write_convention_dispatch_rejects_missing_content(
+    team, data_path, fake_write_record
+):
     """write_convention must still enforce its required field via the shared
     validation in _record_expertise even though the schema itself has no
     'type' property for the caller to get wrong."""
@@ -419,7 +424,9 @@ async def test_write_convention_exact_duplicate_content_rejected_gracefully(
     assert len(structured["records"]) == 1
 
 
-async def test_write_decision_duplicate_title_rejected_gracefully(team, data_path, fake_write_record):
+async def test_write_decision_duplicate_title_rejected_gracefully(
+    team, data_path, fake_write_record
+):
     """Writing a decision with a title matching an existing one is also
     rejected — ml's own dedup logic would silently overwrite (upsert) the
     existing decision in place rather than skip, which is worse than a
@@ -583,7 +590,9 @@ async def test_record_expertise_rejects_fabricated_supersedes(team, data_path, f
     from mulchd.mcp.tier2 import _record_expertise
 
     t = team
-    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
+    with pytest.raises(
+        ValueError, match="supersedes references records that don't exist: mx-ghost"
+    ):
         await _record_expertise(
             {
                 "type": "decision",
@@ -600,15 +609,23 @@ async def test_record_expertise_rejects_fabricated_supersedes(team, data_path, f
     assert structured["records"] == []
 
 
-async def test_record_expertise_accepts_valid_cross_domain_supersedes(team, data_path, fake_write_record):
+async def test_record_expertise_accepts_valid_cross_domain_supersedes(
+    team, data_path, fake_write_record
+):
     """A supersedes target in a different domain is accepted — cross-domain
     supersession is a supported, designed-for case."""
     from mulchd.mcp.tier2 import _record_expertise
 
     t = team
     old = _jot(
-        data_path, "acme", "infra", "guardrails",
-        type="convention", classification="foundational", content="Old", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "guardrails",
+        type="convention",
+        classification="foundational",
+        content="Old",
+        owner="carlos",
     )
     await _record_expertise(
         {
@@ -625,7 +642,9 @@ async def test_record_expertise_accepts_valid_cross_domain_supersedes(team, data
     assert len(structured["records"]) == 1
 
 
-async def test_record_expertise_rejects_archived_supersedes_target(team, data_path, fake_write_record):
+async def test_record_expertise_rejects_archived_supersedes_target(
+    team, data_path, fake_write_record
+):
     """A supersedes target that's been archived (soft-deleted) is rejected the
     same as a fabricated ID — it's no longer live."""
     from mulchd.domains import mulch_dir
@@ -636,9 +655,12 @@ async def test_record_expertise_rejects_archived_supersedes_target(team, data_pa
     archive_dir = m_dir / "archive"
     archive_dir.mkdir(parents=True)
     (archive_dir / "infra.jsonl").write_text(
-        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"}) + "\n"
+        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"})
+        + "\n"
     )
-    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-archived1"):
+    with pytest.raises(
+        ValueError, match="supersedes references records that don't exist: mx-archived1"
+    ):
         await _record_expertise(
             {
                 "type": "decision",
@@ -741,7 +763,9 @@ async def test_write_record_no_warning_when_superseding_tactical(
     assert "SUPERSESSION WARNING" not in result[0].text
 
 
-async def test_write_rolls_back_jsonl_when_db_metadata_fails(team, data_path, fake_write_record, monkeypatch):
+async def test_write_rolls_back_jsonl_when_db_metadata_fails(
+    team, data_path, fake_write_record, monkeypatch
+):
     """If RecordMeta.create fails after the JSONL write already succeeded, the
     record must be removed from disk so the operation fails cleanly instead of
     leaving a record invisible to get_record_history/session grouping."""
@@ -767,6 +791,7 @@ async def test_write_rolls_back_jsonl_when_db_metadata_fails(team, data_path, fa
             ctx(t.carlos, t.org, t.infra),
         )
 
-    assert not (expertise / "infra.jsonl").exists() or "should not persist" not in (
-        expertise / "infra.jsonl"
-    ).read_text()
+    assert (
+        not (expertise / "infra.jsonl").exists()
+        or "should not persist" not in (expertise / "infra.jsonl").read_text()
+    )

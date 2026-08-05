@@ -23,9 +23,12 @@ _SLUG_RE = re.compile(r"^[a-z0-9-]+$")
 def is_valid_slug(slug: str) -> bool:
     return bool(_SLUG_RE.match(slug))
 
+
 # Templates live at src/mulchd/templates/, one level above this package.
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
-templates.env.globals["mulchd_version"] = _pkg_version("mulchd")  # pyright: ignore[reportArgumentType]  # jinja2's Environment.globals stub types values as its own builtin-global set, not arbitrary str
+templates.env.globals["mulchd_version"] = _pkg_version(
+    "mulchd"
+)  # pyright: ignore[reportArgumentType]  # jinja2's Environment.globals stub types values as its own builtin-global set, not arbitrary str
 
 
 async def get_admin_user(request: Request) -> User | None:
@@ -97,7 +100,9 @@ async def resolve_project_by_slugs(org_slug: str, project_slug: str) -> Project 
     """Resolve a project from URL path slugs, with org prefetched so templates
     can read project.org.slug without an extra query. Mirrors resolve_project's
     prefetch pattern for a query-param-style "org/project" string."""
-    return await Project.filter(slug=project_slug, org__slug=org_slug).prefetch_related("org").first()
+    return (
+        await Project.filter(slug=project_slug, org__slug=org_slug).prefetch_related("org").first()
+    )
 
 
 def set_last_project_cookie(response: Response, org_slug: str, project_slug: str) -> None:

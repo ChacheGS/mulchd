@@ -3,7 +3,12 @@ from fastapi.responses import Response
 
 from ..domains import list_domain_names, mulch_dir
 from ..mulch import audit_corpus
-from ._shared import require_admin, resolve_project_by_slugs, set_last_project_cookie, templates
+from ._shared import (
+    require_admin,
+    resolve_project_by_slugs,
+    set_last_project_cookie,
+    templates,
+)
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 

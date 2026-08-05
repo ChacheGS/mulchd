@@ -10,9 +10,7 @@ from .config import TORTOISE_ORM
 from .models import User
 
 
-async def _do_bootstrap(
-    username: str, display_name: str, email: str
-) -> tuple[User, str] | None:
+async def _do_bootstrap(username: str, display_name: str, email: str) -> tuple[User, str] | None:
     """
     Create the first admin User and grant SUPERADMIN, self-referentially.
     Returns None (refuses) if any active SUPERADMIN grant already exists —
@@ -54,6 +52,4 @@ def bootstrap_admin() -> None:
     parser.add_argument("--display-name", required=True)
     parser.add_argument("--email", required=True)
     args = parser.parse_args()
-    asyncio.run(
-        _bootstrap_admin_main(args.username, args.display_name, args.email)
-    )
+    asyncio.run(_bootstrap_admin_main(args.username, args.display_name, args.email))

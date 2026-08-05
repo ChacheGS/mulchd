@@ -3,6 +3,7 @@ import pytest
 
 async def test_create_invite_link(admin_client):
     from mulchd.models import InviteLink, Organization, Project, User
+
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
     resp = await admin_client.post(
@@ -12,7 +13,9 @@ async def test_create_invite_link(admin_client):
     )
     assert resp.status_code == 303
     invite = await InviteLink.get(project=project)
-    assert resp.headers["location"] == f"/admin/p/{org.slug}/{project.slug}/?new_token={invite.token}"
+    assert (
+        resp.headers["location"] == f"/admin/p/{org.slug}/{project.slug}/?new_token={invite.token}"
+    )
     assert invite.role == "writer"
     assert invite.max_uses == 5
     assert invite.expires_at is not None
@@ -22,6 +25,7 @@ async def test_create_invite_link(admin_client):
 
 async def test_revoke_invite_link(admin_client):
     from mulchd.models import InviteLink, Organization, Project
+
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
     invite = await InviteLink.create(
@@ -37,7 +41,12 @@ async def test_revoke_invite_link(admin_client):
 
 
 async def test_create_invite_logs_event(admin_client):
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     org = await Organization.create(slug="loginviteorg", display_name="Log Invite Org")
     project = await Project.create(slug="loginviteproj", display_name="Log Invite Proj", org=org)
@@ -54,15 +63,19 @@ async def test_create_invite_logs_event(admin_client):
 
 
 async def test_revoke_invite_logs_event(admin_client):
-    from mulchd.models import InstanceEvent, InstanceEventCategory, InviteLink, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        InviteLink,
+        Organization,
+        Project,
+    )
 
     org = await Organization.create(slug="logrevokeorg", display_name="Log Revoke Org")
     project = await Project.create(slug="logrevokeproj", display_name="Log Revoke Proj", org=org)
     invite = await InviteLink.create(token="logrevoketoken", project=project, role="writer")
 
-    resp = await admin_client.post(
-        f"/admin/invites/{invite.id}/revoke", follow_redirects=False
-    )
+    resp = await admin_client.post(f"/admin/invites/{invite.id}/revoke", follow_redirects=False)
     assert resp.status_code == 303
 
     event = await InstanceEvent.get(category=InstanceEventCategory.INVITE_REVOKED)

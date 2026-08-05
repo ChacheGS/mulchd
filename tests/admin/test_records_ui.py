@@ -198,7 +198,9 @@ async def test_bulk_delete_records_action_calls_delete_record_for_each_item(
     assert calls == [("architecture", "mx-aaa"), ("ops", "mx-bbb")]
 
 
-async def test_bulk_delete_records_action_skips_malformed_items(admin_client, tmp_path, monkeypatch):
+async def test_bulk_delete_records_action_skips_malformed_items(
+    admin_client, tmp_path, monkeypatch
+):
     """Proves the JSON encoding survives a domain name containing characters
     a naive delimiter scheme would have mishandled (e.g. '::'), and that one
     bad item in the batch doesn't block the rest."""

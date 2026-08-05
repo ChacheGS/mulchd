@@ -11,16 +11,16 @@ from uuid import UUID, uuid7
 
 _log = logging.getLogger("mulchd.mcp")
 
-from mcp.server import Server
-from mcp.server.lowlevel.server import NotificationOptions
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.server.lowlevel.helper_types import ReadResourceContents
-from mcp.types import Resource, ResourceTemplate, TextContent, Tool
-
 import urllib.parse
 
 from pydantic import AnyUrl
 from tortoise.exceptions import IntegrityError
+
+from mcp.server import Server
+from mcp.server.lowlevel.helper_types import ReadResourceContents
+from mcp.server.lowlevel.server import NotificationOptions
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.types import Resource, ResourceTemplate, TextContent, Tool
 
 from ..auth import AuthContext
 from ..domains import (
@@ -28,33 +28,6 @@ from ..domains import (
     list_available_domains,
     list_domain_names,
     mulch_dir,
-)
-from .project_cache import get_project_records
-from .schemas import (
-    TIER2_TOOLS,
-    RECORD_SCHEMAS,
-    RECORD_FIELD_KEYS,
-    DEDUP_FIELD_BY_TYPE,
-)
-from .supersession import (
-    Classification,
-    mark_superseded,
-    mark_related_to,
-    cross_domain_supersede_hints,
-    find_incoming_references,
-    validate_references,
-    _find_cycles,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_supersede_cycles.py
-    supersede_alerts,
-    format_supersession_alerts,
-)
-from .formatting import (
-    CONTENT_FIELD_KEYS,
-    _format_outcomes_tag,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_outcomes.py
-    format_records,
-    format_recent,
-    wrap_untrusted,
-    annotate_edits,
-    annotate_outcome_staleness,
 )
 from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
@@ -71,7 +44,38 @@ from ..mulch import (
 )
 from ..records import find_record, read_domain_records
 from .context import auth_ctx
+from .formatting import (
+    _format_outcomes_tag,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_outcomes.py
+)
+from .formatting import (
+    CONTENT_FIELD_KEYS,
+    annotate_edits,
+    annotate_outcome_staleness,
+    format_recent,
+    format_records,
+    wrap_untrusted,
+)
+from .project_cache import get_project_records
+from .schemas import (
+    DEDUP_FIELD_BY_TYPE,
+    RECORD_FIELD_KEYS,
+    RECORD_SCHEMAS,
+    TIER2_TOOLS,
+)
 from .subscriptions import registry
+from .supersession import (
+    _find_cycles,  # pyright: ignore[reportUnusedImport, reportPrivateUsage]  # re-exported for tests/mcp/test_supersede_cycles.py
+)
+from .supersession import (
+    Classification,
+    cross_domain_supersede_hints,
+    find_incoming_references,
+    format_supersession_alerts,
+    mark_related_to,
+    mark_superseded,
+    supersede_alerts,
+    validate_references,
+)
 
 _background_tasks: set[asyncio.Task[Any]] = set()
 
@@ -297,7 +301,9 @@ async def _read_expertise(
         ]
     if since is not None:
         all_records = [r for r in all_records if _recorded_at(r) >= since]
-    all_records.sort(key=lambda r: (r.get("recorded_at", ""), r.get("id", "")), reverse=since is not None)
+    all_records.sort(
+        key=lambda r: (r.get("recorded_at", ""), r.get("id", "")), reverse=since is not None
+    )
     if cursor:
         cursor_ts, cursor_id = json.loads(base64.b64decode(cursor))
         cursor_key = (cursor_ts, cursor_id)
@@ -369,7 +375,9 @@ async def _notify_domain(
 ) -> None:
     """Fan out notifications/resources/updated to all subscribed sessions except the actor."""
     subscribers = registry.subscribers_for(domain, exclude=actor_session)
-    _log.debug("_notify_domain: domain=%s action=%s subscribers=%d", domain, action, len(subscribers))
+    _log.debug(
+        "_notify_domain: domain=%s action=%s subscribers=%d", domain, action, len(subscribers)
+    )
     if not subscribers:
         return
     title = (
@@ -427,7 +435,8 @@ def _normalize_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
     more permissive tool schema allowed into one comma-separated string
     before the record is handed to ml."""
     return {
-        k: ", ".join(cast("list[str]", v)) if isinstance(v, list) else v for k, v in evidence.items()
+        k: ", ".join(cast("list[str]", v)) if isinstance(v, list) else v
+        for k, v in evidence.items()
     }
 
 
@@ -439,7 +448,9 @@ def _validate_files_supported(rtype: str, args: dict[str, Any]) -> None:
     regardless of whether the list is empty or populated. Reject up front with
     a message that actually names the problem."""
     if "files" in args and "files" not in RECORD_SCHEMAS[rtype]["optional"]:
-        raise ValueError(f"record type '{rtype}' does not support 'files' — only pattern and reference records do")
+        raise ValueError(
+            f"record type '{rtype}' does not support 'files' — only pattern and reference records do"
+        )
 
 
 async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
@@ -767,7 +778,9 @@ async def _edit_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
         old_supersedes: list[str] = record.get("supersedes") or []
         added = [sid for sid in new_supersedes if sid not in old_supersedes]
         if added:
-            effective_classification = updates.get("classification", record.get("classification", ""))
+            effective_classification = updates.get(
+                "classification", record.get("classification", "")
+            )
             alerts = await supersede_alerts(m_dir, added, effective_classification)
             supersession_alert_text = format_supersession_alerts(alerts, effective_classification)
     await edit_record(m_dir, domain, record_id, updates)
@@ -837,7 +850,9 @@ async def _record_outcome(args: dict[str, Any], ctx: AuthContext) -> list[TextCo
             )
         ]
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)
-    await record_outcome(m_dir, domain, record_id, status, args.get("notes"), agent=ctx.user.username)
+    await record_outcome(
+        m_dir, domain, record_id, status, args.get("notes"), agent=ctx.user.username
+    )
     return [
         TextContent(
             type="text",
@@ -912,7 +927,9 @@ async def _move_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
             client=ctx.client,
             session_id=session_id,
         )
-        await RecordMeta.filter(record_id=record_id, project=ctx.project).update(domain=target_domain)
+        await RecordMeta.filter(record_id=record_id, project=ctx.project).update(
+            domain=target_domain
+        )
     except Exception:
         # The JSONL move already applied — move it back so the whole operation
         # fails cleanly instead of leaving an untracked location change.
@@ -1014,7 +1031,8 @@ async def _call_tool(
 # and re-exposed with an explicit annotation rather than decorated inline.
 tier2_server.call_tool()(_call_tool)
 call_tool: Callable[
-    [str, dict[str, Any] | None], Awaitable[list[TextContent] | tuple[list[TextContent], dict[str, Any]]]
+    [str, dict[str, Any] | None],
+    Awaitable[list[TextContent] | tuple[list[TextContent], dict[str, Any]]],
 ] = _call_tool
 
 
@@ -1053,7 +1071,7 @@ async def _read_resource(uri: AnyUrl) -> list[ReadResourceContents]:
         raise ValueError("No auth context")
     uri_str = str(uri)
     if uri_str.startswith("mulchd://domain/"):
-        name = uri_str[len("mulchd://domain/"):]
+        name = uri_str[len("mulchd://domain/") :]
         records = await read_domain_records(expertise_path(ctx.org.slug, ctx.project.slug, name))
         for r in records:
             r["_domain"] = name
@@ -1082,11 +1100,13 @@ async def subscribe_resource(uri: AnyUrl) -> None:
         return
     uri_str = str(uri)
     if uri_str.startswith("mulchd://domain/"):
-        domain = uri_str[len("mulchd://domain/"):]
+        domain = uri_str[len("mulchd://domain/") :]
         try:
             session = tier2_server.request_context.session
             registry.register(session, domain)
-            _log.debug("subscribe_resource: registered session %s for domain %s", id(session), domain)
+            _log.debug(
+                "subscribe_resource: registered session %s for domain %s", id(session), domain
+            )
         except LookupError as exc:
             _log.debug("subscribe_resource: no request context (%s)", exc)
 
@@ -1099,11 +1119,13 @@ async def unsubscribe_resource(uri: AnyUrl) -> None:
         return
     uri_str = str(uri)
     if uri_str.startswith("mulchd://domain/"):
-        domain = uri_str[len("mulchd://domain/"):]
+        domain = uri_str[len("mulchd://domain/") :]
         try:
             session = tier2_server.request_context.session
             registry.unregister(session, domain)
-            _log.debug("unsubscribe_resource: unregistered session %s from domain %s", id(session), domain)
+            _log.debug(
+                "unsubscribe_resource: unregistered session %s from domain %s", id(session), domain
+            )
         except LookupError:
             pass
 

@@ -29,9 +29,10 @@ async def test_do_bootstrap_refuses_when_admin_exists(db):
 
 
 async def test_do_bootstrap_raises_integrity_error_on_username_collision(db):
+    from tortoise.exceptions import IntegrityError
+
     from mulchd.auth import create_user
     from mulchd.cli import _do_bootstrap
-    from tortoise.exceptions import IntegrityError
 
     await create_user("taken", "Existing User")
 

@@ -70,7 +70,9 @@ async def test_sidebar_project_switcher_targets_overview_from_non_project_page(a
     )
 
 
-async def test_sidebar_project_switcher_preserves_tab_on_project_page(admin_client, tmp_path, monkeypatch):
+async def test_sidebar_project_switcher_preserves_tab_on_project_page(
+    admin_client, tmp_path, monkeypatch
+):
     from mulchd.config import settings
     from mulchd.models import Organization, Project
 

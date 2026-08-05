@@ -37,7 +37,9 @@ def test_multiple_patterns_first_matches():
 
 
 def test_multiple_patterns_second_matches():
-    assert matches_allowed_domains("alice@ext.company.com", ["company.com", "*.company.com"]) is True
+    assert (
+        matches_allowed_domains("alice@ext.company.com", ["company.com", "*.company.com"]) is True
+    )
 
 
 def test_multiple_patterns_none_match():
@@ -120,6 +122,7 @@ async def test_token_login_with_pending_invite_claims(client, invite_fixture, db
     """Token login while pending_invite in session claims the invite after auth."""
     invite, project = invite_fixture
     from mulchd.auth import create_user
+
     user, token = await create_user("tokeninvite", "Token Invite", email="ti@company.com")
 
     # Simulate session with pending invite (use client session cookie)
@@ -158,6 +161,7 @@ async def test_claim_invite_returns_false_when_exhausted(invite_fixture, db):
 
 async def test_exhausted_link_returns_opaque_error(client, db):
     from mulchd.models import InviteLink, Organization, Project
+
     org = await Organization.create(slug="exhaustorg", display_name="E")
     project = await Project.create(slug="ep", display_name="EP", org=org)
     invite = await InviteLink.create(
@@ -176,6 +180,7 @@ async def test_domain_restriction_blocks_wrong_email(client, db):
     from mulchd.auth import create_user
     from mulchd.connect import _signer
     from mulchd.models import InviteLink, Organization, Project
+
     org = await Organization.create(slug="domainorg", display_name="D")
     project = await Project.create(slug="dp", display_name="DP", org=org)
     invite = await InviteLink.create(
@@ -194,7 +199,9 @@ async def test_domain_restriction_blocks_wrong_email(client, db):
 
 async def test_expired_link_returns_opaque_error(client, db):
     from datetime import UTC, datetime, timedelta
+
     from mulchd.models import InviteLink, Organization, Project
+
     org = await Organization.create(slug="expiredorg", display_name="EX")
     project = await Project.create(slug="exp", display_name="Exp", org=org)
     past = datetime.now(UTC) - timedelta(hours=1)
@@ -213,6 +220,7 @@ async def test_token_login_with_domain_restricted_invite_denies_silently_but_fla
     should not be claimed, and the login redirect should carry an invite_error hint."""
     from mulchd.auth import create_user
     from mulchd.models import InviteLink, Organization, Project, UserMembership
+
     org = await Organization.create(slug="domtok", display_name="DomTok")
     project = await Project.create(slug="dt", display_name="DT", org=org)
     invite = await InviteLink.create(
@@ -239,7 +247,13 @@ async def test_token_login_with_domain_restricted_invite_denies_silently_but_fla
 async def test_claim_invite_logs_membership_added(db):
     from mulchd.auth import create_user
     from mulchd.invite import claim_invite
-    from mulchd.models import InstanceEvent, InstanceEventCategory, InviteLink, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        InviteLink,
+        Organization,
+        Project,
+    )
 
     org = await Organization.create(slug="claimlogorg", display_name="Claim Log Org")
     project = await Project.create(slug="claimlogproj", display_name="Claim Log Proj", org=org)
@@ -287,6 +301,7 @@ async def test_token_login_with_invalidated_pending_invite_flags_it(client, db):
     the login redirect should carry an invite_error hint instead of silently succeeding."""
     from mulchd.auth import create_user
     from mulchd.models import InviteLink, Organization, Project, UserMembership
+
     org = await Organization.create(slug="revtok", display_name="RevTok")
     project = await Project.create(slug="rt", display_name="RT", org=org)
     invite = await InviteLink.create(

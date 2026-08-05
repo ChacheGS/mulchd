@@ -176,9 +176,9 @@ def test_write_tools_declare_type_specific_required_fields_in_schema():
     for tool_name, fields in expected_content_fields.items():
         tool = next(t for t in TIER2_TOOLS if t.name == tool_name)
         required = set(tool.inputSchema["required"])
-        assert fields <= required, (
-            f"{tool_name} must declare {fields} as required in its JSON schema, got {required}"
-        )
+        assert (
+            fields <= required
+        ), f"{tool_name} must declare {fields} as required in its JSON schema, got {required}"
         assert {"domain", "classification"} <= required
 
 

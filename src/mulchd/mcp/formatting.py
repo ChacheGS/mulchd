@@ -15,8 +15,9 @@ from datetime import datetime, timezone
 from ..models import RecordEdit
 from ..mulch import OutcomeStatus, Record
 
-
-CONTENT_FIELD_KEYS = frozenset({"content", "title", "name", "description", "resolution", "rationale"})
+CONTENT_FIELD_KEYS = frozenset(
+    {"content", "title", "name", "description", "resolution", "rationale"}
+)
 
 
 async def annotate_edits(records: list[Record], project_id: int) -> None:

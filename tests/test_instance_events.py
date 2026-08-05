@@ -20,7 +20,12 @@ async def test_instance_event_create(db):
 
 async def test_instance_event_with_project_and_detail(db):
     from mulchd.auth import create_user
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     actor, _ = await create_user("carol", "Carol")
     org = await Organization.create(slug="acme", display_name="Acme")
@@ -53,9 +58,7 @@ async def test_log_event_creates_row(db):
     actor, _ = await create_user("erin", "Erin")
     target, _ = await create_user("frank", "Frank")
 
-    await log_event(
-        InstanceEventCategory.ADMIN_GRANTED, actor=actor, subject_user=target
-    )
+    await log_event(InstanceEventCategory.ADMIN_GRANTED, actor=actor, subject_user=target)
 
     event = await InstanceEvent.get(category=InstanceEventCategory.ADMIN_GRANTED)
     assert event.actor_id == actor.id
@@ -95,7 +98,12 @@ async def test_describe_event_admin_revoked(db):
 async def test_describe_event_membership_added(db):
     from mulchd.auth import create_user
     from mulchd.instance_events import describe_event
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     actor, _ = await create_user("kate", "Kate")
     target, _ = await create_user("liam", "Liam")
@@ -116,7 +124,12 @@ async def test_describe_event_membership_added(db):
 async def test_describe_event_membership_removed(db):
     from mulchd.auth import create_user
     from mulchd.instance_events import describe_event
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     actor, _ = await create_user("mia", "Mia")
     target, _ = await create_user("noah", "Noah")
@@ -199,7 +212,12 @@ async def test_describe_event_org_created(db):
 async def test_describe_event_project_created(db):
     from mulchd.auth import create_user
     from mulchd.instance_events import describe_event
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     actor, _ = await create_user("tara", "Tara")
     org = await Organization.create(slug="acme", display_name="Acme")
@@ -245,7 +263,12 @@ async def test_describe_event_user_deactivated(db):
 async def test_describe_event_invite_created(db):
     from mulchd.auth import create_user
     from mulchd.instance_events import describe_event
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     actor, _ = await create_user("yara", "Yara")
     org = await Organization.create(slug="acme", display_name="Acme")
@@ -264,7 +287,12 @@ async def test_describe_event_invite_created(db):
 async def test_describe_event_invite_revoked(db):
     from mulchd.auth import create_user
     from mulchd.instance_events import describe_event
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     actor, _ = await create_user("zoe", "Zoe")
     org = await Organization.create(slug="acme", display_name="Acme")

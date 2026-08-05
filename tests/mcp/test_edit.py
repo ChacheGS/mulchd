@@ -2,10 +2,12 @@
 edit_record tests, including annotate_edits.
 """
 
-import pytest
 import uuid
+
+import pytest
+
 from mulchd.models import RecordEdit
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_edit_confirmation_names_org_and_project(team, data_path, fake_write_record):
@@ -90,10 +92,18 @@ async def test_edit_record_rejects_fabricated_supersedes(team, data_path, fake_w
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
     )
-    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
+    with pytest.raises(
+        ValueError, match="supersedes references records that don't exist: mx-ghost"
+    ):
         await _edit_record(
             {"record_id": r["id"], "domain": "infra", "supersedes": ["mx-ghost"]},
             ctx(t.carlos, t.org, t.infra),
@@ -106,8 +116,14 @@ async def test_edit_record_rejects_self_reference(team, data_path, fake_write_re
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
     )
     with pytest.raises(ValueError, match="supersedes cannot reference the record's own id"):
         await _edit_record(
@@ -123,8 +139,14 @@ async def test_edit_record_rejects_relates_to_self_reference(team, data_path, fa
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
     )
     with pytest.raises(ValueError, match="relates_to cannot reference the record's own id"):
         await _edit_record(
@@ -133,7 +155,9 @@ async def test_edit_record_rejects_relates_to_self_reference(team, data_path, fa
         )
 
 
-async def test_edit_record_content_only_skips_reference_validation(team, data_path, monkeypatch, fake_write_record):
+async def test_edit_record_content_only_skips_reference_validation(
+    team, data_path, monkeypatch, fake_write_record
+):
     """Editing a field other than supersedes/relates_to must not trigger a
     project-wide scan at all — get_project_records should not be called."""
     import mulchd.mcp.tier2 as mcp_tier2
@@ -141,8 +165,14 @@ async def test_edit_record_content_only_skips_reference_validation(team, data_pa
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
     )
 
     called = False
@@ -210,8 +240,14 @@ async def test_edit_record_supersession_warning_on_new_foundational_target(
 
     t = team
     foundational = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     await mcp_tier2._record_expertise(
         {"domain": "api", "type": "convention", "classification": "tactical", "content": "v1"},
@@ -247,8 +283,14 @@ async def test_edit_record_no_duplicate_warning_for_already_present_supersedes(
 
     t = team
     foundational = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     await mcp_tier2._record_expertise(
         {
@@ -292,8 +334,14 @@ async def test_edit_record_supersession_warning_uses_effective_classification(
 
     t = team
     foundational = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     await mcp_tier2._record_expertise(
         {"domain": "api", "type": "convention", "classification": "foundational", "content": "v1"},
@@ -323,7 +371,9 @@ async def test_edit_record_supersession_warning_uses_effective_classification(
     assert "foundational → observational" in text
 
 
-async def test_edit_record_outcome_stale_advisory_on_content_change(team, data_path, fake_write_record):
+async def test_edit_record_outcome_stale_advisory_on_content_change(
+    team, data_path, fake_write_record
+):
     """Editing a content field on a record with existing outcomes appends
     the OUTCOME TRUST STALE advisory."""
     import mulchd.mcp.tier2 as mcp_tier2
@@ -331,8 +381,14 @@ async def test_edit_record_outcome_stale_advisory_on_content_change(team, data_p
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
         outcomes=[
             {"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"},
             {"status": "success", "recorded_at": "2026-07-28T00:01:00+00:00"},
@@ -362,8 +418,14 @@ async def test_edit_record_no_stale_advisory_without_outcomes(team, data_path, f
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
     )
 
     async def _noop_edit(m_dir, domain, rid, updates):
@@ -382,7 +444,9 @@ async def test_edit_record_no_stale_advisory_without_outcomes(team, data_path, f
     assert "OUTCOME TRUST STALE" not in result[0].text
 
 
-async def test_edit_record_no_stale_advisory_for_non_content_field(team, data_path, fake_write_record):
+async def test_edit_record_no_stale_advisory_for_non_content_field(
+    team, data_path, fake_write_record
+):
     """Changing only classification (not in CONTENT_FIELD_KEYS) on a record
     with outcomes must not trigger the advisory."""
     import mulchd.mcp.tier2 as mcp_tier2
@@ -390,8 +454,14 @@ async def test_edit_record_no_stale_advisory_for_non_content_field(team, data_pa
 
     t = team
     r = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="v1", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="v1",
+        owner="carlos",
         outcomes=[{"status": "success", "recorded_at": "2026-07-28T00:00:00+00:00"}],
     )
 
@@ -473,7 +543,9 @@ async def test_annotate_edits_counts_multiple_edits(team, data_path):
     assert records[0]["_last_edited_by"] == "Jorge M."
 
 
-async def test_edit_rolls_back_jsonl_when_db_event_fails(team, data_path, fake_write_record, monkeypatch):
+async def test_edit_rolls_back_jsonl_when_db_event_fails(
+    team, data_path, fake_write_record, monkeypatch
+):
     """If RecordEvent/RecordEdit creation fails after the JSONL edit already
     applied, the pre-edit values must be restored so the operation fails
     cleanly instead of leaving an untracked edit on disk."""

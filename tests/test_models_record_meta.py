@@ -36,8 +36,9 @@ async def test_record_meta_same_record_id_allowed_across_projects(db):
 
 
 async def test_record_meta_unique_per_project_and_record_id(db):
-    from mulchd.models import Organization, Project, RecordMeta, User
     from tortoise.exceptions import IntegrityError
+
+    from mulchd.models import Organization, Project, RecordMeta, User
 
     org = await Organization.create(slug="acme", display_name="Acme")
     project = await Project.create(slug="infra", display_name="Infra", org=org)

@@ -33,6 +33,7 @@ async def test_create_project_rejects_slash_in_slug(admin_client):
 
 async def test_project_overview_page_renders(admin_client):
     from mulchd.models import Organization, Project
+
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
     resp = await admin_client.get(f"/admin/p/{org.slug}/{project.slug}/")
@@ -60,9 +61,13 @@ async def test_project_detail_renders_invite_rows(admin_client):
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
     user = await User.create(username="bob", display_name="Bob", token_hash="x")
-    active = await InviteLink.create(token="t1", project=project, role=Role.ADMIN, max_uses=3, use_count=1)
+    active = await InviteLink.create(
+        token="t1", project=project, role=Role.ADMIN, max_uses=3, use_count=1
+    )
     await InviteLink.create(
-        token="t2", project=project, role=Role.READER,
+        token="t2",
+        project=project,
+        role=Role.READER,
         expires_at=datetime.now(UTC) - timedelta(days=1),
     )
     await InviteLink.create(token="t3", project=project, role=Role.WRITER, max_uses=2, use_count=2)

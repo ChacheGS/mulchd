@@ -34,12 +34,11 @@ def describe_event(event: InstanceEvent) -> str:
     """
     detail = cast(
         "dict[str, Any]",
-        event.detail or {},  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
+        event.detail
+        or {},  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
     )
     subject_name = event.subject_user.username if event.subject_user else ""
-    project_label = (
-        f"{event.project.org.slug}/{event.project.slug}" if event.project else ""
-    )
+    project_label = f"{event.project.org.slug}/{event.project.slug}" if event.project else ""
 
     if event.category == InstanceEventCategory.ADMIN_GRANTED:
         return f"Granted SUPERADMIN to {subject_name}"

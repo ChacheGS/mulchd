@@ -5,6 +5,12 @@ from importlib.metadata import version as _pkg_version
 from typing import Any, cast
 
 from fastapi import FastAPI, Request
+from pydantic import AnyHttpUrl
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import Response
+from starlette.types import Receive, Scope, Send
+from tortoise import Tortoise
+
 from mcp.server.auth.provider import AccessToken
 from mcp.server.auth.routes import (
     build_resource_metadata_url,
@@ -13,11 +19,6 @@ from mcp.server.auth.routes import (
 )
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.server.sse import SseServerTransport
-from pydantic import AnyHttpUrl
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.responses import Response
-from starlette.types import Receive, Scope, Send
-from tortoise import Tortoise
 
 from .admin import router as admin_router
 from .admin._shared import AdminRequired, is_admin, redirect_login
@@ -57,7 +58,9 @@ async def _auth_context_from_access_token(access_token: AccessToken) -> AuthCont
     if membership is None:
         return None
     granted_role = Role(claims["granted_role"]) if claims.get("granted_role") else membership.role
-    return AuthContext(user=user, project=project, org=project.org, role=min_role(membership.role, granted_role))
+    return AuthContext(
+        user=user, project=project, org=project.org, role=min_role(membership.role, granted_role)
+    )
 
 
 async def resolve_mcp_tier(request: Request) -> tuple[McpTier, AuthContext | None]:
@@ -175,7 +178,9 @@ async def _admin_project_switcher_context(  # pyright: ignore[reportUnusedFuncti
         and path != "/admin/records/count"
         and get_connect_user_id(request) is not None
     ):
-        request.state.all_projects = await Project.all().order_by("org__slug", "slug").prefetch_related("org")
+        request.state.all_projects = (
+            await Project.all().order_by("org__slug", "slug").prefetch_related("org")
+        )
     return await call_next(request)
 
 
@@ -281,6 +286,7 @@ async def health() -> dict[str, str]:
 
 def run() -> None:
     import logging
+
     import uvicorn
 
     level = settings.log_level.upper()

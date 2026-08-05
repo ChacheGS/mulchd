@@ -14,7 +14,11 @@ async def test_connected_apps_lists_grants(client, alice_and_project):
     await _authed_client(client, token)
     oc = await OAuthClient.create(
         client_id="cli-f",
-        client_metadata={"client_id": "cli-f", "client_name": "Cli F", "redirect_uris": ["http://localhost/cb"]},
+        client_metadata={
+            "client_id": "cli-f",
+            "client_name": "Cli F",
+            "redirect_uris": ["http://localhost/cb"],
+        },
     )
     await OAuthGrant.create(client=oc, user=user, project=project)
 
@@ -31,7 +35,11 @@ async def test_connected_apps_revoke_deletes_grant(client, alice_and_project):
     await _authed_client(client, token)
     oc = await OAuthClient.create(
         client_id="cli-g",
-        client_metadata={"client_id": "cli-g", "client_name": "Cli G", "redirect_uris": ["http://localhost/cb"]},
+        client_metadata={
+            "client_id": "cli-g",
+            "client_name": "Cli G",
+            "redirect_uris": ["http://localhost/cb"],
+        },
     )
     grant = await OAuthGrant.create(client=oc, user=user, project=project)
 
@@ -50,7 +58,11 @@ async def test_connected_apps_revoke_other_users_grant_404s(client, alice_and_pr
     other_user, _ = await create_user("mallory", "Mallory")
     oc = await OAuthClient.create(
         client_id="cli-h",
-        client_metadata={"client_id": "cli-h", "client_name": "Cli H", "redirect_uris": ["http://localhost/cb"]},
+        client_metadata={
+            "client_id": "cli-h",
+            "client_name": "Cli H",
+            "redirect_uris": ["http://localhost/cb"],
+        },
     )
     grant = await OAuthGrant.create(client=oc, user=other_user, project=project)
 
@@ -65,7 +77,11 @@ async def test_connected_apps_revoke_requires_auth(client, alice_and_project):
     user, token, org, project = alice_and_project
     oc = await OAuthClient.create(
         client_id="cli-noauth",
-        client_metadata={"client_id": "cli-noauth", "client_name": "Cli NoAuth", "redirect_uris": ["http://localhost/cb"]},
+        client_metadata={
+            "client_id": "cli-noauth",
+            "client_name": "Cli NoAuth",
+            "redirect_uris": ["http://localhost/cb"],
+        },
     )
     grant = await OAuthGrant.create(client=oc, user=user, project=project)
 
@@ -118,7 +134,11 @@ async def test_connected_apps_shows_granted_role(client, alice_and_project):
     await _authed_client(client, token)
     oc = await OAuthClient.create(
         client_id="cli-role-badge",
-        client_metadata={"client_id": "cli-role-badge", "client_name": "Cli RoleBadge", "redirect_uris": ["http://localhost/cb"]},
+        client_metadata={
+            "client_id": "cli-role-badge",
+            "client_name": "Cli RoleBadge",
+            "redirect_uris": ["http://localhost/cb"],
+        },
     )
     await OAuthGrant.create(client=oc, user=user, project=project, granted_role=Role.READER)
 

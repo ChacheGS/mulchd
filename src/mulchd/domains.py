@@ -42,7 +42,9 @@ def _load_domain_descriptions(m_dir: Path) -> dict[str, str]:
                 elif isinstance(meta, str):
                     descriptions[name] = meta
         except Exception:
-            _log.warning("failed to parse %s — domain descriptions will be empty", config_path, exc_info=True)
+            _log.warning(
+                "failed to parse %s — domain descriptions will be empty", config_path, exc_info=True
+            )
     return descriptions
 
 

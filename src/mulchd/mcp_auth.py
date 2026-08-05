@@ -32,7 +32,9 @@ def _generate_secret() -> str:
     return secrets.token_urlsafe(32)
 
 
-class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]):
+class MulchdOAuthProvider(
+    OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]
+):
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         row = await OAuthClient.filter(client_id=client_id).first()
         if row is None:
@@ -40,7 +42,9 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         # row.client_id is the authoritative business key; the stored client_metadata
         # blob may carry a stale or placeholder value (e.g. captured before the real
         # client_id was assigned), so it must not be trusted over the row itself.
-        metadata = cast(dict[str, Any], row.client_metadata)  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
+        metadata = cast(
+            dict[str, Any], row.client_metadata
+        )  # pyright: ignore[reportUnknownMemberType]  # Tortoise JSONField stub doesn't parametrize its value type
         return OAuthClientInformationFull.model_validate({**metadata, "client_id": row.client_id})
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
@@ -49,7 +53,9 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
             client_metadata=client_info.model_dump(mode="json"),
         )
 
-    async def authorize(self, client: OAuthClientInformationFull, params: AuthorizationParams) -> str:
+    async def authorize(
+        self, client: OAuthClientInformationFull, params: AuthorizationParams
+    ) -> str:
         query = urlencode(
             {
                 "client_id": client.client_id,
@@ -66,13 +72,17 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
     ) -> AuthorizationCode | None:
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
-            await OAuthCode.filter(code_hash=hash_token(authorization_code), client_id=client.client_id, used=False)
+            await OAuthCode.filter(
+                code_hash=hash_token(authorization_code), client_id=client.client_id, used=False
+            )
             .select_related("grant")
             .first()
         )
         if row is None:
             return None
-        expires_at = row.expires_at.replace(tzinfo=UTC) if row.expires_at.tzinfo is None else row.expires_at
+        expires_at = (
+            row.expires_at.replace(tzinfo=UTC) if row.expires_at.tzinfo is None else row.expires_at
+        )
         if expires_at < datetime.now(UTC):
             return None
         return AuthorizationCode(
@@ -91,19 +101,25 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
     ) -> SdkOAuthToken:
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
-            await OAuthCode.filter(code_hash=hash_token(authorization_code.code), client_id=client.client_id)
+            await OAuthCode.filter(
+                code_hash=hash_token(authorization_code.code), client_id=client.client_id
+            )
             .select_related("grant")
             .first()
         )
         if row is None or row.used:
-            raise TokenError(error="invalid_grant", error_description="authorization code already used")
+            raise TokenError(
+                error="invalid_grant", error_description="authorization code already used"
+            )
         # Atomic compare-and-swap, not a read-then-write: two concurrent exchanges of the
         # same code must not both succeed. update() only flips rows still unused, and
         # returns the affected count — a second racing request sees 0 and is rejected,
         # even though its earlier `row.used` read (above) also observed False.
         claimed = await OAuthCode.filter(id=row.id, used=False).update(used=True)
         if claimed == 0:
-            raise TokenError(error="invalid_grant", error_description="authorization code already used")
+            raise TokenError(
+                error="invalid_grant", error_description="authorization code already used"
+            )
         return await self._issue_tokens(client.client_id, row.grant, authorization_code.scopes)
 
     async def load_refresh_token(
@@ -112,7 +128,9 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthToken.filter(
-                refresh_token_hash=hash_token(refresh_token), client_id=client.client_id, revoked=False
+                refresh_token_hash=hash_token(refresh_token),
+                client_id=client.client_id,
+                revoked=False,
             )
             .select_related("grant")
             .first()
@@ -138,7 +156,9 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         assert client.client_id is not None, "registered clients always have a client_id"
         row = (
             await OAuthToken.filter(
-                refresh_token_hash=hash_token(refresh_token.token), client_id=client.client_id, revoked=False
+                refresh_token_hash=hash_token(refresh_token.token),
+                client_id=client.client_id,
+                revoked=False,
             )
             .select_related("grant")
             .first()
@@ -154,7 +174,11 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         return await self._issue_tokens(client.client_id, row.grant, scopes or refresh_token.scopes)
 
     async def load_access_token(self, token: str) -> AccessToken | None:
-        row = await OAuthToken.filter(access_token_hash=hash_token(token), revoked=False).select_related("grant").first()
+        row = (
+            await OAuthToken.filter(access_token_hash=hash_token(token), revoked=False)
+            .select_related("grant")
+            .first()
+        )
         if row is None:
             return None
         expires_at = row.access_expires_at
@@ -167,7 +191,10 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
             scopes=row.scope.split() if row.scope else [],
             expires_at=int(expires_at.timestamp()),
             subject=str(row.grant.user_id),
-            claims={"project_id": row.grant.project_id, "granted_role": str(row.grant.granted_role)},
+            claims={
+                "project_id": row.grant.project_id,
+                "granted_role": str(row.grant.granted_role),
+            },
         )
 
     async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
@@ -175,7 +202,9 @@ class MulchdOAuthProvider(OAuthAuthorizationServerProvider[AuthorizationCode, Re
         await OAuthToken.filter(access_token_hash=token_hash).update(revoked=True)
         await OAuthToken.filter(refresh_token_hash=token_hash).update(revoked=True)
 
-    async def _issue_tokens(self, client_id: str, grant: OAuthGrant, scopes: list[str]) -> SdkOAuthToken:
+    async def _issue_tokens(
+        self, client_id: str, grant: OAuthGrant, scopes: list[str]
+    ) -> SdkOAuthToken:
         # client_id must be the caller's OAuthClientInformationFull.client_id (string) —
         # NOT grant.client_id, which is Tortoise's raw FK column and holds the related
         # OAuthClient row's integer primary key, not its client_id string. Every caller

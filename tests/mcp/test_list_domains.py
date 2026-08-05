@@ -3,7 +3,7 @@ list_domains tests.
 """
 
 from mulchd.mcp.tier2 import _list_domains, _record_expertise
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_list_domains_isolation_different_projects(team, data_path):

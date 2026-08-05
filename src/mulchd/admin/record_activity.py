@@ -76,17 +76,21 @@ async def record_activity_page(
         qs = qs.filter(action=action)
     if domain:
         qs = qs.filter(domain__icontains=domain)
-    rows: list[dict[str, Any]] = await qs.order_by("-at").limit(200).values(
-        "id",
-        "record_id",
-        "domain",
-        "source_domain",
-        "action",
-        "client",
-        "at",
-        "session_id",
-        "actor__username",
-        "actor__display_name",
+    rows: list[dict[str, Any]] = (
+        await qs.order_by("-at")
+        .limit(200)
+        .values(
+            "id",
+            "record_id",
+            "domain",
+            "source_domain",
+            "action",
+            "client",
+            "at",
+            "session_id",
+            "actor__username",
+            "actor__display_name",
+        )
     )
 
     # RecordMeta gives us the original author of each record (may be absent
@@ -94,19 +98,16 @@ async def record_activity_page(
     all_record_ids = [r["record_id"] for r in rows]
     meta_rows: list[dict[str, Any]] = (
         (
-            await RecordMeta.filter(
-                record_id__in=all_record_ids, project=project
-            ).values("record_id", "author__username", "author__display_name")
+            await RecordMeta.filter(record_id__in=all_record_ids, project=project).values(
+                "record_id", "author__username", "author__display_name"
+            )
         )
         if all_record_ids
         else []
     )
-    original_owner: dict[str, str] = {
-        m["record_id"]: m["author__username"] for m in meta_rows
-    }
+    original_owner: dict[str, str] = {m["record_id"]: m["author__username"] for m in meta_rows}
     original_owner_display: dict[str, str] = {
-        m["record_id"]: m["author__display_name"] or m["author__username"]
-        for m in meta_rows
+        m["record_id"]: m["author__display_name"] or m["author__username"] for m in meta_rows
     }
 
     # RecordEdit rows per (record_id, session_id), oldest-first.
@@ -143,9 +144,7 @@ async def record_activity_page(
         actor_username = r["actor__username"] or ""
         # RecordMeta may be absent for records pre-dating that table;
         # fall back to the owner field embedded in the JSONL record.
-        owner_username = original_owner.get(r["record_id"]) or (
-            rec.get("owner", "") if rec else ""
-        )
+        owner_username = original_owner.get(r["record_id"]) or (rec.get("owner", "") if rec else "")
         owner_display_name = original_owner_display.get(r["record_id"]) or owner_username
         # Detect write events that lower classification via supersession,
         # or replace a foundational record with any tier.
@@ -174,11 +173,7 @@ async def record_activity_page(
         elif r["action"] == "edit" and before_snap:
             old_cls = before_snap.get("classification", "")
             new_cls = (rec or {}).get("classification", "")
-            if (
-                old_cls
-                and new_cls
-                and Classification.of(old_cls) > Classification.of(new_cls)
-            ):
+            if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
                 classification_downgrade = True
                 downgrade_label = f"{old_cls} → {new_cls}"
         # cross-owner: actor is not the original author, and it's a mutating action

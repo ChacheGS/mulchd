@@ -6,7 +6,7 @@ independently-computed incoming-reference count (find_incoming_references).
 import json
 
 from mulchd.mcp.tier2 import _read_expertise
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_mark_related_to_sets_outgoing_and_incoming_tags(team, data_path):
@@ -15,12 +15,24 @@ async def test_mark_related_to_sets_outgoing_and_incoming_tags(team, data_path):
 
     t = team
     a = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="A", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="A",
+        owner="carlos",
     )
     b = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="B", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="B",
+        owner="carlos",
         relates_to=[a["id"]],
     )
     a["_domain"] = "infra"
@@ -40,17 +52,35 @@ async def test_mark_related_to_incoming_collects_multiple_referencers(team, data
 
     t = team
     a = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="A", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="A",
+        owner="carlos",
     )
     b = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="B", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="B",
+        owner="carlos",
         relates_to=[a["id"]],
     )
     c = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="C", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="C",
+        owner="carlos",
         relates_to=[a["id"]],
     )
     a["_domain"] = "infra"
@@ -69,11 +99,18 @@ async def test_mark_related_to_labels_deleted_target(team, data_path):
     archive_dir = m_dir / "archive"
     archive_dir.mkdir(parents=True)
     (archive_dir / "infra.jsonl").write_text(
-        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"}) + "\n"
+        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"})
+        + "\n"
     )
     new = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="New", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="New",
+        owner="carlos",
         relates_to=["mx-archived1"],
     )
     new["_domain"] = "infra"
@@ -88,8 +125,14 @@ async def test_mark_related_to_labels_missing_target(team, data_path):
 
     t = team
     new = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="New", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="New",
+        owner="carlos",
         relates_to=["mx-never-existed"],
     )
     new["_domain"] = "infra"
@@ -105,12 +148,24 @@ async def test_read_records_renders_relates_to_on_both_sides(team, data_path):
     validation but zero read-time display."""
     t = team
     a = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="Record A", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="Record A",
+        owner="carlos",
     )
     _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="Record B", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="Record B",
+        owner="carlos",
         relates_to=[a["id"]],
     )
 

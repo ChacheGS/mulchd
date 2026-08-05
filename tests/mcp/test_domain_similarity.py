@@ -5,14 +5,20 @@ a near-duplicate of an existing one — catches typos like "architecutre" vs
 """
 
 from mulchd.mcp.tier2 import _record_expertise
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_write_warns_on_near_duplicate_domain_name(team, data_path, fake_write_record):
     t = team
     _jot(
-        data_path, "acme", "infra", "architecture",
-        type="convention", classification="tactical", content="existing", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "architecture",
+        type="convention",
+        classification="tactical",
+        content="existing",
+        owner="carlos",
     )
 
     result = await _record_expertise(
@@ -34,8 +40,14 @@ async def test_write_warns_on_near_duplicate_domain_name(team, data_path, fake_w
 async def test_write_no_warning_for_genuinely_new_domain(team, data_path, fake_write_record):
     t = team
     _jot(
-        data_path, "acme", "infra", "architecture",
-        type="convention", classification="tactical", content="existing", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "architecture",
+        type="convention",
+        classification="tactical",
+        content="existing",
+        owner="carlos",
     )
 
     result = await _record_expertise(
@@ -56,8 +68,14 @@ async def test_write_no_warning_when_domain_already_exists(team, data_path, fake
     check should even run, regardless of how similar its name is to others."""
     t = team
     _jot(
-        data_path, "acme", "infra", "architecture",
-        type="convention", classification="tactical", content="existing", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "architecture",
+        type="convention",
+        classification="tactical",
+        content="existing",
+        owner="carlos",
     )
 
     result = await _record_expertise(

@@ -27,7 +27,12 @@ async def test_add_membership(admin_client):
 
 async def test_add_membership_logs_event(admin_client):
     from mulchd.auth import create_user
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     target, _ = await create_user("memberadd", "Member Add")
     org = await Organization.create(slug="acme", display_name="Acme")
@@ -74,7 +79,12 @@ async def test_remove_membership_logs_event(admin_client):
 
 async def test_duplicate_membership_does_not_log(admin_client):
     from mulchd.auth import create_user
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization, Project
+    from mulchd.models import (
+        InstanceEvent,
+        InstanceEventCategory,
+        Organization,
+        Project,
+    )
 
     target, _ = await create_user("memberdup", "Member Dup")
     org = await Organization.create(slug="acmedup", display_name="AcmeDup")

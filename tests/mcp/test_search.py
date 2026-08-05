@@ -73,7 +73,9 @@ async def test_search_respects_explicit_limit(team, data_path, monkeypatch):
     t = team
     monkeypatch.setattr(mcp_tier2, "search_domains", _fake_search_domains({"infra": 10}))
 
-    _, structured = await _search_expertise({"query": "x", "limit": 3}, ctx(t.carlos, t.org, t.infra))
+    _, structured = await _search_expertise(
+        {"query": "x", "limit": 3}, ctx(t.carlos, t.org, t.infra)
+    )
 
     assert len(structured["records"]) == 3
     assert structured["truncated"] is True
@@ -101,7 +103,9 @@ async def test_search_preserves_relevance_order_within_the_cap(team, data_path, 
     t = team
     monkeypatch.setattr(mcp_tier2, "search_domains", _fake_search_domains({"infra": 5}))
 
-    _, structured = await _search_expertise({"query": "x", "limit": 2}, ctx(t.carlos, t.org, t.infra))
+    _, structured = await _search_expertise(
+        {"query": "x", "limit": 2}, ctx(t.carlos, t.org, t.infra)
+    )
 
     ids = [r["id"] for r in structured["records"]]
     assert ids == ["mx-infra-0", "mx-infra-1"]

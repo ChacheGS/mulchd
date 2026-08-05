@@ -9,7 +9,9 @@ async def _make_client_grant(project=None):
 
     user, _ = await create_user(f"user-{secrets_suffix()}", "User")
     org = await Organization.create(slug=f"org-{secrets_suffix()}", display_name="Org")
-    project = project or await Project.create(slug=f"proj-{secrets_suffix()}", display_name="Proj", org=org)
+    project = project or await Project.create(
+        slug=f"proj-{secrets_suffix()}", display_name="Proj", org=org
+    )
     client = await OAuthClient.create(
         client_id=f"client-{secrets_suffix()}",
         client_metadata={
@@ -205,7 +207,6 @@ async def test_register_client_then_get_client_roundtrip(db):
     from pydantic import AnyUrl
 
     from mcp.shared.auth import OAuthClientMetadata
-
     from mulchd.mcp_auth import MulchdOAuthProvider
 
     provider = MulchdOAuthProvider()
@@ -243,7 +244,6 @@ async def test_authorize_redirects_to_consent_page(db):
     from pydantic import AnyUrl
 
     from mcp.server.auth.provider import AuthorizationParams
-
     from mulchd.mcp_auth import MulchdOAuthProvider
     from mulchd.models import OAuthClient
 

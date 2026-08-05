@@ -2,11 +2,12 @@
 list_tools / call_tool dispatch and RecordEvent audit-trail tests.
 """
 
-from mulchd.mcp.context import auth_ctx
 import pytest
-from mulchd.models import Role
+
+from mulchd.mcp.context import auth_ctx
 from mulchd.mcp.tier2 import call_tool
-from tests.mcp.conftest import ctx, _make_fake_delete
+from mulchd.models import Role
+from tests.mcp.conftest import _make_fake_delete, ctx
 
 
 async def test_list_tools_hides_mutating_tools_from_reader(team, data_path):
@@ -70,7 +71,9 @@ async def test_call_tool_still_rejects_reader_for_hidden_tool(team, data_path):
     token = auth_ctx.set(ctx(t.carlos, t.org, t.infra, role=Role.READER))
     try:
         with pytest.raises(ValueError, match="reader role cannot edit records"):
-            await call_tool("edit_record", {"record_id": "mx-whatever", "domain": "infra", "content": "x"})
+            await call_tool(
+                "edit_record", {"record_id": "mx-whatever", "domain": "infra", "content": "x"}
+            )
     finally:
         auth_ctx.reset(token)
 

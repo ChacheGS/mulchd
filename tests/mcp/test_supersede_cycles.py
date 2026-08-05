@@ -3,9 +3,11 @@ Supersession, reference validation, and cycle-detection tests (mark_superseded, 
 """
 
 import json
+
 import pytest
+
 from mulchd.mcp.tier2 import _read_expertise
-from tests.mcp.conftest import ctx, _jot
+from tests.mcp.conftest import _jot, ctx
 
 
 async def test_supersede_alerts_foundational_same_tier(team, data_path):
@@ -79,14 +81,18 @@ def test_validate_references_accepts_existing_ids():
 def test_validate_references_rejects_fabricated_supersedes_id():
     from mulchd.mcp.tier2 import validate_references
 
-    with pytest.raises(ValueError, match="supersedes references records that don't exist: mx-ghost"):
+    with pytest.raises(
+        ValueError, match="supersedes references records that don't exist: mx-ghost"
+    ):
         validate_references({"mx-a"}, ["mx-ghost"], [])
 
 
 def test_validate_references_rejects_fabricated_relates_to_id():
     from mulchd.mcp.tier2 import validate_references
 
-    with pytest.raises(ValueError, match="relates_to references records that don't exist: mx-ghost"):
+    with pytest.raises(
+        ValueError, match="relates_to references records that don't exist: mx-ghost"
+    ):
         validate_references({"mx-a"}, [], ["mx-ghost"])
 
 
@@ -157,17 +163,35 @@ async def test_mark_superseded_tags_foundational_victim(team, data_path):
 
     t = team
     original = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     superseder = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="Weakened rule", owner="jorge",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Weakened rule",
+        owner="jorge",
         supersedes=[original["id"]],
     )
     untouched = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="foundational", content="Still standing", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Still standing",
+        owner="carlos",
     )
     for r in (original, superseder, untouched):
         r["_domain"] = "api"
@@ -187,21 +211,45 @@ async def test_format_records_renders_foundational_superseded_banner(team, data_
 
     t = team
     original = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     superseder = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="Weakened rule", owner="jorge",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Weakened rule",
+        owner="jorge",
         supersedes=[original["id"]],
     )
     tactical_old = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="Old tactical", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="Old tactical",
+        owner="carlos",
     )
     tactical_new = _jot(
-        data_path, "acme", "infra", "api",
-        type="convention", classification="tactical", content="New tactical", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "api",
+        type="convention",
+        classification="tactical",
+        content="New tactical",
+        owner="carlos",
         supersedes=[tactical_old["id"]],
     )
     for r in (original, superseder, tactical_old, tactical_new):
@@ -214,7 +262,9 @@ async def test_format_records_renders_foundational_superseded_banner(team, data_
     assert f"FOUNDATIONAL POLICY SUPERSEDED by {superseder['id']}" in text
     assert f"get_record_history('{original['id']}')" in text
     assert f"superseded by {tactical_new['id']}" in text
-    assert "FOUNDATIONAL POLICY SUPERSEDED" not in text.split(tactical_old["id"], 1)[1].split("\n")[0]
+    assert (
+        "FOUNDATIONAL POLICY SUPERSEDED" not in text.split(tactical_old["id"], 1)[1].split("\n")[0]
+    )
 
 
 async def test_format_records_foundational_banner_includes_cross_domain_hint(team, data_path):
@@ -225,12 +275,24 @@ async def test_format_records_foundational_banner_includes_cross_domain_hint(tea
 
     t = team
     original = _jot(
-        data_path, "acme", "infra", "guardrails",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "guardrails",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     superseder = _jot(
-        data_path, "acme", "infra", "policies",
-        type="convention", classification="foundational", content="Replacement", owner="jorge",
+        data_path,
+        "acme",
+        "infra",
+        "policies",
+        type="convention",
+        classification="foundational",
+        content="Replacement",
+        owner="jorge",
         supersedes=[original["id"]],
     )
     original["_domain"] = "guardrails"
@@ -251,12 +313,24 @@ async def test_mark_superseded_foundational_target_not_double_rendered(team, dat
 
     t = team
     old = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="foundational", content="Guardrail", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
     )
     new = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="Weakened rule", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="Weakened rule",
+        owner="carlos",
         supersedes=[old["id"]],
     )
     old["_domain"] = "infra"
@@ -275,12 +349,24 @@ async def test_mark_superseded_sets_generic_outgoing_tag(team, data_path):
 
     t = team
     old = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="Old", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="Old",
+        owner="carlos",
     )
     new = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="New", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="New",
+        owner="carlos",
         supersedes=[old["id"]],
     )
     old["_domain"] = "infra"
@@ -302,11 +388,18 @@ async def test_mark_superseded_labels_deleted_target(team, data_path):
     archive_dir = m_dir / "archive"
     archive_dir.mkdir(parents=True)
     (archive_dir / "infra.jsonl").write_text(
-        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"}) + "\n"
+        json.dumps({"id": "mx-archived1", "type": "convention", "classification": "tactical"})
+        + "\n"
     )
     new = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="New", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="New",
+        owner="carlos",
         supersedes=["mx-archived1"],
     )
     new["_domain"] = "infra"
@@ -323,8 +416,14 @@ async def test_mark_superseded_labels_missing_target(team, data_path):
 
     t = team
     new = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="New", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="New",
+        owner="carlos",
         supersedes=["mx-never-existed"],
     )
     new["_domain"] = "infra"
@@ -340,12 +439,24 @@ async def test_mark_superseded_flags_direct_cycle(team, data_path):
 
     t = team
     a = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="A", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="A",
+        owner="carlos",
     )
     b = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="B", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="B",
+        owner="carlos",
         supersedes=[a["id"]],
     )
     # Edit A directly in JSONL to also supersede B, completing the cycle
@@ -603,12 +714,24 @@ async def test_read_records_renders_cycle_warning_not_normal_tags(team, data_pat
     not the normal superseded/supersedes tags."""
     t = team
     a = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="A", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="A",
+        owner="carlos",
     )
     b = _jot(
-        data_path, "acme", "infra", "infra",
-        type="convention", classification="tactical", content="B", owner="carlos",
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="B",
+        owner="carlos",
         supersedes=[a["id"]],
     )
     path = data_path / "acme" / "infra" / ".mulch" / "expertise" / "infra.jsonl"

@@ -3,6 +3,7 @@ get_record_history tests.
 """
 
 import uuid
+
 from mulchd.models import RecordEdit, RecordEvent, Role
 from tests.mcp.conftest import ctx
 
@@ -89,26 +90,46 @@ async def test_get_record_history_matches_snapshots_by_session_not_position(team
 
     # RecordEvent order: carlos's edit (session_a) before jorge's edit (session_b).
     await RecordEvent.create(
-        record_id=record_id, project=t.infra, domain="api", actor=t.carlos,
-        action="edit", client="test", session_id=session_a,
+        record_id=record_id,
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        action="edit",
+        client="test",
+        session_id=session_a,
     )
     await asyncio.sleep(0.01)
     await RecordEvent.create(
-        record_id=record_id, project=t.infra, domain="api", actor=t.jorge,
-        action="edit", client="test", session_id=session_b,
+        record_id=record_id,
+        project=t.infra,
+        domain="api",
+        actor=t.jorge,
+        action="edit",
+        client="test",
+        session_id=session_b,
     )
     await asyncio.sleep(0.01)
     # RecordEdit order deliberately reversed relative to RecordEvent's (at):
     # jorge's (session_b) snapshot row is created — and so sorts — before
     # carlos's (session_a) one, even though carlos's edit event came first.
     await RecordEdit.create(
-        record_id=record_id, project=t.infra, domain="api", actor=t.jorge,
-        before_snapshot={"content": "jorge-old"}, client="test", session_id=session_b,
+        record_id=record_id,
+        project=t.infra,
+        domain="api",
+        actor=t.jorge,
+        before_snapshot={"content": "jorge-old"},
+        client="test",
+        session_id=session_b,
     )
     await asyncio.sleep(0.01)
     await RecordEdit.create(
-        record_id=record_id, project=t.infra, domain="api", actor=t.carlos,
-        before_snapshot={"content": "carlos-old"}, client="test", session_id=session_a,
+        record_id=record_id,
+        project=t.infra,
+        domain="api",
+        actor=t.carlos,
+        before_snapshot={"content": "carlos-old"},
+        client="test",
+        session_id=session_a,
     )
 
     result = await _get_record_history({"record_id": record_id}, ctx(t.carlos, t.org, t.infra))
@@ -130,7 +151,12 @@ async def test_get_record_history_reader_role_can_call(team, data_path, fake_wri
 
     t = team
     await mcp_tier2._record_expertise(
-        {"domain": "history-test", "type": "convention", "classification": "tactical", "content": "v1"},
+        {
+            "domain": "history-test",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "v1",
+        },
         ctx(t.carlos, t.org, t.infra),
     )
     records = await mcp_tier2._read_expertise(
