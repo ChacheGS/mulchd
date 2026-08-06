@@ -94,13 +94,15 @@ async def mark_superseded(records: list[Record], org_slug: str, project_slug: st
             for tid in outgoing:
                 target = live_by_id.get(tid)
                 if target is not None:
+                    # _supersedes_display is the complete outgoing list regardless
+                    # of classification — a foundational target is additionally
+                    # called out via _supersedes_foundational, not moved out of
+                    # this one. format_records dedupes the two for the rendered
+                    # text; this field itself must stay the full picture for any
+                    # caller reading structured data instead.
+                    display.append(tid)
                     if target.get("classification") == "foundational":
-                        # Shown via the dedicated "⚠ supersedes foundational" line
-                        # below instead — listing it in the generic tag too would
-                        # render the same id twice back-to-back.
                         displaced_foundational.append(tid)
-                    else:
-                        display.append(tid)
                 elif tid in archived_ids:
                     display.append(f"{tid} (deleted)")
                 else:

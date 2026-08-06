@@ -172,10 +172,17 @@ def _decorate_header(header: str, r: Record) -> str:
                     f"{t} (in {branch_domains[t]})" if t in branch_domains else t for t in tips
                 ]
                 header += f" ⚠ current tip ambiguous ({len(tips)} branches): {', '.join(shown)}"
-        if r.get("_supersedes_display"):
-            header += f" • supersedes {', '.join(r['_supersedes_display'])}"
-        if r.get("_supersedes_foundational"):
-            header += f" ⚠ supersedes foundational: {', '.join(r['_supersedes_foundational'])}"
+        supersedes_foundational: list[str] = r.get("_supersedes_foundational") or []
+        # _supersedes_display is the complete outgoing list; a foundational
+        # target also appears in _supersedes_foundational, so it's excluded
+        # here to avoid rendering the same id twice back-to-back in text.
+        supersedes_display = [
+            tid for tid in (r.get("_supersedes_display") or []) if tid not in supersedes_foundational
+        ]
+        if supersedes_display:
+            header += f" • supersedes {', '.join(supersedes_display)}"
+        if supersedes_foundational:
+            header += f" ⚠ supersedes foundational: {', '.join(supersedes_foundational)}"
     if r.get("_relates_to_display"):
         header += f" • relates to {', '.join(r['_relates_to_display'])}"
     if r.get("_related_by"):

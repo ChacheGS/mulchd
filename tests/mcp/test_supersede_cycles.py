@@ -305,10 +305,17 @@ async def test_format_records_foundational_banner_includes_cross_domain_hint(tea
     assert f"FOUNDATIONAL POLICY SUPERSEDED by {superseder['id']} (in policies)" in text
 
 
-async def test_mark_superseded_foundational_target_not_double_rendered(team, data_path):
-    """A foundational supersede target must appear only in _supersedes_foundational,
-    not also in the generic _supersedes_display — otherwise the id renders twice
-    back-to-back in the formatted text (once per tag)."""
+async def test_mark_superseded_foundational_target_in_both_display_and_foundational(
+    team, data_path
+):
+    """_supersedes_display is the complete outgoing list regardless of
+    classification — a foundational target additionally appears in
+    _supersedes_foundational, it isn't moved out of the generic field.
+    Otherwise a caller that only reads _supersedes_display (the obvious
+    choice, given the _display suffix convention used elsewhere, e.g.
+    _relates_to_display) sees "supersedes nothing" for exactly the
+    highest-stakes case. Text rendering (format_records) is responsible for
+    not printing the id twice, not this structured field."""
     from mulchd.mcp.tier2 import mark_superseded
 
     t = team
@@ -338,8 +345,47 @@ async def test_mark_superseded_foundational_target_not_double_rendered(team, dat
     records = [old, new]
     await mark_superseded(records, "acme", "infra")
 
-    assert new.get("_supersedes_display") in (None, [])
+    assert new["_supersedes_display"] == [old["id"]]
     assert new["_supersedes_foundational"] == [old["id"]]
+
+
+async def test_format_records_does_not_double_render_foundational_supersede_target(
+    team, data_path
+):
+    """Even though _supersedes_display now includes the foundational target,
+    the rendered text must still show its id once, not twice back-to-back."""
+    from mulchd.mcp.tier2 import format_records, mark_superseded
+
+    t = team
+    old = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="foundational",
+        content="Guardrail",
+        owner="carlos",
+    )
+    new = _jot(
+        data_path,
+        "acme",
+        "infra",
+        "infra",
+        type="convention",
+        classification="tactical",
+        content="Weakened rule",
+        owner="carlos",
+        supersedes=[old["id"]],
+    )
+    old["_domain"] = "infra"
+    new["_domain"] = "infra"
+    records = [old, new]
+    await mark_superseded(records, "acme", "infra")
+
+    text = format_records(records)
+    new_line = next(line for line in text.splitlines() if line.startswith(f"[infra/convention/tactical] {new['id']}"))
+    assert new_line.count(old["id"]) == 1
 
 
 async def test_mark_superseded_sets_generic_outgoing_tag(team, data_path):
