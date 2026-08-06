@@ -664,3 +664,106 @@ async def test_edit_rolls_back_jsonl_when_db_event_fails(
         )
 
     assert calls == [{"content": "updated"}, {"content": "original"}]
+
+
+async def test_edit_admin_override_blocks_when_enforced(team, data_path, fake_write_record, monkeypatch):
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "override-test", "type": "convention", "classification": "foundational", "content": "original"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["override-test"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": record_id, "domain": "override-test", "content": "changed by admin"},
+            ctx(t.jorge, t.org, t.infra, role=Role.ADMIN),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "Not completed" in result[0].text
+    assert "ADMIN OVERRIDE" in result[0].text
+
+    # The record is unchanged.
+    unchanged = await mcp_tier2._read_expertise({"domains": ["override-test"]}, ctx(t.carlos, t.org, t.infra))
+    assert unchanged[1]["records"][0]["content"] == "original"
+
+
+async def test_edit_admin_override_confirm_true_proceeds_when_enforced(
+    team, data_path, fake_write_record, monkeypatch
+):
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "override-test", "type": "convention", "classification": "foundational", "content": "original"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["override-test"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {
+                "record_id": record_id,
+                "domain": "override-test",
+                "content": "changed by admin",
+                "confirm": True,
+            },
+            ctx(t.jorge, t.org, t.infra, role=Role.ADMIN),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "Updated" in result[0].text
+    assert "ADMIN OVERRIDE" in result[0].text
+
+
+async def test_edit_classification_downgrade_blocks_when_enforced(
+    team, data_path, fake_write_record, monkeypatch
+):
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _edit_record
+
+    t = team
+    await mcp_tier2._record_expertise(
+        {"domain": "infra", "type": "convention", "classification": "foundational", "content": "original"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    records = await mcp_tier2._read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    record_id = records[1]["records"][0]["id"]
+
+    async def _noop_edit(m_dir, domain, rid, updates):
+        pass
+
+    orig_edit = mcp_tier2.edit_record
+    mcp_tier2.edit_record = _noop_edit
+    try:
+        result = await _edit_record(
+            {"record_id": record_id, "domain": "infra", "classification": "tactical"},
+            ctx(t.carlos, t.org, t.infra),
+        )
+    finally:
+        mcp_tier2.edit_record = orig_edit
+
+    assert "Not completed" in result[0].text
+    assert "CLASSIFICATION DOWNGRADE" in result[0].text

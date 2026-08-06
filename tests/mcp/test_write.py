@@ -883,3 +883,173 @@ def test_write_tools_schemas_mention_strict_domains_caveat():
     ):
         tool = _tool_by_name(name)
         assert "strict domain creation" in (tool.description or "").lower()
+
+
+async def test_write_supersession_warning_blocks_when_enforced(
+    team, data_path, fake_write_record, monkeypatch
+):
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    t = team
+    foundational = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "foundational",
+            "title": "Old guardrail",
+            "rationale": "x",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    import re
+
+    old_id = re.search(r"\(mx-[a-f0-9]+\)", foundational[0].text).group(0)[1:-1]
+
+    result = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "New approach",
+            "rationale": "y",
+            "supersedes": [old_id],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Not completed" in result[0].text
+    assert "SUPERSESSION WARNING" in result[0].text
+    assert "confirm=true" in result[0].text
+
+    # No record was actually written.
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert len(structured["records"]) == 1
+
+
+async def test_write_confirm_true_proceeds_when_enforced(
+    team, data_path, fake_write_record, monkeypatch
+):
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    t = team
+    foundational = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "foundational",
+            "title": "Old guardrail",
+            "rationale": "x",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    import re
+
+    old_id = re.search(r"\(mx-[a-f0-9]+\)", foundational[0].text).group(0)[1:-1]
+
+    result = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "New approach",
+            "rationale": "y",
+            "supersedes": [old_id],
+            "confirm": True,
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Recorded" in result[0].text
+    assert "SUPERSESSION WARNING" in result[0].text  # still shown, for audit visibility
+
+
+async def test_gate_guardrail_warnings_uses_elicitation_when_client_supports_it(
+    team, data_path, monkeypatch
+):
+    """When the connected client declared the elicitation capability,
+    _gate_guardrail_warnings must ask it in real time rather than falling
+    back to confirm=true — and a decline must block, distinctly from the
+    confirm=true rejection message."""
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    from mcp.types import ClientCapabilities, ElicitResult
+
+    from mulchd.mcp.tier2 import _gate_guardrail_warnings
+
+    t = team
+
+    class FakeSession:
+        client_capabilities = ClientCapabilities(elicitation={})
+        elicit_calls: list[tuple[str, dict]] = []
+
+        async def elicit_form(self, message, requested_schema):
+            self.elicit_calls.append((message, requested_schema))
+            return ElicitResult(action="decline")
+
+    class FakeCtx:
+        session = FakeSession()
+
+    fake_ctx = FakeCtx()
+    rejection = await _gate_guardrail_warnings(
+        t.infra, fake_ctx, ["\n\n⚠ SUPERSESSION WARNING: test"], False
+    )
+    assert rejection is not None
+    assert "Not completed" in rejection
+    assert "declined via elicitation" in rejection
+    assert "SUPERSESSION WARNING" in rejection
+    assert fake_ctx.session.elicit_calls
+    message, schema = fake_ctx.session.elicit_calls[0]
+    assert "SUPERSESSION WARNING" in message
+    assert schema == {"type": "object", "properties": {}}
+
+
+async def test_gate_guardrail_warnings_elicitation_accept_proceeds(team, data_path, monkeypatch):
+    monkeypatch.setenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", "enforce")
+    from mcp.types import ClientCapabilities, ElicitResult
+
+    from mulchd.mcp.tier2 import _gate_guardrail_warnings
+
+    t = team
+
+    class FakeSession:
+        client_capabilities = ClientCapabilities(elicitation={})
+
+        async def elicit_form(self, message, requested_schema):
+            return ElicitResult(action="accept")
+
+    class FakeCtx:
+        session = FakeSession()
+
+    rejection = await _gate_guardrail_warnings(
+        t.infra, FakeCtx(), ["\n\n⚠ SUPERSESSION WARNING: test"], False
+    )
+    assert rejection is None
+
+
+async def test_write_supersession_warning_not_blocked_when_warn_mode(
+    team, data_path, fake_write_record
+):
+    """Default policy value (warn) preserves today's behavior exactly."""
+    t = team
+    foundational = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "foundational",
+            "title": "Old guardrail",
+            "rationale": "x",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    import re
+
+    old_id = re.search(r"\(mx-[a-f0-9]+\)", foundational[0].text).group(0)[1:-1]
+
+    result = await _record_expertise(
+        {
+            "domain": "infra",
+            "type": "decision",
+            "classification": "tactical",
+            "title": "New approach",
+            "rationale": "y",
+            "supersedes": [old_id],
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Recorded" in result[0].text
+    assert "SUPERSESSION WARNING" in result[0].text

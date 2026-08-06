@@ -51,7 +51,7 @@ from ..domains import (
     list_domain_names,
     mulch_dir,
 )
-from ..models import RecordEdit, RecordEvent, RecordMeta, ToolCall
+from ..models import Project, RecordEdit, RecordEvent, RecordMeta, ToolCall
 from ..mulch import (
     OutcomeStatus,
     Record,
@@ -146,7 +146,13 @@ tier, prefer the newer record; if two live records genuinely contradict, flag it
 user and propose a superseding record rather than silently picking one. \
 If a write_* tool returns a SUPERSESSION WARNING, or edit_record returns a \
 CLASSIFICATION DOWNGRADE or ADMIN OVERRIDE warning, stop immediately and show the user \
-the full warning before doing anything else — do not proceed without explicit acknowledgement.
+the full warning before doing anything else — do not proceed without explicit acknowledgement. \
+Some projects enforce these instead of just warning: if the response starts with \
+"Not completed" and names one of these warnings, the call was rejected and nothing was \
+written. If it says "declined via elicitation", a human was already asked in real time \
+and already said no or dismissed the prompt — do not retry, report the outcome to the \
+user instead. Otherwise, get the user's explicit go-ahead, then retry the identical call \
+with confirm=true once they approve. Do not set confirm=true on your own judgment.
 
 If a tool call fails or the connection drops mid-session, don't stall retrying — continue \
 the work, keep a list of records you would have written, and show that list to the user \
@@ -269,6 +275,47 @@ def _admin_override_warning(ctx: AuthContext, record: Record) -> str:
         f"a writer without admin could not. For foundational or otherwise significant records, "
         f"prefer a superseding record instead so the change stays attributable. Stop and flag "
         f"this to the user before continuing."
+    )
+
+
+async def _gate_guardrail_warnings(
+    project: Project,
+    mcp_ctx: ServerRequestContext | None,
+    warnings: list[str],
+    confirmed: bool,
+) -> str | None:
+    """Returns None to proceed — in warn mode, or in enforce mode once approved
+    or confirmed — leaving the caller responsible for appending `warnings` to
+    its own success response exactly as it does today. Returns a rejection
+    message instead when enforce mode blocks the call; the caller must return
+    that message immediately without mutating anything.
+
+    Elicitation is preferred when the connected client declared the capability
+    (a real human decision mid-call) — confirm=true is the fallback for clients
+    that don't declare it."""
+    if not warnings:
+        return None
+    enforcement = await resolve_policy(project, "guardrail_enforcement")
+    if enforcement.value == "warn":
+        return None
+
+    combined = "".join(warnings)
+    client_capabilities = mcp_ctx.session.client_capabilities if mcp_ctx is not None else None
+    if client_capabilities is not None and client_capabilities.elicitation is not None:
+        assert mcp_ctx is not None
+        result = await mcp_ctx.session.elicit_form(
+            message=f"This action triggered a guardrail warning:{combined}\n\nProceed anyway?",
+            requested_schema={"type": "object", "properties": {}},
+        )
+        if result.action == "accept":
+            return None
+        return f"Not completed — declined via elicitation.{combined}"
+
+    if confirmed:
+        return None
+    return (
+        f"Not completed — this project enforces guardrail warnings.{combined}\n\n"
+        f"Pass confirm=true to proceed."
     )
 
 
@@ -621,6 +668,17 @@ async def _record_expertise(
                     ),
                 )
             ]
+    alerts = await supersede_alerts(m_dir, list(args.get("supersedes") or []), args["classification"])
+    supersession_alert_text = format_supersession_alerts(alerts, args["classification"])
+    rejection = await _gate_guardrail_warnings(
+        ctx.project,
+        mcp_ctx,
+        [supersession_alert_text] if supersession_alert_text else [],
+        bool(args.get("confirm")),
+    )
+    if rejection is not None:
+        return [TextContent(type="text", text=rejection)]
+
     await init_ml_project(m_dir)
     pre_existed = domain_file.exists()
     from ..mulch import MulchError, RecordNotWrittenError
@@ -704,10 +762,7 @@ async def _record_expertise(
     msg = f"Recorded {written['type']} in {domain} ({written['id']}) — {ctx.org.slug}/{ctx.project.slug}"
     if similar_domain:
         msg += f"\n\n⚠ '{domain}' is a new domain; did you mean the existing domain '{similar_domain}'?"
-    alerts = await supersede_alerts(
-        m_dir, list(args.get("supersedes") or []), args["classification"]
-    )
-    msg += format_supersession_alerts(alerts, args["classification"])
+    msg += supersession_alert_text
     _fire_notify(domain, ctx, "write", written)
     return [TextContent(type="text", text=msg)]
 
@@ -931,6 +986,27 @@ async def _edit_record(
             )
             alerts = await supersede_alerts(m_dir, added, effective_classification)
             supersession_alert_text = format_supersession_alerts(alerts, effective_classification)
+
+    classification_downgrade_text = ""
+    old_cls = before_snapshot.get("classification", "")
+    new_cls = updates.get("classification", "")
+    if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
+        classification_downgrade_text = (
+            f"\n\n⚠ CLASSIFICATION DOWNGRADE: changed {record_id} from {old_cls} to {new_cls}. "
+            f"Stop and flag this to the user before continuing."
+        )
+
+    admin_override_text = _admin_override_warning(ctx, record)
+
+    rejection = await _gate_guardrail_warnings(
+        ctx.project,
+        mcp_ctx,
+        [t for t in (supersession_alert_text, classification_downgrade_text, admin_override_text) if t],
+        bool(args.get("confirm")),
+    )
+    if rejection is not None:
+        return [TextContent(type="text", text=rejection)]
+
     await edit_record(m_dir, domain, record_id, updates)
     session_id = _get_or_create_session(ctx.user.id, ctx.project.id)
     try:
@@ -959,13 +1035,7 @@ async def _edit_record(
         await edit_record(m_dir, domain, record_id, before_snapshot)
         raise
     msg = f"Updated {record_id} in {domain} — {ctx.org.slug}/{ctx.project.slug}"
-    old_cls = before_snapshot.get("classification", "")
-    new_cls = updates.get("classification", "")
-    if old_cls and new_cls and Classification.of(old_cls) > Classification.of(new_cls):
-        msg += (
-            f"\n\n⚠ CLASSIFICATION DOWNGRADE: changed {record_id} from {old_cls} to {new_cls}. "
-            f"Stop and flag this to the user before continuing."
-        )
+    msg += classification_downgrade_text
     msg += supersession_alert_text
     existing_outcomes: list[dict[str, Any]] = record.get("outcomes") or []
     if updates.keys() & CONTENT_FIELD_KEYS and existing_outcomes:
@@ -973,7 +1043,7 @@ async def _edit_record(
             f"\n\n⚠ OUTCOME TRUST STALE: {len(existing_outcomes)} confirmed outcome(s) describe "
             f"the previous content — they no longer apply to what you just wrote."
         )
-    msg += _admin_override_warning(ctx, record)
+    msg += admin_override_text
     notif_record = {**record, **updates, "recorded_at": datetime.now(timezone.utc).isoformat()}
     _fire_notify(domain, ctx, "edit", notif_record)
     return [TextContent(type="text", text=msg)]
