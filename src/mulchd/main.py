@@ -112,6 +112,10 @@ def _oauth_invalid_token_response() -> Response:
 async def lifespan(_: FastAPI):
     import logging
 
+    from .policies import validate_env_policies
+
+    validate_env_policies()
+
     # Configure mcp/mulchd loggers here (after uvicorn's dictConfig has run)
     # so our handler and level are not overridden.
     level = settings.log_level.upper()
