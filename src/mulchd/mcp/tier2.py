@@ -534,7 +534,9 @@ def _validate_files_supported(rtype: str, args: dict[str, Any]) -> None:
         )
 
 
-async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
+async def _record_expertise(
+    args: dict[str, Any], ctx: AuthContext, mcp_ctx: ServerRequestContext | None = None
+) -> list[TextContent]:
     _require_writer(ctx, "write records")
     rtype = args["type"]
     required = list(RECORD_SCHEMAS[rtype]["required"])
@@ -884,7 +886,9 @@ async def _get_record_history(args: dict[str, Any], ctx: AuthContext) -> list[Te
     return [TextContent(type="text", text="\n".join(lines))]
 
 
-async def _edit_record(args: dict[str, Any], ctx: AuthContext) -> list[TextContent]:
+async def _edit_record(
+    args: dict[str, Any], ctx: AuthContext, mcp_ctx: ServerRequestContext | None = None
+) -> list[TextContent]:
     _require_writer(ctx, "edit records")
     record_id = args["record_id"]
     domain = args["domain"]
@@ -1127,23 +1131,27 @@ async def list_tools(
 
 
 async def _dispatch_call_tool(
-    name: str, args: dict[str, Any], auth: AuthContext, protocol_version: str
+    name: str,
+    args: dict[str, Any],
+    auth: AuthContext,
+    protocol_version: str,
+    mcp_ctx: ServerRequestContext | None,
 ) -> list[TextContent] | tuple[list[TextContent], dict[str, Any]]:
     match name:
         case "read_records":
             return await _read_expertise(args, auth)
         case "write_convention":
-            return await _record_expertise({**args, "type": "convention"}, auth)
+            return await _record_expertise({**args, "type": "convention"}, auth, mcp_ctx)
         case "write_decision":
-            return await _record_expertise({**args, "type": "decision"}, auth)
+            return await _record_expertise({**args, "type": "decision"}, auth, mcp_ctx)
         case "write_failure":
-            return await _record_expertise({**args, "type": "failure"}, auth)
+            return await _record_expertise({**args, "type": "failure"}, auth, mcp_ctx)
         case "write_pattern":
-            return await _record_expertise({**args, "type": "pattern"}, auth)
+            return await _record_expertise({**args, "type": "pattern"}, auth, mcp_ctx)
         case "write_reference":
-            return await _record_expertise({**args, "type": "reference"}, auth)
+            return await _record_expertise({**args, "type": "reference"}, auth, mcp_ctx)
         case "write_guide":
-            return await _record_expertise({**args, "type": "guide"}, auth)
+            return await _record_expertise({**args, "type": "guide"}, auth, mcp_ctx)
         case "search_records":
             return await _search_expertise(args, auth)
         case "list_domains":
@@ -1155,7 +1163,7 @@ async def _dispatch_call_tool(
         case "record_outcome":
             return await _record_outcome(args, auth)
         case "edit_record":
-            return await _edit_record(args, auth)
+            return await _edit_record(args, auth, mcp_ctx)
         case "delete_record":
             return await _delete_record(args, auth)
         case "move_record":
@@ -1182,7 +1190,7 @@ async def call_tool(
         _t = asyncio.create_task(_record_tool_call(params.name, auth, protocol_version))
         _background_tasks.add(_t)
         _t.add_done_callback(_background_tasks.discard)
-        result = await _dispatch_call_tool(params.name, args, auth, protocol_version)
+        result = await _dispatch_call_tool(params.name, args, auth, protocol_version, ctx)
     except Exception as e:
         return CallToolResult(
             content=[TextContent(type="text", text=str(e))],

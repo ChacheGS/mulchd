@@ -49,6 +49,18 @@ _RELATED_RECORD_PROPERTIES = {
     },
 }
 
+_CONFIRM_PROPERTY = {
+    "confirm": {
+        "type": "boolean",
+        "description": (
+            "Pass true to proceed despite a guardrail warning (SUPERSESSION, "
+            "CLASSIFICATION DOWNGRADE, ADMIN OVERRIDE) this call would otherwise "
+            "trigger, when this project enforces guardrails. Only meaningful on a "
+            "retry after a prior call was rejected for that reason."
+        ),
+    },
+}
+
 # `files` is only valid on pattern/reference records — ml's own per-type record
 # schema rejects it (empty or populated) on convention/decision/failure/guide.
 # Spread only into write_pattern/write_reference's inputSchema below, not into
@@ -112,6 +124,7 @@ _WRITE_TOOLS = [
                 "classification": _CLASSIFICATION_PROPERTY,
                 "content": {"type": "string", "description": "Body text of the convention."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "content"],
@@ -138,6 +151,7 @@ _WRITE_TOOLS = [
                     "description": "Date the decision was made (ISO 8601); defaults to recorded_at.",
                 },
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "title", "rationale"],
@@ -160,6 +174,7 @@ _WRITE_TOOLS = [
                 "description": {"type": "string", "description": "What broke."},
                 "resolution": {"type": "string", "description": "How it was fixed."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "description", "resolution"],
@@ -185,6 +200,7 @@ _WRITE_TOOLS = [
                     "description": "What the pattern is and how to use it.",
                 },
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
                 **_FILES_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
@@ -211,6 +227,7 @@ _WRITE_TOOLS = [
                     "description": "What it points to and why it matters.",
                 },
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
                 **_FILES_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
@@ -234,6 +251,7 @@ _WRITE_TOOLS = [
                 "name": {"type": "string", "description": "Short name for the guide."},
                 "description": {"type": "string", "description": "The guide's steps or content."},
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
                 **_EVIDENCE_PROPERTIES,
             },
             "required": ["domain", "classification", "name", "description"],
@@ -490,6 +508,7 @@ TIER2_TOOLS = [
                 "name": {"type": "string", "description": "pattern/reference/guide: name field"},
                 **_FILES_PROPERTY,
                 **_RELATED_RECORD_PROPERTIES,
+                **_CONFIRM_PROPERTY,
             },
             "required": ["record_id", "domain"],
         },

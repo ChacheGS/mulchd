@@ -177,3 +177,30 @@ async def test_call_tool_records_unknown_protocol_version_without_sdk_context(te
     call = await ToolCall.filter(project=t.infra, tool="list_domains").order_by("-id").first()
     assert call is not None
     assert call.protocol_version == "unknown"
+
+
+async def test_dispatch_call_tool_passes_mcp_ctx_through(team, data_path, fake_write_record, monkeypatch):
+    """_dispatch_call_tool must hand the real ServerRequestContext to
+    _record_expertise/_edit_record, not just AuthContext — a later feature
+    needs it to check the client's elicitation capability."""
+    import mulchd.mcp.tier2 as mcp_tier2
+    from mulchd.mcp.tier2 import _dispatch_call_tool
+
+    t = team
+    seen = {}
+
+    async def _fake_record_expertise(args, auth, mcp_ctx):
+        seen["mcp_ctx"] = mcp_ctx
+        return [], {}
+
+    monkeypatch.setattr(mcp_tier2, "_record_expertise", _fake_record_expertise)
+
+    sentinel = object()
+    await _dispatch_call_tool(
+        "write_convention",
+        {"domain": "infra", "classification": "tactical", "content": "x"},
+        ctx(t.carlos, t.org, t.infra),
+        "2025-11-25",
+        sentinel,
+    )
+    assert seen["mcp_ctx"] is sentinel
