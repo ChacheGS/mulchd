@@ -64,6 +64,7 @@ from ..mulch import (
     search_domains,
     write_record,
 )
+from ..policies import resolve_policy
 from ..records import find_record, read_domain_records
 from .context import auth_ctx, session_id_ctx
 from .formatting import (
@@ -315,7 +316,8 @@ async def _read_expertise(
 ) -> tuple[list[TextContent], dict[str, Any]]:
     since = _parse_since(args["since"]) if args.get("since") else None
     domains = args.get("domains") or list_domain_names(ctx.org.slug, ctx.project.slug)
-    limit = int(args.get("limit", 50))
+    default_limit = (await resolve_policy(ctx.project, "default_page_size")).value
+    limit = int(args.get("limit", default_limit))
     cursor = args.get("cursor")
     available = set(list_domain_names(ctx.org.slug, ctx.project.slug))
     unknown = [d for d in domains if d not in available]
@@ -1219,13 +1221,6 @@ def _parse_domain_uri(uri: str, auth: AuthContext) -> str | None:
     return None
 
 
-# resources/read has no request parameters — a client can't pass a limit or
-# cursor the way read_records callers do — so this is a hard cap on a single
-# response, not a default page size. Anything beyond it is only reachable via
-# read_records' real pagination.
-_RESOURCE_READ_LIMIT = 50
-
-
 async def read_resource(
     ctx: ServerRequestContext, params: ReadResourceRequestParams
 ) -> ReadResourceResult:
@@ -1237,6 +1232,11 @@ async def read_resource(
     if name is not None:
         if name not in list_domain_names(auth.org.slug, auth.project.slug):
             raise MCPError(INVALID_PARAMS, f"Unknown domain: {name}")
+        # resources/read has no request parameters — a client can't pass a
+        # limit or cursor the way read_records callers do — so this is a hard
+        # cap on a single response, not a default page size. Anything beyond
+        # it is only reachable via read_records' real pagination.
+        page_size = (await resolve_policy(auth.project, "default_page_size")).value
         protocol_version = ctx.protocol_version if ctx is not None else "unknown"
         _t = asyncio.create_task(_record_tool_call("resources/read", auth, protocol_version))
         _background_tasks.add(_t)
@@ -1245,8 +1245,8 @@ async def read_resource(
         for r in records:
             r["_domain"] = name
         records.sort(key=lambda r: (r.get("recorded_at", ""), r.get("id", "")))
-        truncated = len(records) > _RESOURCE_READ_LIMIT
-        page = records[:_RESOURCE_READ_LIMIT]
+        truncated = len(records) > page_size
+        page = records[:page_size]
         await mark_superseded(page, auth.org.slug, auth.project.slug)
         await mark_related_to(page, auth.org.slug, auth.project.slug)
         await annotate_edits(page, auth.project.id)

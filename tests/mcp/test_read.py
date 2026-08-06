@@ -558,3 +558,20 @@ async def test_read_records_file_and_outcome_status_filters_skip_records_without
         {"domains": ["infra"], "outcome_status": "success"}, ctx(t.carlos, t.org, t.infra)
     )
     assert by_outcome["records"] == []
+
+
+async def test_read_records_default_limit_comes_from_policy(team, data_path, monkeypatch):
+    from mulchd.mcp.tier2 import _read_expertise
+    from tests.mcp.conftest import ctx
+
+    t = team
+    monkeypatch.setenv("MULCHD_POLICY_DEFAULT_PAGE_SIZE", "2")
+    for i in range(3):
+        _jot(
+            data_path, "acme", "infra", "infra",
+            type="convention", classification="tactical", content=f"r{i}", owner="carlos",
+        )
+
+    _, structured = await _read_expertise({"domains": ["infra"]}, ctx(t.carlos, t.org, t.infra))
+    assert len(structured["records"]) == 2
+    assert structured["truncated"] is True

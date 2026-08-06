@@ -89,7 +89,10 @@ async def test_read_resource_caps_response_size(team, data_path):
     an entire, potentially huge domain in one shot."""
     from mcp.types import ReadResourceRequestParams
 
-    from mulchd.mcp.tier2 import _RESOURCE_READ_LIMIT, read_resource
+    from mulchd.mcp.tier2 import read_resource
+    from mulchd.policies import POLICIES
+
+    _RESOURCE_READ_LIMIT = POLICIES["default_page_size"].default
 
     t = team
     for i in range(_RESOURCE_READ_LIMIT + 5):
@@ -153,3 +156,28 @@ async def test_read_resource_records_usage(team, data_path):
     call = await ToolCall.filter(project=t.infra, tool="resources/read").order_by("-id").first()
     assert call is not None
     assert call.author_id == t.carlos.id
+
+
+async def test_read_resource_cap_comes_from_policy(team, data_path, monkeypatch):
+    from mcp.types import ReadResourceRequestParams
+
+    from mulchd.mcp.tier2 import read_resource
+
+    t = team
+    monkeypatch.setenv("MULCHD_POLICY_DEFAULT_PAGE_SIZE", "2")
+    for i in range(3):
+        _jot(
+            data_path, "acme", "infra", "infra",
+            type="convention", classification="tactical", content=f"r{i}", owner="carlos",
+        )
+
+    token = auth_ctx.set(ctx(t.carlos, t.org, t.infra))
+    try:
+        result = await read_resource(
+            None, ReadResourceRequestParams(uri="mulchd://acme/infra/domain/infra")
+        )
+    finally:
+        auth_ctx.reset(token)
+
+    text = result.contents[0].text
+    assert "Showing 2 of 3 records" in text
