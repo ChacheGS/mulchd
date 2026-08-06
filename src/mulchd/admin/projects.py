@@ -84,6 +84,10 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
     policies = [
         (key, definition, await resolve_policy(project, key)) for key, definition in POLICIES.items()
     ]
+    policy_overrides = {
+        row.key: row
+        for row in await ProjectPolicy.filter(project=project).select_related("updated_by")
+    }
     response = templates.TemplateResponse(
         request,
         "project_detail.html",
@@ -98,6 +102,7 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
             "uses_by_invite": uses_by_invite,
             "roles": list(Role),
             "policies": policies,
+            "policy_overrides": policy_overrides,
         },
     )
     set_last_project_cookie(response, org_slug, project_slug)

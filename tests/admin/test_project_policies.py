@@ -77,6 +77,19 @@ async def test_set_policy_redirect_shows_fresh_value(admin_client):
     assert 'value="25"' in resp.text
 
 
+async def test_overview_shows_who_changed_an_override_and_when(admin_client):
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+
+    resp = await admin_client.post(
+        f"/admin/p/{org.slug}/{project.slug}/policies/default_page_size",
+        data={"value": "25"},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert "changed by admin on" in resp.text
+
+
 async def test_set_policy_rejects_invalid_value(admin_client):
     from mulchd.models import ProjectPolicy
 

@@ -41,6 +41,10 @@
     <span class="text-muted" style="font-size:11px;">
       {% if resolved.source == 'locked' %}locked by {{ definition.env_var }}
       {% elif resolved.source == 'override' %}overridden
+        {% set override_row = policy_overrides[key] %}
+        {% if override_row %}
+        <span style="color:#94a3b8;">— changed by {{ override_row.updated_by.username if override_row.updated_by else "unknown" }} on {{ override_row.updated_at.strftime('%Y-%m-%d') }}</span>
+        {% endif %}
       {% elif resolved.source == 'env-default' %}env default
       {% else %}code default{% endif %}
     </span>
