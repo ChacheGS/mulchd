@@ -56,6 +56,10 @@ class RecordMeta(models.Model):
 class RecordEvent(models.Model):
     """Out-of-band audit log for every mutating action on a record."""
 
+    # Note: aerich (0.9.2) does not diff on_delete changes — `aerich migrate`
+    # reports "No changes detected" even when this differs from what's in the
+    # DB. Any future on_delete change here needs a hand-written migration
+    # (ALTER TABLE ... DROP/ADD CONSTRAINT), not an auto-generated one.
     id = fields.IntField(primary_key=True)
     record_id = fields.CharField(max_length=32)  # mx-xxxxxx; not FK, survives deletes
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
@@ -64,7 +68,7 @@ class RecordEvent(models.Model):
     domain = fields.CharField(max_length=64)  # for "move", the target domain
     source_domain = fields.CharField(max_length=64, null=True, default=None)  # "move" only
     actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User", related_name="record_events"
+        "models.User", related_name="record_events", on_delete=fields.RESTRICT
     )
     action = fields.CharField(max_length=16)  # "write" | "edit" | "delete" | "move"
     client = fields.CharField(max_length=64, default="unknown")
@@ -78,6 +82,10 @@ class RecordEvent(models.Model):
 class RecordEdit(models.Model):
     """Before-snapshot for every edit_record call."""
 
+    # Note: aerich (0.9.2) does not diff on_delete changes — `aerich migrate`
+    # reports "No changes detected" even when this differs from what's in the
+    # DB. Any future on_delete change here needs a hand-written migration
+    # (ALTER TABLE ... DROP/ADD CONSTRAINT), not an auto-generated one.
     id = fields.IntField(primary_key=True)
     record_id = fields.CharField(max_length=32)
     project: fields.ForeignKeyRelation[Project] = fields.ForeignKeyField(
@@ -85,7 +93,7 @@ class RecordEdit(models.Model):
     )
     domain = fields.CharField(max_length=64)
     actor: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User", related_name="record_edits"
+        "models.User", related_name="record_edits", on_delete=fields.RESTRICT
     )
     # {field: old_value} for fields that changed.
     # Tortoise JSONField stub doesn't parametrize its value type.
