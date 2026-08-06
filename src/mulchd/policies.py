@@ -14,7 +14,10 @@ the MCP tool-dispatch layer and the admin UI.
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Callable, Literal, cast
 
 from dotenv import dotenv_values
@@ -34,6 +37,20 @@ assert isinstance(_DOTENV_PATH, (str, os.PathLike)), (
 )
 
 
+@lru_cache(maxsize=8)
+def _cached_dotenv_values(resolved_path: str) -> dict[str, str | None]:
+    """The .env file can only change on process restart — there's no
+    live-reload anywhere in this app — so parse it once per real file, for
+    the process's lifetime, instead of re-parsing on every call.
+
+    Keyed by resolved absolute path (not a bare "compute once, ever" cache,
+    and not keyed by the literal ".env" string) so that tests which
+    monkeypatch.chdir into a fresh tmp_path and write their own .env each get
+    an independent cache entry instead of reusing another test's content.
+    """
+    return dotenv_values(resolved_path)
+
+
 def _get_env(name: str) -> str | None:
     """Real process env wins over .env, matching pydantic-settings' own
     documented precedence — .env is a fallback for values that were never
@@ -41,7 +58,8 @@ def _get_env(name: str) -> str | None:
     value = os.environ.get(name)
     if value is not None:
         return value
-    return dotenv_values(_DOTENV_PATH).get(name)
+    resolved_path = str(Path(_DOTENV_PATH).resolve())
+    return _cached_dotenv_values(resolved_path).get(name)
 
 
 def _parse_enforcement(raw: str) -> str:
@@ -121,6 +139,56 @@ class ResolvedPolicy:
     source: Literal["locked", "override", "env-default", "code-default"]
 
 
+# Unlike the .env cache above, a DB override can genuinely change at runtime
+# (an admin edits it via the admin UI in a later task), so this is a short
+# TTL cache rather than a permanent one — a few seconds of staleness is an
+# acceptable tradeoff for a policy value, not a security-critical setting.
+_OVERRIDE_CACHE_TTL_SECONDS = 5.0
+_override_cache: dict[tuple[int, str], tuple[Any, float]] = {}
+
+
+def _clear_policy_cache() -> None:  # pyright: ignore[reportUnusedFunction]
+    """Test-only escape hatch — clears the DB-override TTL cache so tests
+    don't see a stale cached value (or a stale cache miss) left over from an
+    earlier test reusing the same (project.id, key) pair. Production code
+    never needs to call this; the TTL alone is sufficient there. (Called from
+    tests/test_policies.py, which pyright doesn't cross-reference here.)"""
+    _override_cache.clear()
+
+
+class _NoOverride:
+    """Sentinel distinguishing "no DB override row exists" from an override
+    whose unwrapped value happens to be None — a cached miss is still a
+    valid, cacheable fact, not the absence of a cache entry."""
+
+
+_NO_OVERRIDE = _NoOverride()
+
+
+async def _get_cached_override(project: Project, key: str) -> Any:
+    """TTL-cached lookup of a ProjectPolicy override's unwrapped value.
+    Returns _NO_OVERRIDE if no override row exists (also cached, so repeated
+    no-override calls skip the DB too)."""
+    cache_key = (project.id, key)
+    cached = _override_cache.get(cache_key)
+    if cached is not None:
+        value, cached_at = cached
+        if time.monotonic() - cached_at < _OVERRIDE_CACHE_TTL_SECONDS:
+            return value
+
+    row = await ProjectPolicy.get_or_none(project=project, key=key)
+    if row is not None:
+        # ProjectPolicy.value is an untyped JSONField (see its model docstring);
+        # unwrap the single-element-list storage convention back to a plain value.
+        row_value = cast(list[Any], row.value)  # pyright: ignore[reportUnknownMemberType]
+        value = row_value[0]
+    else:
+        value = _NO_OVERRIDE
+
+    _override_cache[cache_key] = (value, time.monotonic())
+    return value
+
+
 async def resolve_policy(project: Project, key: str) -> ResolvedPolicy:
     """Locked env var -> DB override -> seed env var -> code default.
 
@@ -138,12 +206,9 @@ async def resolve_policy(project: Project, key: str) -> ResolvedPolicy:
     if raw is not None and raw.startswith("ro:"):
         return ResolvedPolicy(value=definition.parse(raw.removeprefix("ro:")), source="locked")
 
-    row = await ProjectPolicy.get_or_none(project=project, key=key)
-    if row is not None:
-        # ProjectPolicy.value is an untyped JSONField (see its model docstring);
-        # unwrap the single-element-list storage convention back to a plain value.
-        row_value = cast(list[Any], row.value)  # pyright: ignore[reportUnknownMemberType]
-        return ResolvedPolicy(value=row_value[0], source="override")
+    override_value = await _get_cached_override(project, key)
+    if override_value is not _NO_OVERRIDE:
+        return ResolvedPolicy(value=override_value, source="override")
 
     if raw is not None:
         return ResolvedPolicy(value=definition.parse(raw), source="env-default")

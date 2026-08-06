@@ -8,9 +8,21 @@ from mulchd.models import Organization, Project
 from mulchd.policies import (
     POLICIES,
     ResolvedPolicy,
+    _clear_policy_cache,
     resolve_policy,
     validate_env_policies,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_policy_cache():
+    """The DB-override TTL cache is process-lifetime state keyed by
+    (project.id, key) — without this, a stale cached miss (or a stale
+    cached value) from an earlier test could leak into a later test that
+    happens to reuse the same auto-incrementing project id."""
+    _clear_policy_cache()
+    yield
+    _clear_policy_cache()
 
 
 @pytest.fixture
@@ -147,3 +159,51 @@ async def test_resolve_policy_real_env_var_wins_over_dotenv(project, monkeypatch
 
     resolved = await resolve_policy(project, "strict_domains")
     assert resolved == ResolvedPolicy(value=False, source="env-default")
+
+
+async def test_resolve_policy_db_override_lookup_is_ttl_cached(project, monkeypatch):
+    """Repeated resolve_policy calls for the same (project, key) within the
+    TTL window must hit the DB at most once — this is the whole point of the
+    override cache."""
+    from mulchd.models import ProjectPolicy
+
+    monkeypatch.delenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", raising=False)
+
+    calls = 0
+    original_get_or_none = ProjectPolicy.get_or_none
+
+    async def counting_get_or_none(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return await original_get_or_none(*args, **kwargs)
+
+    monkeypatch.setattr(ProjectPolicy, "get_or_none", counting_get_or_none)
+
+    first = await resolve_policy(project, "guardrail_enforcement")
+    second = await resolve_policy(project, "guardrail_enforcement")
+
+    assert first == second == ResolvedPolicy(value="warn", source="code-default")
+    assert calls == 1
+
+
+async def test_resolve_policy_db_override_cache_miss_does_not_hide_new_override(
+    project, monkeypatch
+):
+    """A cached "no override" result must not survive a manual cache clear —
+    once cleared, a real override row is picked up. This exercises the
+    _clear_policy_cache escape hatch the autouse fixture relies on."""
+    from mulchd.models import ProjectPolicy
+
+    monkeypatch.delenv("MULCHD_POLICY_GUARDRAIL_ENFORCEMENT", raising=False)
+
+    no_override = await resolve_policy(project, "guardrail_enforcement")
+    assert no_override.source == "code-default"
+
+    await ProjectPolicy.create(project=project, key="guardrail_enforcement", value=["enforce"])
+
+    still_cached = await resolve_policy(project, "guardrail_enforcement")
+    assert still_cached.source == "code-default"  # cached miss, not yet expired
+
+    _clear_policy_cache()
+    resolved = await resolve_policy(project, "guardrail_enforcement")
+    assert resolved == ResolvedPolicy(value="enforce", source="override")
