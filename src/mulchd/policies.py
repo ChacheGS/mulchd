@@ -106,6 +106,15 @@ class PolicyDef:
     env_var: str
     parse: Callable[[str], Any]
     validate: Callable[[Any], Any]
+    # Explicit, declared value shape — NOT inferred from type(default) by any
+    # caller. In Python, bool is a subtype of int (isinstance(True, int) is
+    # True), so any code that tried to infer "is this a bool policy or an int
+    # policy" from the runtime type of `default` would need to check bool
+    # before int, and that ordering requirement would be invisible and easy
+    # to silently break (e.g. by reordering template conditionals). Callers
+    # that need to pick a control/type by kind (e.g. the admin UI template)
+    # must branch on this field, not on `default`'s runtime type.
+    kind: Literal["bool", "int", "str"]
 
 
 POLICIES: dict[str, PolicyDef] = {
@@ -115,6 +124,7 @@ POLICIES: dict[str, PolicyDef] = {
         env_var="MULCHD_POLICY_GUARDRAIL_ENFORCEMENT",
         parse=_parse_enforcement,
         validate=_validate_enforcement,
+        kind="str",
     ),
     "default_page_size": PolicyDef(
         key="default_page_size",
@@ -122,6 +132,7 @@ POLICIES: dict[str, PolicyDef] = {
         env_var="MULCHD_POLICY_DEFAULT_PAGE_SIZE",
         parse=_parse_positive_int,
         validate=_validate_positive_int,
+        kind="int",
     ),
     "strict_domains": PolicyDef(
         key="strict_domains",
@@ -129,6 +140,7 @@ POLICIES: dict[str, PolicyDef] = {
         env_var="MULCHD_POLICY_STRICT_DOMAINS",
         parse=_parse_bool,
         validate=_validate_bool,
+        kind="bool",
     ),
 }
 
@@ -150,10 +162,24 @@ _override_cache: dict[tuple[int, str], tuple[Any, float]] = {}
 def _clear_policy_cache() -> None:  # pyright: ignore[reportUnusedFunction]
     """Test-only escape hatch — clears the DB-override TTL cache so tests
     don't see a stale cached value (or a stale cache miss) left over from an
-    earlier test reusing the same (project.id, key) pair. Production code
-    never needs to call this; the TTL alone is sufficient there. (Called from
+    earlier test reusing the same (project.id, key) pair. (Called from
     tests/test_policies.py, which pyright doesn't cross-reference here.)"""
     _override_cache.clear()
+
+
+def invalidate_policy_override(project: Project, key: str) -> None:
+    """Drop the cached override for one (project, key) pair immediately.
+
+    The admin UI's write path (see admin/projects.py's set_project_policy)
+    must call this right after writing a ProjectPolicy row — otherwise the
+    TTL cache can still be holding a pre-write miss cached from the same
+    request's earlier resolve_policy lock-check call, and the PRG redirect
+    right after the write would render the stale (pre-write) value for up to
+    _OVERRIDE_CACHE_TTL_SECONDS. The TTL alone is only sufficient for
+    incidental cross-admin staleness, not for a write immediately followed by
+    a read of the thing just written.
+    """
+    _override_cache.pop((project.id, key), None)
 
 
 class _NoOverride:

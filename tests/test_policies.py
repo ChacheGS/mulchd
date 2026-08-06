@@ -101,6 +101,22 @@ def test_every_policy_default_round_trips_its_own_validator():
         assert definition.validate(definition.default) == definition.default
 
 
+def test_every_policy_kind_matches_its_default_type():
+    """PolicyDef.kind is declared explicitly rather than inferred from
+    type(default) (bool is a subtype of int in Python, so any inference
+    would need bool-before-int ordering that's easy to silently break —
+    see the admin UI template, which branches on kind instead of on
+    default's runtime type). This just guards against kind and default
+    drifting apart as policies are added or edited."""
+    kind_to_type = {"bool": bool, "int": int, "str": str}
+    for definition in POLICIES.values():
+        expected_type = kind_to_type[definition.kind]
+        assert type(definition.default) is expected_type, (
+            f"{definition.key}: kind={definition.kind!r} but "
+            f"default={definition.default!r} has type {type(definition.default)}"
+        )
+
+
 @pytest.mark.parametrize(
     ("key", "raw", "expected"),
     [

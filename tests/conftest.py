@@ -36,11 +36,19 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(autouse=True)
 async def db():
+    from mulchd.policies import _clear_policy_cache
+
     await Tortoise.init(
         db_url="sqlite://:memory:",
         modules={"models": ["mulchd.models", "aerich.models"]},
     )
     await Tortoise.generate_schemas()
+    # Each test gets a fresh in-memory DB with autoincrement IDs starting back
+    # at 1, but policies.py's DB-override TTL cache is a module-global dict
+    # keyed by (project.id, key) that outlives any single test. Without this,
+    # a test that writes a ProjectPolicy override can poison the cache entry
+    # for a later, unrelated test whose project happens to reuse the same id.
+    _clear_policy_cache()
     yield
     await Tortoise.close_connections()
 

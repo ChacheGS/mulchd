@@ -18,6 +18,39 @@
   </div>
 </div>
 
+<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:10px;">Policies</div>
+<div class="card" style="margin-bottom:24px; padding:12px 16px 16px;">
+  {% for key, definition, resolved in policies %}
+  <form method="post" action="/admin/p/{{ project.org.slug }}/{{ project.slug }}/policies/{{ key }}"
+        style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #f1f5f9;">
+    <span style="width:180px; font-size:13px;">{{ key }}</span>
+    {% if definition.kind == 'bool' %}
+    <select name="value" {% if resolved.source == 'locked' %}disabled{% endif %} style="font-size:12px;">
+      <option value="true" {% if resolved.value %}selected{% endif %}>true</option>
+      <option value="false" {% if not resolved.value %}selected{% endif %}>false</option>
+    </select>
+    {% elif definition.kind == 'int' %}
+    <input type="number" name="value" value="{{ resolved.value }}" min="1"
+           {% if resolved.source == 'locked' %}disabled{% endif %} style="width:80px; font-size:12px;">
+    {% else %}
+    <select name="value" {% if resolved.source == 'locked' %}disabled{% endif %} style="font-size:12px;">
+      <option value="warn" {% if resolved.value == 'warn' %}selected{% endif %}>warn</option>
+      <option value="enforce" {% if resolved.value == 'enforce' %}selected{% endif %}>enforce</option>
+    </select>
+    {% endif %}
+    <span class="text-muted" style="font-size:11px;">
+      {% if resolved.source == 'locked' %}locked by {{ definition.env_var }}
+      {% elif resolved.source == 'override' %}overridden
+      {% elif resolved.source == 'env-default' %}env default
+      {% else %}code default{% endif %}
+    </span>
+    {% if not (resolved.source == 'locked') %}
+    <button type="submit" style="font-size:11px; padding:2px 10px;">Save</button>
+    {% endif %}
+  </form>
+  {% endfor %}
+</div>
+
 <div style="display:flex; gap:16px; margin-bottom:24px; font-size:13px;">
   <a href="/admin/memberships?project={{ project.org.slug }}/{{ project.slug }}" class="btn-link">View memberships for this project →</a>
   <a href="/admin/project-tokens?project={{ project.org.slug }}/{{ project.slug }}" class="btn-link">View tokens for this project →</a>
