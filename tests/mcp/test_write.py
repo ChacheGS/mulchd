@@ -811,3 +811,75 @@ async def test_write_rolls_back_jsonl_when_db_metadata_fails(
         not (expertise / "infra.jsonl").exists()
         or "should not persist" not in (expertise / "infra.jsonl").read_text()
     )
+
+
+async def test_write_rejects_unknown_domain_when_strict(
+    team, data_path, fake_write_record, monkeypatch
+):
+    monkeypatch.setenv("MULCHD_POLICY_STRICT_DOMAINS", "true")
+    t = team
+
+    with pytest.raises(ValueError, match="does not exist"):
+        await _record_expertise(
+            {
+                "domain": "never-created",
+                "type": "convention",
+                "classification": "tactical",
+                "content": "x",
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_write_strict_names_the_closest_existing_domain(
+    team, data_path, fake_write_record, monkeypatch
+):
+    t = team
+    # Create the baseline domain before strict mode is enabled — strict_domains
+    # blocks writes to any not-yet-existing domain, so it must not be on yet
+    # for this seeding write, or it would be rejected before we ever reach the
+    # typo-detection path this test is actually exercising.
+    await _record_expertise(
+        {
+            "domain": "architecture",
+            "type": "convention",
+            "classification": "tactical",
+            "content": "x",
+        },
+        ctx(t.carlos, t.org, t.infra),
+    )
+
+    monkeypatch.setenv("MULCHD_POLICY_STRICT_DOMAINS", "true")
+    with pytest.raises(ValueError, match="did you mean the existing domain 'architecture'"):
+        await _record_expertise(
+            {
+                "domain": "architecutre",
+                "type": "convention",
+                "classification": "tactical",
+                "content": "y",
+            },
+            ctx(t.carlos, t.org, t.infra),
+        )
+
+
+async def test_write_still_auto_creates_when_not_strict(team, data_path, fake_write_record):
+    """Unaffected by this change when the policy is left at its default."""
+    t = team
+    result = await _record_expertise(
+        {"domain": "brand-new", "type": "convention", "classification": "tactical", "content": "x"},
+        ctx(t.carlos, t.org, t.infra),
+    )
+    assert "Recorded" in result[0].text
+
+
+def test_write_tools_schemas_mention_strict_domains_caveat():
+    for name in (
+        "write_convention",
+        "write_decision",
+        "write_failure",
+        "write_pattern",
+        "write_reference",
+        "write_guide",
+    ):
+        tool = _tool_by_name(name)
+        assert "strict domain creation" in (tool.description or "").lower()

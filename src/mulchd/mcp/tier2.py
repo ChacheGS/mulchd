@@ -547,6 +547,21 @@ async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[Text
     similar_domain = (
         _find_similar_domain(domain, existing_domains) if domain not in existing_domains else None
     )
+    if domain not in existing_domains:
+        strict_domains = (await resolve_policy(ctx.project, "strict_domains")).value
+        if strict_domains:
+            if similar_domain:
+                raise ValueError(
+                    f"domain '{domain}' does not exist — did you mean the existing domain "
+                    f"'{similar_domain}'? This project restricts domain creation "
+                    f"(strict_domains policy): ask a project admin to create it, or write "
+                    f"to an existing domain instead."
+                )
+            raise ValueError(
+                f"domain '{domain}' does not exist — this project restricts domain "
+                f"creation (strict_domains policy): ask a project admin to create it, or "
+                f"write to an existing domain instead."
+            )
     record: Record = {
         "type": rtype,
         "classification": args["classification"],
@@ -1038,8 +1053,9 @@ async def _move_record(args: dict[str, Any], ctx: AuthContext) -> list[TextConte
         raise ValueError("source and target domain are the same — nothing to move")
     if target_domain not in list_domain_names(ctx.org.slug, ctx.project.slug):
         raise ValueError(
-            f"target domain '{target_domain}' does not exist — write_* tools auto-create "
-            f"domains, but move_record requires the target to already exist"
+            f"target domain '{target_domain}' does not exist — write_* tools may auto-create "
+            f"domains (unless this project enforces strict domain creation), but move_record "
+            f"requires the target to already exist"
         )
     record = await _get_owned_record(ctx, source_domain, record_id, "move")
     m_dir = mulch_dir(ctx.org.slug, ctx.project.slug)

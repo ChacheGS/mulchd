@@ -101,7 +101,9 @@ _WRITE_TOOLS = [
         name="write_convention",
         description=(
             "Record a convention that's been established or corrected — without being asked. "
-            "Writing to a domain that does not exist will create it automatically."
+            "Writing to a domain that does not exist will create it automatically, unless "
+            "this project enforces strict domain creation (in which case the write is "
+            "rejected instead)."
         ),
         input_schema={
             "type": "object",
@@ -120,7 +122,9 @@ _WRITE_TOOLS = [
         name="write_decision",
         description=(
             "Record a decision that's been made or confirmed — without being asked. "
-            "Writing to a domain that does not exist will create it automatically."
+            "Writing to a domain that does not exist will create it automatically, unless "
+            "this project enforces strict domain creation (in which case the write is "
+            "rejected instead)."
         ),
         input_schema={
             "type": "object",
@@ -144,7 +148,9 @@ _WRITE_TOOLS = [
         name="write_failure",
         description=(
             "Record something that broke and how it got fixed — without being asked. "
-            "Writing to a domain that does not exist will create it automatically."
+            "Writing to a domain that does not exist will create it automatically, unless "
+            "this project enforces strict domain creation (in which case the write is "
+            "rejected instead)."
         ),
         input_schema={
             "type": "object",
@@ -164,7 +170,9 @@ _WRITE_TOOLS = [
         name="write_pattern",
         description=(
             "Record a reusable solution or code shape that emerged — without being asked. "
-            "Writing to a domain that does not exist will create it automatically."
+            "Writing to a domain that does not exist will create it automatically, unless "
+            "this project enforces strict domain creation (in which case the write is "
+            "rejected instead)."
         ),
         input_schema={
             "type": "object",
@@ -188,7 +196,9 @@ _WRITE_TOOLS = [
         name="write_reference",
         description=(
             "Record a reference — a pointer to external info worth remembering — without "
-            "being asked. Writing to a domain that does not exist will create it automatically."
+            "being asked. Writing to a domain that does not exist will create it "
+            "automatically, unless this project enforces strict domain creation (in which "
+            "case the write is rejected instead)."
         ),
         input_schema={
             "type": "object",
@@ -212,7 +222,9 @@ _WRITE_TOOLS = [
         name="write_guide",
         description=(
             "Record a how-to guide — without being asked. "
-            "Writing to a domain that does not exist will create it automatically."
+            "Writing to a domain that does not exist will create it automatically, unless "
+            "this project enforces strict domain creation (in which case the write is "
+            "rejected instead)."
         ),
         input_schema={
             "type": "object",
@@ -507,8 +519,9 @@ TIER2_TOOLS = [
             "when a record landed in the wrong domain. "
             "Writers may only move their own records; admins may move any record. "
             "The target domain must already exist; this does not auto-create it "
-            "like the write_* tools do. If this was the last record in the source "
-            "domain, the domain is removed automatically."
+            "(write_* tools may, depending on the project's domain-creation policy). "
+            "If this was the last record in the source domain, the domain is removed "
+            "automatically."
         ),
         input_schema={
             "type": "object",
