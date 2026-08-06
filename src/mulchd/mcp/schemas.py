@@ -312,9 +312,13 @@ TIER2_TOOLS = [
         name="search_records",
         description=(
             "Search records by query, optionally filtered by domain or owner. "
-            "Results are relevance-ranked within each matching domain, capped "
-            "to `limit` per domain — there is no single relevance ranking "
-            "across multiple domains, so this is not a global top-N."
+            "`limit` is a global total across all matching domains, distributed "
+            "round-robin — one result per domain per round, in the order domains "
+            "matched, cycling until `limit` is reached or every domain is "
+            "exhausted. Results stay relevance-ranked within each domain, but "
+            "there is no single relevance ranking across domains (BM25 scores "
+            "aren't comparable across domains), so this is round-robin fairness, "
+            "not a global top-N by score."
         ),
         input_schema={
             "type": "object",
@@ -332,7 +336,9 @@ TIER2_TOOLS = [
                 "limit": {
                     "type": "integer",
                     "description": (
-                        "Max results per matching domain (not a global total). " "Defaults to 20."
+                        "Max total results across all matching domains (a global "
+                        "total, distributed round-robin across domains). Defaults "
+                        "to the project's configured default page size."
                     ),
                 },
             },

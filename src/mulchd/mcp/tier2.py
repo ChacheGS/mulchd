@@ -695,25 +695,40 @@ async def _record_expertise(args: dict[str, Any], ctx: AuthContext) -> list[Text
     return [TextContent(type="text", text=msg)]
 
 
-def _cap_per_domain(records: list[Record], limit: int) -> tuple[list[Record], bool]:
-    """Cap each domain's matches to `limit`, preserving mulch's own
-    BM25(+confirmation-boost) rank order within each domain — mulch discards
-    the numeric relevance score before returning JSON, but not the order, so
-    keeping the first `limit` per domain is a real relevance cutoff. There is
-    no merged cross-domain score to rank by, so this caps each matching
-    domain independently rather than picking one global top-N."""
-    counts: dict[str, int] = {}
-    kept: list[Record] = []
-    truncated = False
+def _round_robin_cap(records: list[Record], limit: int) -> tuple[list[Record], bool]:
+    """Take one result from each domain with remaining matches, cycling
+    through domains in the order they first appear, until `limit` total
+    results are collected or every domain is exhausted. Preserves each
+    domain's own BM25(+confirmation-boost) rank order — mulch discards the
+    numeric relevance score before returning JSON, but not the order — while
+    making `limit` a genuine global total: cross-domain BM25 scores aren't
+    comparable, so this allocates slots fairly without ranking across
+    domains, rather than picking one global top-N by score."""
+    by_domain: dict[str, list[Record]] = {}
+    order: list[str] = []
     for r in records:
         domain = r.get("_domain", "")
-        n = counts.get(domain, 0)
-        if n < limit:
-            kept.append(r)
-            counts[domain] = n + 1
-        else:
-            truncated = True
-    return kept, truncated
+        if domain not in by_domain:
+            by_domain[domain] = []
+            order.append(domain)
+        by_domain[domain].append(r)
+
+    indices = {domain: 0 for domain in order}
+    kept: list[Record] = []
+    while len(kept) < limit:
+        progressed = False
+        for domain in order:
+            if len(kept) >= limit:
+                break
+            i = indices[domain]
+            bucket = by_domain[domain]
+            if i < len(bucket):
+                kept.append(bucket[i])
+                indices[domain] = i + 1
+                progressed = True
+        if not progressed:
+            break
+    return kept, len(kept) < len(records)
 
 
 async def _search_expertise(
@@ -722,7 +737,8 @@ async def _search_expertise(
     query = args["query"]
     domains: list[str] | None = args.get("domains") or None
     author_filter = args.get("owner")
-    limit = int(args.get("limit", 20))
+    default_limit = (await resolve_policy(ctx.project, "default_page_size")).value
+    limit = int(args.get("limit", default_limit))
     available = set(list_domain_names(ctx.org.slug, ctx.project.slug))
     unknown = [d for d in (domains or []) if d not in available]
     warning = ""
@@ -731,7 +747,7 @@ async def _search_expertise(
     results = await search_domains(mulch_dir(ctx.org.slug, ctx.project.slug), query, domains)
     if author_filter:
         results = [r for r in results if r.get("owner") == author_filter]
-    results, truncated = _cap_per_domain(results, limit)
+    results, truncated = _round_robin_cap(results, limit)
     await mark_superseded(results, ctx.org.slug, ctx.project.slug)
     await mark_related_to(results, ctx.org.slug, ctx.project.slug)
     await annotate_edits(results, ctx.project.id)
