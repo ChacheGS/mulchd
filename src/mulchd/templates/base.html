@@ -72,14 +72,6 @@
   .token-box { background: #0f172a; color: #22d3ee; font-family: 'Courier New', monospace; padding: 14px 16px; border-radius: 6px; font-size: 14px; word-break: break-all; letter-spacing: 0.04em; }
   .code-box { background: #f1f5f9; font-family: 'Courier New', monospace; padding: 12px 14px; border-radius: 6px; font-size: 12px; color: #334155; white-space: pre; overflow-x: auto; line-height: 1.6; }
 
-  /* Stats */
-  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-  .stat-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; }
-  .stat-number { font-size: 28px; font-weight: 700; line-height: 1; }
-  .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; }
-  .stat-link { text-decoration: none; color: inherit; display: block; }
-  .stat-link:hover .stat-number { color: #3b82f6; }
-
   /* Login */
   .login-page { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #f8fafc; }
   .login-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px; width: 320px; }
@@ -103,7 +95,6 @@
     <div class="sidebar-logo">mulchd</div>
 
     <div class="nav-group-label">Overview</div>
-    <a href="/admin/" class="nav-link {% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
     <a href="/admin/activity" class="nav-link {% if active == 'activity' %}active{% endif %}">Activity</a>
 
     <div class="nav-group-label">Instance</div>

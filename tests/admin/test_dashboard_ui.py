@@ -1,13 +1,13 @@
 import pytest
 
 
-async def test_dashboard_requires_auth(client):
+async def test_root_requires_auth(client):
     resp = await client.get("/admin/", follow_redirects=False)
     assert resp.status_code == 303
     assert "/connect" in resp.headers["location"]
 
 
-async def test_dashboard_rejects_non_admin_user(client):
+async def test_root_rejects_non_admin_user(client):
     from mulchd.auth import create_user
     from mulchd.connect import _signer
 
@@ -19,9 +19,7 @@ async def test_dashboard_rejects_non_admin_user(client):
     assert "/connect" in resp.headers["location"]
 
 
-async def test_dashboard_renders(admin_client):
-    resp = await admin_client.get("/admin/")
-    assert resp.status_code == 200
-    assert "Dashboard" in resp.text
-    assert 'id="usage-chart"' not in resp.text
-    assert "loadUsageChart" not in resp.text
+async def test_root_redirects_to_activity(admin_client):
+    resp = await admin_client.get("/admin/", follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "/admin/activity"
