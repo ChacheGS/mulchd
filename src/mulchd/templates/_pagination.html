@@ -1,0 +1,17 @@
+{% macro pager(page, total_pages, extra_params={}) %}
+{% if total_pages > 1 %}
+<div style="display:flex; gap:12px; align-items:center; justify-content:flex-end; padding:10px 16px; border-top:1px solid #f1f5f9; font-size:12px;">
+  {% if page > 1 %}
+  <a href="?{{ dict(extra_params, page=page - 1)|urlencode }}" class="btn-link">← Prev</a>
+  {% else %}
+  <span class="text-muted">← Prev</span>
+  {% endif %}
+  <span class="text-muted">Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+  <a href="?{{ dict(extra_params, page=page + 1)|urlencode }}" class="btn-link">Next →</a>
+  {% else %}
+  <span class="text-muted">Next →</span>
+  {% endif %}
+</div>
+{% endif %}
+{% endmacro %}

@@ -19,24 +19,27 @@ from ..models import (
     User,
     UserMembership,
 )
-from ._shared import get_current_admin, require_admin, templates
+from ._shared import admin_page_size, get_current_admin, paginate, require_admin, templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
 
-async def _render_users(request: Request, *, error: str = "", status_code: int = 200) -> Response:
-    users = await User.all().order_by("username")
+async def _render_users(
+    request: Request, *, error: str = "", status_code: int = 200, page: int = 1
+) -> Response:
+    qs = User.all().order_by("username")
+    users, total_pages = await paginate(qs, page=page, page_size=admin_page_size())
     return templates.TemplateResponse(
         request,
         "users.html",
-        {"active": "users", "users": users, "error": error},
+        {"active": "users", "users": users, "error": error, "page": page, "total_pages": total_pages},
         status_code=status_code,
     )
 
 
 @router.get("/users")
-async def users_page(request: Request, error: str = "") -> Response:
-    return await _render_users(request, error=error)
+async def users_page(request: Request, error: str = "", page: int = 1) -> Response:
+    return await _render_users(request, error=error, page=page)
 
 
 @router.post("/users")

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_pagination.html" as pagination %}
 {% block title %}mulchd admin — orgs{% endblock %}
 {% block content %}
 <div class="page-title">Organisations</div>
@@ -27,6 +28,7 @@
   {% else %}
   <div class="empty-state">No organisations yet.</div>
   {% endfor %}
+  {{ pagination.pager(page, total_pages, {'pick_for': pick_for} if pick_for else {}) }}
 
   <div class="form-section">
     <div class="form-section-title">Add organisation</div>

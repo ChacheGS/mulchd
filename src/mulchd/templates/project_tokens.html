@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_pagination.html" as pagination %}
 {% block title %}mulchd admin — project tokens{% endblock %}
 {% block content %}
 <div class="page-title">Project Tokens</div>
@@ -46,5 +47,6 @@
   {% else %}
   <div class="empty-state">No project tokens yet. Users create these via the self-service API after setup.</div>
   {% endfor %}
+  {{ pagination.pager(page, total_pages, {'project': project_filter} if project_filter else {}) }}
 </div>
 {% endblock %}

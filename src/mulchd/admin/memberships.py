@@ -4,7 +4,7 @@ from tortoise.exceptions import IntegrityError
 
 from ..instance_events import log_event
 from ..models import InstanceEventCategory, Project, Role, User, UserMembership
-from ._shared import get_current_admin, require_admin, resolve_project, templates
+from ._shared import admin_page_size, get_current_admin, paginate, require_admin, resolve_project, templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -16,14 +16,16 @@ async def _render_memberships(
     error: str = "",
     status_code: int = 200,
     project_filter: str = "",
+    page: int = 1,
 ) -> Response:
-    qs = UserMembership.all()
+    qs = UserMembership.all().order_by("-created_at")
     filtered_project = None
     if project_filter:
         filtered_project = await resolve_project(project_filter)
         if filtered_project:
             qs = qs.filter(project=filtered_project)
-    memberships = await qs.prefetch_related("user", "project", "project__org")
+    qs = qs.prefetch_related("user", "project", "project__org")
+    memberships, total_pages = await paginate(qs, page=page, page_size=admin_page_size())
     users = await User.filter(active=True).order_by("username")
     projects = await Project.all().order_by("slug").prefetch_related("org")
     return templates.TemplateResponse(
@@ -39,6 +41,8 @@ async def _render_memberships(
             "error": error,
             "project_filter": project_filter,
             "filtered_project": filtered_project,
+            "page": page,
+            "total_pages": total_pages,
         },
         status_code=status_code,
     )
@@ -46,10 +50,10 @@ async def _render_memberships(
 
 @router.get("/memberships")
 async def memberships_page(
-    request: Request, user: str = "", error: str = "", project: str = ""
+    request: Request, user: str = "", error: str = "", project: str = "", page: int = 1
 ) -> Response:
     return await _render_memberships(
-        request, preselect_user=user, error=error, project_filter=project
+        request, preselect_user=user, error=error, project_filter=project, page=page
     )
 
 

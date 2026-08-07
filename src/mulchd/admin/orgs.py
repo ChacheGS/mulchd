@@ -4,7 +4,7 @@ from tortoise.exceptions import IntegrityError
 
 from ..instance_events import log_event
 from ..models import InstanceEventCategory, Organization, Project, User
-from ._shared import get_current_admin, is_valid_slug, require_admin, templates
+from ._shared import admin_page_size, get_current_admin, is_valid_slug, paginate, require_admin, templates
 
 router = APIRouter(dependencies=[Depends(require_admin)])
 
@@ -16,9 +16,10 @@ _PICK_FOR_LABELS = {
 
 
 async def _render_orgs(
-    request: Request, *, error: str = "", status_code: int = 200, pick_for: str = ""
+    request: Request, *, error: str = "", status_code: int = 200, pick_for: str = "", page: int = 1
 ) -> Response:
-    orgs = await Organization.all().order_by("slug").prefetch_related("projects")
+    qs = Organization.all().order_by("slug").prefetch_related("projects")
+    orgs, total_pages = await paginate(qs, page=page, page_size=admin_page_size())
     pick_for_label = _PICK_FOR_LABELS.get(pick_for, "")
     return templates.TemplateResponse(
         request,
@@ -31,14 +32,16 @@ async def _render_orgs(
             # value must never reach the template's URL-building logic.
             "pick_for": pick_for if pick_for_label else "",
             "pick_for_label": pick_for_label,
+            "page": page,
+            "total_pages": total_pages,
         },
         status_code=status_code,
     )
 
 
 @router.get("/orgs")
-async def orgs_page(request: Request, error: str = "", pick_for: str = "") -> Response:
-    return await _render_orgs(request, error=error, pick_for=pick_for)
+async def orgs_page(request: Request, error: str = "", pick_for: str = "", page: int = 1) -> Response:
+    return await _render_orgs(request, error=error, pick_for=pick_for, page=page)
 
 
 @router.post("/orgs")

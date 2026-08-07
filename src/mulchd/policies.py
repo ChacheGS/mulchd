@@ -242,6 +242,21 @@ async def resolve_policy(project: Project, key: str) -> ResolvedPolicy:
     return ResolvedPolicy(value=definition.default, source="code-default")
 
 
+def resolve_global_default(key: str) -> Any:
+    """Env var or code default for a policy, skipping the per-project
+    DB-override/lock resolution that resolve_policy does. For admin-UI
+    surfaces that aren't scoped to a single project (e.g. pagination on
+    cross-project lists like Orgs/Users), there's no Project to resolve a
+    per-project override against — but the env var and code default still
+    apply globally, so this reuses that part of the same policy definition
+    instead of hardcoding a second, unrelated constant."""
+    definition = POLICIES[key]
+    raw = _get_env(definition.env_var)
+    if raw is None:
+        return definition.default
+    return definition.parse(raw.removeprefix("ro:") if raw.startswith("ro:") else raw)
+
+
 def validate_env_policies() -> None:
     """Fail loudly at startup on a malformed policy env var, locked or not —
     a security-relevant policy like guardrail_enforcement silently falling

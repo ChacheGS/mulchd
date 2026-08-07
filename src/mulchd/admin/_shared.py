@@ -1,14 +1,17 @@
 import re
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from tortoise.queryset import QuerySet
 
 from ..admin_grants import is_superadmin
 from ..connect import get_connect_user_id
 from ..models import Project, User
+from ..policies import resolve_global_default
 
 # Matches the pattern already declared (but never enforced server-side) on the
 # org/project creation forms' `pattern="[a-z0-9\-]+"` attribute. Org and project
@@ -118,3 +121,25 @@ def set_last_project_cookie(response: Response, org_slug: str, project_slug: str
         samesite="lax",
         max_age=60 * 60 * 24 * 365,
     )
+
+
+def admin_page_size() -> int:
+    """Page size for cross-project admin list pages (Orgs, Users, Memberships,
+    Tokens). Reuses the default_page_size policy's env-var/code-default
+    resolution — these lists aren't scoped to a single project, so there's no
+    per-project override to resolve against, but the same env var and default
+    apply globally."""
+    return resolve_global_default("default_page_size")  # pyright: ignore[reportAny] — policy value is Any by design
+
+
+async def paginate(
+    qs: "QuerySet[Any]", *, page: int, page_size: int
+) -> tuple[list[Any], int]:
+    """Slice an ordered queryset to one 1-indexed page. Returns (items, total_pages) —
+    total_pages is always >= 1 so callers/templates never divide by zero or
+    render "page 1 of 0" on an empty list."""
+    total = await qs.count()
+    total_pages = max(1, -(-total // page_size))
+    page = max(page, 1)
+    items = await qs.offset((page - 1) * page_size).limit(page_size)
+    return items, total_pages
