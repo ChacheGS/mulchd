@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}mulchd admin — {{ org.slug }}{% endblock %}
+{% block content %}
+<div class="page-title">
+  <a href="/admin/orgs" class="btn-link">← Orgs</a>
+  &nbsp;{{ org.display_name }}
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="table-header" style="grid-template-columns:120px 1fr">
+    <span>Field</span><span>Value</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Slug</span>
+    <span class="monospace">{{ org.slug }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Display name</span>
+    <span>{{ org.display_name }}</span>
+  </div>
+  <div class="table-row" style="grid-template-columns:120px 1fr">
+    <span class="text-muted">Created</span>
+    <span>{{ org.created_at.strftime('%Y-%m-%d') }}</span>
+  </div>
+</div>
+
+<div class="page-title" style="font-size:14px;margin-top:24px;">Projects</div>
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% if pick_for_label %}
+<div class="alert alert-warning">Pick a project to view its <strong>{{ pick_for_label }}</strong></div>
+{% endif %}
+<div class="card">
+  <div class="table-header" style="grid-template-columns: 1fr 2fr 100px 120px 100px">
+    <span>Slug</span>
+    <span>Display name</span>
+    <span>Language</span>
+    <span>Created</span>
+    <span>Manage</span>
+  </div>
+  {% for project in projects %}
+  <div class="table-row" style="grid-template-columns: 1fr 2fr 100px 120px 100px; align-items: center">
+    <span class="monospace">{{ project.slug }}</span>
+    <span>{{ project.display_name }}</span>
+    <span>{{ project.knowledge_language or "—" }}</span>
+    <span class="text-muted">{{ project.created_at.strftime('%Y-%m-%d') }}</span>
+    <span>
+      {% if pick_for %}
+      <a href="/admin/p/{{ org.slug }}/{{ project.slug }}/{{ pick_for }}" class="btn-link">View {{ pick_for_label }} →</a>
+      {% else %}
+      <a href="/admin/p/{{ org.slug }}/{{ project.slug }}/" class="btn-link">Manage</a>
+      {% endif %}
+    </span>
+  </div>
+  {% else %}
+  <div class="empty-state">No projects yet.</div>
+  {% endfor %}
+
+  <div class="form-section">
+    <div class="form-section-title">Add project</div>
+    <form method="post" action="/admin/orgs/{{ org.slug }}/projects">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="slug">Slug</label>
+          <input type="text" id="slug" name="slug" required placeholder="e.g. data-platform" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, hyphens" style="width:180px">
+        </div>
+        <div class="form-group">
+          <label for="display_name">Display name</label>
+          <input type="text" id="display_name" name="display_name" required placeholder="e.g. Data Platform" style="width:200px">
+        </div>
+        <div class="form-group">
+          <label for="knowledge_language">Language</label>
+          <input type="text" id="knowledge_language" name="knowledge_language" placeholder="e.g. en" style="width:80px" title="BCP 47 language tag. Leave blank for no constraint.">
+        </div>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
