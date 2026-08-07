@@ -40,7 +40,7 @@
 </div>
 
 {# ── Event log ── #}
-<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px">
+<div class="section-label" style="margin-bottom:6px">
   Event log
   {% if events %}<span style="font-weight:400; text-transform:none; letter-spacing:0; color:#94a3b8">— {{ events | length }} event{{ 's' if events | length != 1 else '' }}</span>{% endif %}
 </div>
@@ -102,7 +102,7 @@
 {% endif %}
 
 {# ── Archived records ── #}
-<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:6px">
+<div class="section-label" style="margin-bottom:6px">
   Archived records
 </div>
 
@@ -112,7 +112,7 @@
 </div>
 {% else %}
 {% for domain in archived_domains %}
-<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin:{% if not loop.first %}20px{% else %}0{% endif %} 0 6px">
+<div class="section-label" style="margin:{% if not loop.first %}20px{% else %}0{% endif %} 0 6px">
   {{ domain.name }}
   <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#94a3b8">— {{ domain.records | length }} archived</span>
 </div>

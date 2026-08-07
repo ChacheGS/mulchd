@@ -25,7 +25,7 @@
   </div>
 </div>
 
-<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:10px;">Policies</div>
+<div class="section-label" style="margin-bottom:10px;">Policies</div>
 <div class="card" style="margin-bottom:24px; padding:12px 16px 16px;">
   {% for key, definition, resolved in policies %}
   <form method="post" action="/admin/p/{{ project.org.slug }}/{{ project.slug }}/policies/{{ key }}"
@@ -66,7 +66,7 @@
   <a href="/admin/activity?project={{ project.org.slug }}/{{ project.slug }}" class="btn-link">View activity for this project →</a>
 </div>
 
-<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:10px;">Tool usage</div>
+<div class="section-label" style="margin-bottom:10px;">Tool usage</div>
 <div class="card" style="margin-bottom:24px; padding:12px 16px 16px;">
   <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px">
     <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; letter-spacing:0.05em">Trend</span>
@@ -84,21 +84,21 @@
   </div>
   <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px">
     <div>
-      <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By tool</div>
+      <div class="subsection-label" style="margin-bottom:6px">By tool</div>
       <div id="usage-by-tool"></div>
     </div>
     <div>
-      <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By user</div>
+      <div class="subsection-label" style="margin-bottom:6px">By user</div>
       <div id="usage-by-user"></div>
     </div>
     <div>
-      <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px">By protocol version</div>
+      <div class="subsection-label" style="margin-bottom:6px">By protocol version</div>
       <div id="usage-by-protocol-version"></div>
     </div>
   </div>
 </div>
 
-<div class="page-title" style="font-size:14px;margin-top:24px;">Create invite link</div>
+<div class="page-title-sm">Create invite link</div>
 <div class="card" style="margin-bottom:24px;padding:20px;">
   <form method="post" action="/admin/projects/{{ project.id }}/invites" class="form-row">
     <div class="form-group">

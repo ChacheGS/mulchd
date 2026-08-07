@@ -56,8 +56,7 @@
 } %}
 
 {% for domain in domains %}
-<div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase;
-            letter-spacing:0.07em; margin:{% if not loop.first %}28px{% else %}0{% endif %} 0 6px">
+<div class="section-label" style="margin:{% if not loop.first %}28px{% else %}0{% endif %} 0 6px">
   {{ domain.name }}
   <span style="font-weight:400; text-transform:none; letter-spacing:0; color:#94a3b8; font-size:11px">
     — {{ domain.records | length }} record{{ 's' if domain.records | length != 1 else '' }}
@@ -222,7 +221,7 @@
         <input type="hidden" name="domain" value="{{ domain.name }}">
         <input type="hidden" name="record_id" value="{{ r.id }}">
         <input type="hidden" name="field" value="{{ fname }}">
-        <div style="font-size:11px; font-weight:600; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px">{{ fname }}</div>
+        <div class="subsection-label" style="margin-bottom:4px">{{ fname }}</div>
         <div style="display:flex; gap:6px; align-items:flex-start">
           <textarea name="value" rows="3"
             style="flex:1; font-size:13px; border:1px solid #d1d5db; border-radius:4px; padding:6px 8px; font-family:inherit; resize:vertical; line-height:1.5">{{ fval }}</textarea>
