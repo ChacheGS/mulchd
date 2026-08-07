@@ -102,3 +102,16 @@ async def test_project_home_header_has_no_switcher(admin_client, tmp_path, monke
     assert resp.status_code == 200
     assert 'class="project-switcher"' not in resp.text
     assert 'class="project-breadcrumb-org"' in resp.text
+
+
+async def test_project_breadcrumb_org_links_to_org_detail(admin_client, tmp_path, monkeypatch):
+    from mulchd.config import settings
+    from mulchd.models import Organization, Project
+
+    monkeypatch.setattr(settings, "data_path", tmp_path)
+    org = await Organization.create(slug="acme", display_name="Acme")
+    await Project.create(slug="infra", display_name="Infra", org=org)
+
+    resp = await admin_client.get("/admin/p/acme/infra/records")
+    assert resp.status_code == 200
+    assert 'href="/admin/orgs/acme" class="project-breadcrumb-org"' in resp.text

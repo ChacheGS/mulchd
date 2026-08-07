@@ -3,7 +3,8 @@
 {% block content %}
 <style>
   .project-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-  .project-breadcrumb-org { font-size: 12px; color: #94a3b8; }
+  .project-breadcrumb-org { font-size: 12px; color: #94a3b8; text-decoration: none; }
+  .project-breadcrumb-org:hover { color: #64748b; text-decoration: underline; }
   .project-breadcrumb-sep { color: #cbd5e1; }
   .project-breadcrumb-name { font-size: 16px; font-weight: 600; color: #1e293b; }
   .project-tabs { display: flex; gap: 2px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; }
@@ -12,7 +13,7 @@
 </style>
 
 <div class="project-header">
-  <span class="project-breadcrumb-org">{{ project.org.slug }}</span>
+  <a href="/admin/orgs/{{ project.org.slug }}" class="project-breadcrumb-org">{{ project.org.slug }}</a>
   <span class="project-breadcrumb-sep">/</span>
   <span class="project-breadcrumb-name">{{ project.slug }}</span>
 </div>
