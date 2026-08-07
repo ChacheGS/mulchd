@@ -272,3 +272,28 @@ async def test_reset_token_logs_event(admin_client):
 
     event = await InstanceEvent.get(category=InstanceEventCategory.TOKEN_RESET)
     assert event.subject_user_id == target.id
+
+
+async def test_user_detail_shows_memberships(admin_client):
+    from mulchd.auth import create_user
+    from mulchd.models import Organization, Project, Role, UserMembership
+
+    user, _ = await create_user("jorge", "Jorge M.")
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+    await UserMembership.create(user=user, project=project, role=Role.WRITER)
+
+    resp = await admin_client.get(f"/admin/users/{user.id}")
+    assert resp.status_code == 200
+    assert "acme/infra" in resp.text
+    assert "badge-writer" in resp.text
+
+
+async def test_user_detail_shows_no_memberships_empty_state(admin_client):
+    from mulchd.auth import create_user
+
+    user, _ = await create_user("noproj", "No Proj")
+
+    resp = await admin_client.get(f"/admin/users/{user.id}")
+    assert resp.status_code == 200
+    assert "No memberships yet." in resp.text

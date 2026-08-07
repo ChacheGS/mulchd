@@ -17,6 +17,7 @@ from ..models import (
     InstanceEventCategory,
     OAuthIdentity,
     User,
+    UserMembership,
 )
 from ._shared import get_current_admin, require_admin, templates
 
@@ -109,6 +110,12 @@ async def user_detail(request: Request, user_id: int) -> Response:
     if user is None:
         return Response(status_code=404)
     identities = await OAuthIdentity.filter(user=user).order_by("created_at").all()
+    memberships = (
+        await UserMembership.filter(user=user)
+        .select_related("project", "project__org")
+        .order_by("project__org__slug", "project__slug")
+        .all()
+    )
     return templates.TemplateResponse(
         request,
         "user_detail.html",
@@ -116,6 +123,7 @@ async def user_detail(request: Request, user_id: int) -> Response:
             "active": "users",
             "user": user,
             "identities": identities,
+            "memberships": memberships,
             "is_superadmin_user": await is_superadmin(user),
             "error": request.query_params.get("error", ""),
         },

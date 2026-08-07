@@ -86,4 +86,30 @@
   <div class="empty-state">No linked identities. User will be linked on first SSO login.</div>
   {% endif %}
 </div>
+
+<div class="page-title" style="font-size:14px;margin-top:24px;">Memberships</div>
+<div class="card">
+  {% if memberships %}
+  <div class="table-header" style="grid-template-columns:1.5fr 80px 80px">
+    <span>Project</span><span>Role</span><span>Since</span>
+  </div>
+  {% for m in memberships %}
+  <div class="table-row" style="grid-template-columns:1.5fr 80px 80px">
+    <span class="monospace">{{ m.project.org.slug }}/{{ m.project.slug }}</span>
+    <span>
+      {% if m.role == 'admin' %}
+        <span class="badge badge-admin">admin</span>
+      {% elif m.role == 'writer' %}
+        <span class="badge badge-writer">writer</span>
+      {% else %}
+        <span class="badge badge-reader">reader</span>
+      {% endif %}
+    </span>
+    <span class="text-muted">{{ m.created_at.strftime('%Y-%m-%d') }}</span>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty-state">No memberships yet.</div>
+  {% endif %}
+</div>
 {% endblock %}
