@@ -84,10 +84,6 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
     policies = [
         (key, definition, await resolve_policy(project, key)) for key, definition in POLICIES.items()
     ]
-    policy_overrides = {
-        row.key: row
-        for row in await ProjectPolicy.filter(project=project).select_related("updated_by")
-    }
     response = templates.TemplateResponse(
         request,
         "project_detail.html",
@@ -102,7 +98,6 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
             "uses_by_invite": uses_by_invite,
             "roles": list(Role),
             "policies": policies,
-            "policy_overrides": policy_overrides,
         },
     )
     set_last_project_cookie(response, org_slug, project_slug)
@@ -194,4 +189,10 @@ async def set_project_policy(
     # pre-write miss) — drop it now so the PRG redirect below reflects the
     # write instead of serving a stale cached value for up to the TTL window.
     invalidate_policy_override(project, key)
+    await log_event(
+        InstanceEventCategory.POLICY_CHANGED,
+        actor=admin,
+        project=project,
+        detail={"key": key, "value": parsed},
+    )
     return RedirectResponse(f"/admin/p/{org_slug}/{project_slug}/", status_code=303)

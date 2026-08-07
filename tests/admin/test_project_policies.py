@@ -77,7 +77,9 @@ async def test_set_policy_redirect_shows_fresh_value(admin_client):
     assert 'value="25"' in resp.text
 
 
-async def test_overview_shows_who_changed_an_override_and_when(admin_client):
+async def test_set_policy_logs_an_instance_event(admin_client):
+    from mulchd.models import InstanceEvent, InstanceEventCategory
+
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
 
@@ -87,7 +89,14 @@ async def test_overview_shows_who_changed_an_override_and_when(admin_client):
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert "changed by admin on" in resp.text
+
+    event = await InstanceEvent.get(
+        project=project, category=InstanceEventCategory.POLICY_CHANGED
+    )
+    assert event.detail == {"key": "default_page_size", "value": 25}
+
+    activity_resp = await admin_client.get("/admin/activity")
+    assert "Changed default_page_size to 25" in activity_resp.text
 
 
 async def test_set_policy_rejects_invalid_value(admin_client):

@@ -68,4 +68,8 @@ def describe_event(event: InstanceEvent) -> str:
         return f"Created invite link for {project_label} ({role})"
     if event.category == InstanceEventCategory.INVITE_REVOKED:
         return f"Revoked invite link for {project_label}"
+    if event.category == InstanceEventCategory.POLICY_CHANGED:
+        key = detail.get("key", "")
+        value = detail.get("value", "")
+        return f"Changed {key} to {value!r} for {project_label}"
     return str(event.category)

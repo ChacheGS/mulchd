@@ -55,6 +55,7 @@ class InstanceEventCategory(StrEnum):
     USER_DEACTIVATED = "user_deactivated"
     INVITE_CREATED = "invite_created"
     INVITE_REVOKED = "invite_revoked"
+    POLICY_CHANGED = "policy_changed"
 
 
 class InstanceEvent(models.Model):
