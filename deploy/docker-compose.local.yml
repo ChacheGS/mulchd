@@ -11,6 +11,7 @@ services:
   postgres:
     ports:
       - "127.0.0.1:5433:5432"
+
   mulchd:
     ports:
       - "8000:8000"
@@ -24,6 +25,7 @@ services:
         - action: sync
           path: ../migrations
           target: /app/migrations
+  
   inspector:
     image: ghcr.io/modelcontextprotocol/inspector:latest
     profiles:
@@ -34,6 +36,7 @@ services:
     environment:
       HOST: 0.0.0.0
       MCP_AUTO_OPEN_ENABLED: "false"
+      ALLOWED_ORIGINS: "http://127.0.0.1:6274"
     ports:
       - "127.0.0.1:6274:6274"
       - "127.0.0.1:6277:6277"
