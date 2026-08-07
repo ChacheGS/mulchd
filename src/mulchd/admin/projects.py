@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
-from tortoise.exceptions import IntegrityError
 
 from ..instance_events import log_event
 from ..models import (
     InstanceEventCategory,
     InviteLink,
     InviteUse,
-    Organization,
     Project,
     ProjectPolicy,
     Role,
@@ -16,7 +14,6 @@ from ..models import (
 from ..policies import POLICIES, invalidate_policy_override, resolve_policy
 from ._shared import (
     get_current_admin,
-    is_valid_slug,
     require_admin,
     resolve_project_by_slugs,
     set_last_project_cookie,
@@ -24,40 +21,6 @@ from ._shared import (
 )
 
 router = APIRouter(dependencies=[Depends(require_admin)])
-
-_PICK_FOR_LABELS = {
-    "records": "Records",
-    "record-activity": "Record activity",
-    "quality": "Quality",
-}
-
-
-async def _render_projects(
-    request: Request, *, error: str = "", status_code: int = 200, pick_for: str = ""
-) -> Response:
-    projects = await Project.all().order_by("slug").prefetch_related("org")
-    orgs = await Organization.all().order_by("slug")
-    pick_for_label = _PICK_FOR_LABELS.get(pick_for, "")
-    return templates.TemplateResponse(
-        request,
-        "projects.html",
-        {
-            "active": "projects",
-            "projects": projects,
-            "orgs": orgs,
-            "error": error,
-            # Empty unless pick_for matched the allowlist above — a bogus
-            # value must never reach the template's URL-building logic.
-            "pick_for": pick_for if pick_for_label else "",
-            "pick_for_label": pick_for_label,
-        },
-        status_code=status_code,
-    )
-
-
-@router.get("/projects")
-async def projects_page(request: Request, error: str = "", pick_for: str = "") -> Response:
-    return await _render_projects(request, error=error, pick_for=pick_for)
 
 
 @router.get("/p/{org_slug}/{project_slug}/")
@@ -104,54 +67,18 @@ async def project_overview_page(request: Request, org_slug: str, project_slug: s
     return response
 
 
-@router.post("/projects")
-async def create_project(
-    request: Request,
-    org_id: int = Form(...),
-    slug: str = Form(...),
-    display_name: str = Form(...),
-    knowledge_language: str = Form(""),
-    admin: User = Depends(get_current_admin),
-) -> Response:
-    org = await Organization.get_or_none(id=org_id)
-    if org is None:
-        return RedirectResponse("/admin/projects", status_code=303)
-    slug = slug.strip()
-    if not is_valid_slug(slug):
-        return await _render_projects(
-            request,
-            error=f"Project slug '{slug}' must be lowercase letters, numbers, and hyphens only.",
-            status_code=422,
-        )
-    try:
-        project = await Project.create(
-            slug=slug,
-            display_name=display_name.strip(),
-            knowledge_language=knowledge_language.strip() or None,
-            org=org,
-        )
-    except IntegrityError:
-        return await _render_projects(
-            request,
-            error=f"Project slug '{slug}' already exists in that org.",
-            status_code=409,
-        )
-    await log_event(InstanceEventCategory.PROJECT_CREATED, actor=admin, project=project)
-    return RedirectResponse("/admin/projects", status_code=303)
-
-
 @router.post("/projects/{project_id}/language")
 async def set_project_language(
     request: Request,
     project_id: int,
     knowledge_language: str = Form(""),
 ) -> Response:
-    project = await Project.get_or_none(id=project_id)
+    project = await Project.filter(id=project_id).select_related("org").first()
     if project is None:
-        return RedirectResponse("/admin/projects", status_code=303)
+        return Response(status_code=404)
     project.knowledge_language = knowledge_language.strip() or None  # type: ignore[assignment] — tortoise's CharField stub isn't null-aware
     await project.save(update_fields=["knowledge_language"])
-    return RedirectResponse("/admin/projects", status_code=303)
+    return RedirectResponse(f"/admin/p/{project.org.slug}/{project.slug}/", status_code=303)
 
 
 @router.post("/p/{org_slug}/{project_slug}/policies/{key}")

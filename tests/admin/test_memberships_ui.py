@@ -7,8 +7,8 @@ async def test_add_membership(admin_client):
 
     org = await Organization.get(slug="acme")
     await admin_client.post(
-        "/admin/projects",
-        data={"org_id": org.id, "slug": "proj", "display_name": "Proj"},
+        f"/admin/orgs/{org.slug}/projects",
+        data={"slug": "proj", "display_name": "Proj"},
     )
     await admin_client.post("/admin/users", data={"username": "jorge", "display_name": "Jorge M."})
 

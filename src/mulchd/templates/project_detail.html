@@ -14,7 +14,14 @@
   </div>
   <div class="table-row" style="grid-template-columns:120px 1fr">
     <span class="text-muted">Language</span>
-    <span>{{ project.knowledge_language or "—" }}</span>
+    <span>
+      <form method="post" action="/admin/projects/{{ project.id }}/language" style="display:flex;gap:4px;align-items:center">
+        <input type="text" name="knowledge_language" value="{{ project.knowledge_language or '' }}"
+               placeholder="e.g. en" style="width:60px;font-size:0.8rem;padding:2px 4px"
+               title="BCP 47 language tag (e.g. en, es, pt-BR). Leave blank for no constraint.">
+        <button type="submit" class="btn" style="padding:2px 6px;font-size:0.75rem">✓</button>
+      </form>
+    </span>
   </div>
 </div>
 
@@ -56,6 +63,7 @@
 <div style="display:flex; gap:16px; margin-bottom:24px; font-size:13px;">
   <a href="/admin/memberships?project={{ project.org.slug }}/{{ project.slug }}" class="btn-link">View memberships for this project →</a>
   <a href="/admin/project-tokens?project={{ project.org.slug }}/{{ project.slug }}" class="btn-link">View tokens for this project →</a>
+  <a href="/admin/activity?project={{ project.org.slug }}/{{ project.slug }}" class="btn-link">View activity for this project →</a>
 </div>
 
 <div style="font-size:11px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.07em; margin-bottom:10px;">Tool usage</div>

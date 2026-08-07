@@ -1,36 +1,6 @@
 import pytest
 
 
-async def test_create_project(admin_client):
-    await admin_client.post("/admin/orgs", data={"slug": "acme", "display_name": "Acme"})
-    resp = await admin_client.get("/admin/orgs")
-    from mulchd.models import Organization
-
-    org = await Organization.get(slug="acme")
-    resp = await admin_client.post(
-        "/admin/projects",
-        data={"org_id": org.id, "slug": "data-platform", "display_name": "Data Platform"},
-        follow_redirects=False,
-    )
-    assert resp.status_code == 303
-
-
-async def test_create_project_rejects_slash_in_slug(admin_client):
-    """A slug containing '/' would break the org/project-slug join used
-    throughout the admin UI (cookies, ?project= params, /admin/p/... routes)."""
-    from mulchd.models import Organization, Project
-
-    org = await Organization.create(slug="acme-slash", display_name="Acme")
-    resp = await admin_client.post(
-        "/admin/projects",
-        data={"org_id": org.id, "slug": "data/platform", "display_name": "Data Platform"},
-        follow_redirects=False,
-    )
-    assert resp.status_code == 422
-    assert "lowercase letters, numbers, and hyphens" in resp.text
-    assert await Project.filter(slug="data/platform").first() is None
-
-
 async def test_project_overview_page_renders(admin_client):
     from mulchd.models import Organization, Project
 
@@ -99,40 +69,6 @@ async def test_project_detail_shows_invite_creator(admin_client):
     assert "by admin" in resp.text
 
 
-async def test_create_project_logs_event(admin_client):
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization
-
-    org = await Organization.create(slug="logprojorg", display_name="Log Proj Org")
-    resp = await admin_client.post(
-        "/admin/projects",
-        data={"org_id": org.id, "slug": "logproj", "display_name": "Log Proj"},
-        follow_redirects=False,
-    )
-    assert resp.status_code == 303
-
-    event = await InstanceEvent.get(category=InstanceEventCategory.PROJECT_CREATED)
-    assert event.project_id is not None
-
-
-async def test_create_project_duplicate_does_not_log(admin_client):
-    from mulchd.models import InstanceEvent, InstanceEventCategory, Organization
-
-    org = await Organization.create(slug="dupprojorg", display_name="Dup Proj Org")
-    await admin_client.post(
-        "/admin/projects",
-        data={"org_id": org.id, "slug": "dupproj", "display_name": "Dup Proj"},
-    )
-    resp = await admin_client.post(
-        "/admin/projects",
-        data={"org_id": org.id, "slug": "dupproj", "display_name": "Dup Proj 2"},
-        follow_redirects=False,
-    )
-    assert resp.status_code == 409
-
-    count = await InstanceEvent.filter(category=InstanceEventCategory.PROJECT_CREATED).count()
-    assert count == 1
-
-
 async def test_project_overview_links_to_filtered_memberships_and_tokens(admin_client):
     from mulchd.models import Organization, Project
 
@@ -143,31 +79,7 @@ async def test_project_overview_links_to_filtered_memberships_and_tokens(admin_c
     assert resp.status_code == 200
     assert "/admin/memberships?project=acme/infra" in resp.text
     assert "/admin/project-tokens?project=acme/infra" in resp.text
-
-
-async def test_projects_page_pick_for_shows_banner_and_tab_links(admin_client):
-    from mulchd.models import Organization, Project
-
-    org = await Organization.create(slug="acme", display_name="Acme Corp")
-    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
-
-    resp = await admin_client.get("/admin/projects?pick_for=records")
-    assert resp.status_code == 200
-    assert "Pick a project to view its" in resp.text
-    assert "Records" in resp.text
-    assert f'href="/admin/p/{org.slug}/{project.slug}/records"' in resp.text
-
-
-async def test_projects_page_unknown_pick_for_is_ignored(admin_client):
-    from mulchd.models import Organization, Project
-
-    org = await Organization.create(slug="acme", display_name="Acme Corp")
-    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
-
-    resp = await admin_client.get("/admin/projects?pick_for=bogus")
-    assert resp.status_code == 200
-    assert "Pick a project" not in resp.text
-    assert f'href="/admin/p/{org.slug}/{project.slug}/"' in resp.text  # normal Manage link
+    assert "/admin/activity?project=acme/infra" in resp.text
 
 
 async def test_project_overview_shows_usage_panel(admin_client):
@@ -187,13 +99,39 @@ async def test_project_overview_shows_usage_panel(admin_client):
     assert "/admin/api/usage/acme/infra" in resp.text
 
 
-async def test_projects_page_no_pick_for_shows_manage_link(admin_client):
+async def test_project_overview_shows_language_edit_form(admin_client):
     from mulchd.models import Organization, Project
 
     org = await Organization.create(slug="acme", display_name="Acme Corp")
     project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
 
-    resp = await admin_client.get("/admin/projects")
+    resp = await admin_client.get(f"/admin/p/{org.slug}/{project.slug}/")
     assert resp.status_code == 200
-    assert "Pick a project" not in resp.text
-    assert f'href="/admin/p/{org.slug}/{project.slug}/"' in resp.text
+    assert f'action="/admin/projects/{project.id}/language"' in resp.text
+
+
+async def test_set_project_language_404s_for_unknown_project(admin_client):
+    resp = await admin_client.post(
+        "/admin/projects/999999/language",
+        data={"knowledge_language": "en"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 404
+
+
+async def test_set_project_language_redirects_to_project_detail(admin_client):
+    from mulchd.models import Organization, Project
+
+    org = await Organization.create(slug="acme", display_name="Acme Corp")
+    project = await Project.create(slug="infra", display_name="Infrastructure", org=org)
+
+    resp = await admin_client.post(
+        f"/admin/projects/{project.id}/language",
+        data={"knowledge_language": "en"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert resp.headers["location"] == f"/admin/p/{org.slug}/{project.slug}/"
+
+    await project.refresh_from_db()
+    assert project.knowledge_language == "en"

@@ -9,18 +9,18 @@ async def test_sidebar_groups_render(admin_client):
     assert "Project" in resp.text
 
 
-async def test_sidebar_project_tab_links_fallback_to_projects_list_with_no_context(admin_client):
+async def test_sidebar_project_tab_links_fallback_to_orgs_list_with_no_context(admin_client):
     """With no last-visited-project cookie and no project in the current page's
-    context, the Knowledge links point at the Projects list with a `pick_for`
+    context, the Knowledge links point at the Orgs list with a `pick_for`
     hint (which shows an explicit picker banner) rather than a broken or
     guessed URL."""
     resp = await admin_client.get("/admin/users")
     assert resp.status_code == 200
-    assert 'href="/admin/projects?pick_for=records"' in resp.text
-    assert 'href="/admin/projects?pick_for=record-activity"' in resp.text
-    assert 'href="/admin/projects?pick_for=quality"' in resp.text
-    # The Instance-group "Projects" nav item itself stays a plain link.
-    assert resp.text.count('href="/admin/projects"') == 1
+    assert 'href="/admin/orgs?pick_for=records"' in resp.text
+    assert 'href="/admin/orgs?pick_for=record-activity"' in resp.text
+    assert 'href="/admin/orgs?pick_for=quality"' in resp.text
+    # The Instance-group "Orgs" nav item itself stays a plain link.
+    assert resp.text.count('href="/admin/orgs"') == 1
     # No tab link points at a guessed project URL (the sidebar's project
     # switcher <select> legitimately references "/admin/p/" in its onchange
     # JS regardless of context — only hrefs are asserted here).

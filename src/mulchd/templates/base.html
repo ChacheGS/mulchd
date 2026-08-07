@@ -100,9 +100,6 @@
     <div class="nav-group-label">Instance</div>
     <a href="/admin/users" class="nav-link {% if active == 'users' %}active{% endif %}">Users</a>
     <a href="/admin/orgs" class="nav-link {% if active == 'orgs' %}active{% endif %}">Orgs</a>
-    <a href="/admin/projects" class="nav-link {% if active == 'projects' %}active{% endif %}">Projects</a>
-    <a href="/admin/memberships" class="nav-link {% if active == 'memberships' %}active{% endif %}">Memberships</a>
-    <a href="/admin/project-tokens" class="nav-link {% if active == 'project-tokens' %}active{% endif %}">Tokens</a>
 
     <div class="nav-group-label">Project</div>
     {% set _kp = (project.org.slug ~ '/' ~ project.slug) if (project is defined and project) else request.cookies.get('admin_last_project', '') %}
@@ -113,9 +110,9 @@
       <option value="{{ p.org.slug }}/{{ p.slug }}" {% if (p.org.slug ~ '/' ~ p.slug) == _kp %}selected{% endif %}>{{ p.org.slug }} / {{ p.slug }}</option>
       {% endfor %}
     </select>
-    <a href="{{ ('/admin/p/' ~ _kp ~ '/records') if _kp else '/admin/projects?pick_for=records' }}" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
-    <a href="{{ ('/admin/p/' ~ _kp ~ '/record-activity') if _kp else '/admin/projects?pick_for=record-activity' }}" class="nav-link {% if active == 'record-activity' %}active{% endif %}">Record activity</a>
-    <a href="{{ ('/admin/p/' ~ _kp ~ '/quality') if _kp else '/admin/projects?pick_for=quality' }}" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/records') if _kp else '/admin/orgs?pick_for=records' }}" class="nav-link {% if active == 'records' %}active{% endif %}">Records</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/record-activity') if _kp else '/admin/orgs?pick_for=record-activity' }}" class="nav-link {% if active == 'record-activity' %}active{% endif %}">Record activity</a>
+    <a href="{{ ('/admin/p/' ~ _kp ~ '/quality') if _kp else '/admin/orgs?pick_for=quality' }}" class="nav-link {% if active == 'quality' %}active{% endif %}">Quality</a>
 
     <div class="sidebar-spacer"></div>
     <a href="/connect/logout" class="sidebar-logout" style="text-decoration:none;">Logout</a>
