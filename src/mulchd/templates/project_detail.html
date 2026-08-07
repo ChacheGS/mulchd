@@ -23,7 +23,7 @@
   {% for key, definition, resolved in policies %}
   <form method="post" action="/admin/p/{{ project.org.slug }}/{{ project.slug }}/policies/{{ key }}"
         class="form-row" style="align-items:center; padding:8px 0; border-bottom:1px solid #f1f5f9;">
-    <span style="width:180px; font-size:13px;">{{ key }}</span>
+    <span class="monospace" style="width:180px;">{{ key }}</span>
     <div class="form-group">
       {% if definition.kind == 'bool' %}
       <select name="value" {% if resolved.source == 'locked' %}disabled{% endif %}>
