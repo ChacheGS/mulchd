@@ -2,13 +2,13 @@
 {% import "_pagination.html" as pagination %}
 {% block title %}mulchd admin — memberships{% endblock %}
 {% block content %}
-<div class="page-title">Memberships</div>
-{% if project_filter %}
-<div class="alert alert-warning" style="display:flex; justify-content:space-between; align-items:center;">
-  <span>Filtered to <strong>{{ project_filter }}</strong>{% if not filtered_project %} (unknown project){% endif %}</span>
-  <a href="/admin/memberships" class="btn-link">Clear</a>
+<div class="page-title" style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+  Memberships
+  {% if project_filter %}
+  <span class="text-muted" style="font-size:13px; font-weight:400;">Filtered to <span class="monospace">{{ project_filter }}</span>{% if not filtered_project %} (unknown project){% endif %}</span>
+  <a href="/admin/memberships" class="btn-link" style="font-size:12px;">Clear</a>
+  {% endif %}
 </div>
-{% endif %}
 {% if error %}
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
