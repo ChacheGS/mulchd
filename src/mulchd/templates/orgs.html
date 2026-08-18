@@ -10,6 +10,23 @@
 <div class="alert alert-warning">Pick a project to view its <strong>{{ pick_for_label }}</strong></div>
 {% endif %}
 <div class="card">
+  <div class="form-section">
+    <div class="form-section-title">Add organisation</div>
+    <form method="post" action="/admin/orgs">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="slug">Slug</label>
+          <input type="text" id="slug" name="slug" required placeholder="e.g. acme" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, hyphens" style="width:160px">
+        </div>
+        <div class="form-group">
+          <label for="display_name">Display name</label>
+          <input type="text" id="display_name" name="display_name" required placeholder="e.g. Acme Corp" style="width:220px">
+        </div>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+
   <div class="table-header" style="grid-template-columns: 1fr 2fr 60px 80px">
     <span>Slug</span>
     <span>Display name</span>
@@ -29,22 +46,5 @@
   <div class="empty-state">No organisations yet.</div>
   {% endfor %}
   {{ pagination.pager(page, total_pages, {'pick_for': pick_for} if pick_for else {}) }}
-
-  <div class="form-section">
-    <div class="form-section-title">Add organisation</div>
-    <form method="post" action="/admin/orgs">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="slug">Slug</label>
-          <input type="text" id="slug" name="slug" required placeholder="e.g. acme" pattern="[a-z0-9\-]+" title="Lowercase letters, numbers, hyphens" style="width:160px">
-        </div>
-        <div class="form-group">
-          <label for="display_name">Display name</label>
-          <input type="text" id="display_name" name="display_name" required placeholder="e.g. Acme Corp" style="width:220px">
-        </div>
-        <button type="submit" class="btn btn-primary">Create</button>
-      </div>
-    </form>
-  </div>
 </div>
 {% endblock %}

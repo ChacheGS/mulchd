@@ -13,42 +13,6 @@
 <div class="alert alert-error">{{ error }}</div>
 {% endif %}
 <div class="card">
-  <div class="table-header" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
-    <span>User</span>
-    <span>Project</span>
-    <span>Role</span>
-    <span>Since</span>
-    <span></span>
-  </div>
-  {% for m in memberships %}
-  <div class="table-row" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
-    <span class="monospace">{{ m.user.username }}</span>
-    <span class="text-muted">
-      <span class="monospace">{{ m.project.org.slug }}</span>
-      <span style="color:#cbd5e1"> / </span>
-      <span class="monospace" style="color:#475569">{{ m.project.slug }}</span>
-    </span>
-    <span>
-      {% if m.role == 'admin' %}
-        <span class="badge badge-admin">admin</span>
-      {% elif m.role == 'writer' %}
-        <span class="badge badge-writer">writer</span>
-      {% else %}
-        <span class="badge badge-reader">reader</span>
-      {% endif %}
-    </span>
-    <span class="text-muted">{{ m.created_at.strftime('%Y-%m-%d') }}</span>
-    <span>
-      <form method="post" action="/admin/memberships/{{ m.id }}/remove" style="display:inline">
-        <button type="submit" class="btn-link-danger">Remove</button>
-      </form>
-    </span>
-  </div>
-  {% else %}
-  <div class="empty-state">No memberships yet.</div>
-  {% endfor %}
-  {{ pagination.pager(page, total_pages, {'project': project_filter} if project_filter else {}) }}
-
   <div class="form-section">
     <div class="form-section-title">Add membership</div>
     {% if users and projects %}
@@ -87,5 +51,41 @@
     <div class="text-muted">Create an org and project first.</div>
     {% endif %}
   </div>
+
+  <div class="table-header" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
+    <span>User</span>
+    <span>Project</span>
+    <span>Role</span>
+    <span>Since</span>
+    <span></span>
+  </div>
+  {% for m in memberships %}
+  <div class="table-row" style="grid-template-columns: 1fr 1.5fr 80px 80px 60px">
+    <span class="monospace">{{ m.user.username }}</span>
+    <span class="text-muted">
+      <span class="monospace">{{ m.project.org.slug }}</span>
+      <span style="color:#cbd5e1"> / </span>
+      <span class="monospace" style="color:#475569">{{ m.project.slug }}</span>
+    </span>
+    <span>
+      {% if m.role == 'admin' %}
+        <span class="badge badge-admin">admin</span>
+      {% elif m.role == 'writer' %}
+        <span class="badge badge-writer">writer</span>
+      {% else %}
+        <span class="badge badge-reader">reader</span>
+      {% endif %}
+    </span>
+    <span class="text-muted">{{ m.created_at.strftime('%Y-%m-%d') }}</span>
+    <span>
+      <form method="post" action="/admin/memberships/{{ m.id }}/remove" style="display:inline">
+        <button type="submit" class="btn-link-danger">Remove</button>
+      </form>
+    </span>
+  </div>
+  {% else %}
+  <div class="empty-state">No memberships yet.</div>
+  {% endfor %}
+  {{ pagination.pager(page, total_pages, {'project': project_filter} if project_filter else {}) }}
 </div>
 {% endblock %}
