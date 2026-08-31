@@ -28,7 +28,13 @@ async def quality_page(
     domain_filter = domain if domain in available_domains else ""
 
     m_dir = mulch_dir(org_slug, project_slug)
-    result = await audit_corpus(m_dir, domain=domain_filter or None)
+    # A brand-new project has no .mulch/ on disk until the first MCP write
+    # runs `ml init` — calling `ml audit` before that exists raises MulchError
+    # (or fails to even spawn, since the project dir itself is missing).
+    if m_dir.exists():
+        result = await audit_corpus(m_dir, domain=domain_filter or None)
+    else:
+        result = {}
     report = result.get("report", {})
     suggestions = result.get("suggestions", {}).get("groups", [])
 

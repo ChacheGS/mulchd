@@ -30,6 +30,19 @@ async def _setup(tmp_path, monkeypatch):
     return org, project, alice
 
 
+async def test_quality_page_brand_new_project_has_no_mulch_dir(
+    admin_client, tmp_path, monkeypatch
+):
+    """A project with no records yet has no .mulch/ on disk at all — nothing
+    has run `ml init` for it. The page must not call ml (which would fail to
+    even spawn, since the project dir doesn't exist) and must not 500."""
+    await _setup(tmp_path, monkeypatch)
+
+    resp = await admin_client.get("/admin/p/acme/platform/quality")
+    assert resp.status_code == 200
+    assert "No report data" in resp.text
+
+
 async def test_quality_page_unknown_domain_does_not_crash(admin_client, tmp_path, monkeypatch):
     """A domain that doesn't exist in the project must not reach ml at all —
     previously this caused an unhandled MulchError -> 500."""
@@ -146,8 +159,10 @@ async def test_quality_page_renders_when_a_signal_is_null(admin_client, tmp_path
     """Deterministic version of the null-signal case above, for fast/offline
     coverage without depending on real ml's actual scoring behavior."""
     import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
 
     org, project, alice = await _setup(tmp_path, monkeypatch)
+    mulch_dir("acme", "platform").mkdir(parents=True)
 
     async def _fake_audit(m_dir, domain=None):
         report = _fake_report()
@@ -228,8 +243,10 @@ def _fake_report(**overrides) -> dict:
 
 async def test_quality_page_renders_pass_warn_fail_signals(admin_client, tmp_path, monkeypatch):
     import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
 
     org, project, alice = await _setup(tmp_path, monkeypatch)
+    mulch_dir("acme", "platform").mkdir(parents=True)
 
     async def _fake_audit(m_dir, domain=None):
         return _fake_report()
@@ -245,8 +262,10 @@ async def test_quality_page_renders_pass_warn_fail_signals(admin_client, tmp_pat
 
 async def test_quality_page_renders_per_domain_breakdown(admin_client, tmp_path, monkeypatch):
     import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
 
     org, project, alice = await _setup(tmp_path, monkeypatch)
+    mulch_dir("acme", "platform").mkdir(parents=True)
 
     async def _fake_audit(m_dir, domain=None):
         return _fake_report()
@@ -260,8 +279,10 @@ async def test_quality_page_renders_per_domain_breakdown(admin_client, tmp_path,
 
 async def test_quality_page_renders_suggestions(admin_client, tmp_path, monkeypatch):
     import mulchd.admin.quality as quality_module
+    from mulchd.domains import mulch_dir
 
     org, project, alice = await _setup(tmp_path, monkeypatch)
+    mulch_dir("acme", "platform").mkdir(parents=True)
 
     async def _fake_audit(m_dir, domain=None):
         return _fake_report()
